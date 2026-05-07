@@ -11,12 +11,7 @@ export const meta: SimulationMeta = {
     mass: { type: 'range', min: 0, max: 0.1, step: 0.001, unit: 'kg' },
     dynamometer: {
       type: 'enum',
-      values: [
-        'dynamometer-1N',
-        'dynamometer-5N',
-        'dynamometer-10N',
-        'dynamometer-50N',
-      ],
+      values: ['dynamometer-1N', 'dynamometer-5N', 'dynamometer-10N', 'dynamometer-50N'],
     },
   },
   milestones: [],

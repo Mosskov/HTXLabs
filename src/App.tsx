@@ -1,6 +1,7 @@
 import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { ExperimentRoute } from './routes/experiment';
 import { Home } from './routes/home';
+import { PlaygroundIndex, PlaygroundRoute } from './routes/playground';
 import { TopicRoute } from './routes/topic';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -29,6 +30,8 @@ export function App() {
           <Route path="/emner" element={<Home />} />
           <Route path="/emner/:topic" element={<TopicRoute />} />
           <Route path="/emner/:topic/:experiment" element={<ExperimentRoute />} />
+          <Route path="/playground" element={<PlaygroundIndex />} />
+          <Route path="/playground/:simId" element={<PlaygroundRoute />} />
         </Routes>
       </main>
     </Router>
