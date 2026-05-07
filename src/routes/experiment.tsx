@@ -12,6 +12,7 @@ const mdxComponents = {
   KeyEquation: widgets.KeyEquation,
   Reflection: widgets.Reflection,
   ConclusionStatement: widgets.ConclusionStatement,
+  NulstilButton: widgets.NulstilButton,
 };
 
 export function ExperimentRoute() {
