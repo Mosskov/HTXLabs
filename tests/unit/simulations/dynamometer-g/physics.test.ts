@@ -1,5 +1,6 @@
+import { G_DK } from '@/lib/physics-constants';
 import { meta } from '@/simulations/dynamometer-g/meta';
-import { DYNAMOMETERS, G_DK, forceFor, pegReading } from '@/simulations/dynamometer-g/physics';
+import { forceFor, pegReading } from '@/simulations/dynamometer-g/physics';
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
@@ -38,38 +39,6 @@ describe('dynamometer-g physics', () => {
 
     it('treats force exactly at scaleMax as in-scale', () => {
       expect(pegReading(1, 1)).toEqual({ reading: 1, overScale: false });
-    });
-  });
-
-  describe('DYNAMOMETERS map', () => {
-    const allowedIds = (meta.paramSchema.dynamometer as { values: string[] }).values;
-
-    it('has an entry for every id in meta.paramSchema', () => {
-      for (const id of allowedIds) {
-        expect(DYNAMOMETERS[id], `missing entry for ${id}`).toBeDefined();
-      }
-    });
-
-    it.each(allowedIds)('%s spec is internally consistent', (id) => {
-      const spec = DYNAMOMETERS[id];
-      // scaleMax matches the numeric prefix of the id (e.g. 'dynamometer-10N' -> 10).
-      const numFromId = Number(id.replace(/^dynamometer-/, '').replace(/N$/, ''));
-      expect(spec.scaleMax).toBe(numFromId);
-
-      // majorTick divides scaleMax cleanly.
-      expect(Math.round(spec.scaleMax / spec.majorTick) * spec.majorTick).toBeCloseTo(
-        spec.scaleMax,
-        6,
-      );
-
-      // minorTick divides majorTick cleanly.
-      expect(Math.round(spec.majorTick / spec.minorTick) * spec.minorTick).toBeCloseTo(
-        spec.majorTick,
-        6,
-      );
-
-      // Minor ticks should be finer than major.
-      expect(spec.minorTick).toBeLessThan(spec.majorTick);
     });
   });
 });

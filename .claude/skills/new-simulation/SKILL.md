@@ -1,11 +1,11 @@
 ---
 name: new-simulation
-description: Scaffold a new simulation under src/simulations/<id>/ — index.tsx (component), physics.ts (pure helpers), meta.ts (SimulationMeta), and a Vitest stub for physics. Surfaces the registry one-liner for confirmation. Use when the user asks to create a simulation (e.g. "/new-simulation dynamometer-g", "scaffold a sim called pendulum").
+description: Scaffold a new simulation under src/simulations/<id>/ — index.tsx (component), physics.ts (pure helpers), meta.ts (SimulationMeta), optional instruments.ts (apparatus catalogue), and matching Vitest stubs. Surfaces the registry one-liner for confirmation. Use when the user asks to create a simulation (e.g. "/new-simulation dynamometer-g", "scaffold a sim called pendulum").
 ---
 
 # new-simulation
 
-Scaffold a new simulation under `src/simulations/<id>/` with the canonical four-file split (component / physics / meta / physics test).
+Scaffold a new simulation under `src/simulations/<id>/` with the canonical file split (component / physics / meta / physics test, optionally + instruments / instruments test).
 
 This skill is **pure structure**. It writes the `SimulationProps`/`SimulationModule` contract and an empty physics module. It does not invent equations, milestones, or UI — those are TODOs.
 
@@ -24,22 +24,30 @@ The user types `/new-simulation <id>` where `<id>` is **kebab-case** (lowercase 
 
 Validate: if the id contains uppercase, underscore, or anything else, ask for a kebab-case version. The id becomes the folder name AND the `simulationId` referenced from lab frontmatter — they must match.
 
-After the id, ask **one** AskUserQuestion with two questions:
+After the id, ask **one** AskUserQuestion with four questions:
 
-1. **Update model** (single-select) — how does the simulation's visual state advance?
-   - `input-driven` — derived from params on input change only. No animation loop. Best for static-ish sims like dynamometer-g (slider changes → spring indicator moves to `m·g` instantly). Recommended starting point.
-   - `animated` — runs a `requestAnimationFrame` loop integrating physics over time (pendulum, projectile, oscillator). Adds a `useEffect` rAF setup with `paused` prop wired up.
+1. **Mode** (single-select) — written into `meta.mode`. **Default: `interactive`.** Display-only is the explicit exception; only pick it for a true read-only renderer.
+   - `interactive` — the sim owns its controls (sliders, dropdowns, buttons) and drives its own animation if applicable. The lab-guide MDX focuses on observation widgets (NumericAnswer, MultipleChoice). This is the expected mode for new sims (pendul, projektil, RC-circuit, decay, induction, …).
+   - `display` — read-only renderer driven entirely by `initialParams` from the lab guide. The lab guide owns the parameter controls. Static-lookup sims like dynamometer-g, where the apparatus just shows `m·g` for whatever mass the lab supplies. Rare — if you find yourself reaching for it more than once, raise it before continuing.
 
-2. **Emits milestones?** (single-select) — does the sim fire `onProgress({ type: 'milestone', id })` events that gates can read?
+2. **Update model** (single-select) — how does the simulation's visual state advance?
+   - `input-driven` — derived from params on input change only. No animation loop. Always the right choice for `mode: display` sims, and fine for interactive sims whose physics is instantaneous.
+   - `animated` — runs a `requestAnimationFrame` loop integrating physics over time (pendulum, projectile, oscillator). Adds a `useEffect` rAF setup with `paused` prop wired up. Only meaningful for `mode: interactive`.
+
+3. **Emits milestones?** (single-select) — does the sim fire `onProgress({ type: 'milestone', id })` events that gates can read?
    - `yes` — meta gets a populated `milestones: [...]` array with TODO entries; component has a `fireMilestone()` helper stub.
    - `no` — meta gets `milestones: []`; component still receives `onProgress` but doesn't call it.
+
+4. **Apparatus catalogue?** (single-select) — does the sim pick from a fixed enum of named instruments / variants (e.g. `dynamometer-1N` / `dynamometer-5N` / …, or `surface-wood` / `surface-glass`)?
+   - `yes` — scaffold a sibling `instruments.ts` holding a `Record<string, Spec>` table; `meta.ts` derives its enum `values` from `Object.keys(...)` so the two never drift.
+   - `no` — omit `instruments.ts`. Pure continuous-param sims (e.g. a single-pendulum with length/mass/angle sliders) don't need it.
 
 ## Files to create
 
 Use the templates in `templates/` and substitute `__ID__` (the kebab-case id) and `__TITLE__` (a Title-Cased Danish working title — derive from the id by replacing hyphens with spaces and Title-Casing, e.g. `dynamometer-g` → `Dynamometer G`. The user will rewrite this; keep it as a placeholder).
 
 ### 1. `src/simulations/<id>/index.tsx`
-Use `templates/index-input-driven.tsx.template` or `templates/index-animated.tsx.template` based on Q1.
+Use `templates/index-input-driven.tsx.template` or `templates/index-animated.tsx.template` based on Q2 (update model).
 
 The component must:
 - Default-export a function component typed `React.FC<SimulationProps>` (or accept `SimulationProps` directly).
@@ -48,17 +56,28 @@ The component must:
 - Honour the `paused` prop in animated mode.
 
 ### 2. `src/simulations/<id>/physics.ts`
-Use `templates/physics.ts.template`. Pure functions only — no React, no DOM. This is the file that gets unit-tested.
+Use `templates/physics.ts.template`. Pure functions only — no React, no DOM, **no data tables**. This is the file that gets unit-tested.
 
 Always export at least one placeholder function so the test has something to import (the template provides `noop` as a stand-in — replace with real physics later).
 
-### 3. `src/simulations/<id>/meta.ts`
-Use `templates/meta.ts.template`. Substitute `__ID__` and `__TITLE__`.
+### 3. `src/simulations/<id>/instruments.ts` (only if Q4 was `yes`)
+Use `templates/instruments.ts.template`. This file is the single source of truth for the apparatus enum — `meta.ts` imports `DYNAMOMETERS` (or whatever you rename it to) and derives `values: Object.keys(...)`, so the schema list and the data table can never drift.
 
-Include `paramSchema: {}` and `defaultParams: {}` as empty objects — the user fills these in. If Q2 was `yes`, leave `milestones: ['todo-rename-me']` as a single placeholder so it's clear where to expand.
+Pattern: `as const satisfies Record<string, Spec>` — gives you a literal-typed map plus a derived `Id = keyof typeof ...` union. The template uses `INSTRUMENTS` / `InstrumentSpec` / `InstrumentId` as placeholder names; rename to the apparatus (e.g. `DYNAMOMETERS` / `DynamometerSpec` / `DynamometerId`).
 
-### 4. `tests/unit/simulations/<id>/physics.test.ts`
+Skip this file for pure continuous-param sims with no apparatus catalogue.
+
+### 4. `src/simulations/<id>/meta.ts`
+Use `templates/meta.ts.template`. Substitute `__ID__`, `__TITLE__`, and `__MODE__` (the Q1 answer — `'interactive'` or `'display'`).
+
+If Q4 was `yes`, also import the instruments map and use `Object.keys(INSTRUMENTS)` for the enum's `values` — see the commented example in the template. Otherwise leave `paramSchema: {}` and `defaultParams: {}` as empty objects.
+
+If Q3 was `yes`, leave `milestones: ['todo-rename-me']` as a single placeholder so it's clear where to expand.
+
+### 5. `tests/unit/simulations/<id>/physics.test.ts`
 Use `templates/physics.test.ts.template`. Tests live OUTSIDE `src/` — this matches SPEC §6 layout (line 301). Create the directory if it doesn't exist; bash `mkdir -p` is fine via the Bash tool.
+
+If Q4 was `yes`, also create a sibling `tests/unit/simulations/<id>/instruments.test.ts` so the catalogue table gets its own consistency tests (cross-checking `meta.paramSchema` enum values against the `INSTRUMENTS` map). The user fills in apparatus-specific invariants.
 
 ## Registry edit — surface, don't apply
 
@@ -92,7 +111,7 @@ Do not move `meta` into `index.tsx`. Keeping it in `meta.ts` lets future tooling
 
 End with one sentence listing what was created, then suggest the next step:
 
-> Created `src/simulations/<id>/` (4 files) + `tests/unit/simulations/<id>/physics.test.ts`. Next: implement the physics, fill `paramSchema` and `defaultParams` in `meta.ts`, and reference the sim from a lab via `simulationId: <id>` in frontmatter.
+> Created `src/simulations/<id>/` (3–4 files: index/physics/meta, plus instruments.ts if Q4 was yes) + matching tests under `tests/unit/simulations/<id>/`. Next: implement the physics, fill `paramSchema` and `defaultParams` in `meta.ts`, populate `instruments.ts` if applicable, and reference the sim from a lab via `simulationId: <id>` in frontmatter.
 
 ## What NOT to do
 

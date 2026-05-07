@@ -20,9 +20,21 @@ export type ProgressEvent =
   | { type: 'data-collected'; count: number }
   | { type: 'reset' };
 
+/**
+ * `display` — read-only renderer driven entirely by `initialParams` from the
+ * lab guide. The lab guide owns the parameter controls (sliders, inputs).
+ * Use for static-lookup sims like a dynamometer scale viewer. Rare.
+ *
+ * `interactive` — sim renders its own controls and drives its own animation.
+ * MDX widgets focus on observation / data-collection. The expected mode for
+ * new sims; pick this unless the sim is a pure read-only display.
+ */
+export type SimulationMode = 'display' | 'interactive';
+
 export interface SimulationMeta {
   id: string;
   title: string;
+  mode: SimulationMode;
   defaultParams: Record<string, number | string>;
   paramSchema: ParamSchema;
   milestones: string[];

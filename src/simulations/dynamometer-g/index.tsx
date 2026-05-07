@@ -2,8 +2,9 @@ import { formatDK } from '@/lib/numbers';
 import type { SimulationProps } from '@/sim-contract';
 import { COLORS, FONT, RADIUS, STROKE, TRANSITION } from '@/simulations/_shared/mekanik/tokens';
 import { useMemo } from 'react';
+import { dynamometerSpec } from './instruments';
 import { meta } from './meta';
-import { dynamometerSpec, forceFor, pegReading } from './physics';
+import { forceFor, pegReading } from './physics';
 
 // Internal viewBox is fixed; the harness scales the SVG via width/height attrs.
 const VB_W = 320;

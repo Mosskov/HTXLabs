@@ -431,9 +431,12 @@ export type ProgressEvent =
   | { type: 'data-collected'; count: number }
   | { type: 'reset' };
 
+export type SimulationMode = 'display' | 'interactive';
+
 export interface SimulationMeta {
   id: string;
   title: string;
+  mode: SimulationMode;                    // see "Sim mode" below
   defaultParams: Record<string, number>;
   paramSchema: ParamSchema;
   milestones: string[];                    // declared milestone ids (for build-time gate check)
@@ -447,6 +450,15 @@ export interface SimulationModule {
 ```
 
 **The simulation never imports from `lab-guide`** — only from `sim-contract` and `sim-runtime`. This is the seam that keeps simulations independently developable.
+
+#### Sim mode
+
+`meta.mode` declares whether the sim renders its own controls. **`interactive` is the default; `display` is the explicit exception.**
+
+- `interactive` — the sim owns its parameter controls (sliders, dropdowns, buttons) and drives its own animation if applicable. The lab-guide MDX focuses on observation and data-collection widgets (NumericAnswer, MultipleChoice). Expected for pendul, projektil, RC-circuit, decay, induction, photoelectric, etc.
+- `display` — read-only renderer driven entirely by `initialParams` from the lab guide; the lab guide owns the parameter controls. Static-lookup sims like `dynamometer-g`, where the apparatus just shows `m·g` for whatever mass the lab supplies.
+
+If a third mode starts to feel necessary, raise it before adding — extending the union has cross-cutting consequences for the lab guide's rendering responsibilities.
 
 ### Per-simulation testing
 - **Pure physics** in `physics.ts` is unit-tested with Vitest. No DOM.

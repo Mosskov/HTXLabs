@@ -8,7 +8,11 @@ The intent is **schematic line-art** — physics-textbook aesthetic, not
 3D-realistic. Cleanest legibility for students; minimum SVG markup for whoever
 maintains the codebase next.
 
-## Palette
+## Visual language (apparatus-agnostic)
+
+These rules hold regardless of what the apparatus looks like.
+
+### Palette
 
 | Token | Use it for |
 |---|---|
@@ -19,34 +23,31 @@ maintains the codebase next.
 | `COLORS.badgeFill` / `badgeText` | Blue rounded badges that display measured/input values (e.g. mass). |
 | `COLORS.cardFill` / `cardBorder` | The outer card background when the sim is not already inside a parent panel. |
 
-## Strokes
+### Strokes
 
 `STROKE.thin` for tick marks, `STROKE.medium` for body outlines and connecting
 strings, `STROKE.thick` for the indicator triangle and emphasised lines,
 `STROKE.bar` for ceiling bars and caps.
 
-## Layout
+### Polish ceiling
 
-- **viewBox**: portrait, fixed pixel coordinates. The current convention is
-  `viewBox="0 0 320 520"` for vertical instruments. Use `preserveAspectRatio="xMidYMid meet"` so the harness can scale freely without warping. Pick fresh coordinates per sim if the apparatus isn't vertical — but stay roughly in the 300–520 range so sims feel like siblings on a topic page.
-- **Anchor everything to the centerline** (`x = 160` in the 320-wide viewBox). It
-  keeps composition predictable and resizes cleanly.
-- **Top to bottom is gravity**: ceilings/mounts at low y, suspended things at
-  high y. Don't invent sideways layouts unless the apparatus actually is sideways.
+Subtle gradients are OK (cylindrical body fill, metallic badge fill — see
+`dynamometer-g`). Drop shadows, bevels, glass/photoreal lighting are not.
+Indicator red is the only attention colour — never use it for decoration.
 
-## Transitions
+### Transitions
 
 Mekanik sims are input-driven — derive visual quantities from `params` on every
 render and let CSS animate the result. Use `TRANSITION.indicator` /
 `TRANSITION.mass`. **No `requestAnimationFrame` loops** unless the physics is
 genuinely time-dependent.
 
-## Numbers
+### Numbers
 
 All on-screen numeric values use Danish format. Pull `formatDK` from
 `@/lib/numbers` — never `toFixed` + manual replace.
 
-## Accessibility
+### Accessibility
 
 - Every sim's outer `<svg>` has `role="img"` and a live `aria-label` describing
   the current state in Danish (e.g. *"Dynamometer 10 N med 27 g hængende, viser
@@ -56,11 +57,40 @@ All on-screen numeric values use Danish format. Pull `formatDK` from
   position changes, text labels, or shape changes (the dynamometer's
   break-apart cracks are an example).
 
+## Layout patterns (closed catalogue)
+
+Pick one of the four patterns below. All use `preserveAspectRatio="xMidYMid meet"`
+so the harness can scale freely without warping.
+
+| Pattern | viewBox | Anchor | Gravity | Example |
+|---|---|---|---|---|
+| Vertical instrument | `0 0 320 520` | centerline x=160 | top → bottom | `dynamometer-g`, Hooke (fjeder) |
+| Horizontal surface | `0 0 520 320` | floor at fixed y | shown via vector arrows | friktion |
+| Square swing/arc | `0 0 400 400` | top-center pivot | top → bottom | pendul |
+| Wide trajectory | `0 0 640 360` | launcher bottom-left | parabolic | projektil |
+
+If your apparatus doesn't fit one of these four, raise it before building —
+extend this catalogue rather than inventing a fifth layout in a single sim's
+folder.
+
+## Shared visual elements
+
+Recurring elements that aren't yet shared but will be:
+
+- Force / velocity vector arrow (head shape, label-near-tip rule, scale convention)
+- Angle indicator arc + label
+- Trajectory trail (dashed, opacity ramp)
+- Hatched surface (ceiling, floor, incline — same idiom as the existing
+  dynamometer ceiling)
+
+Rule: first sim inlines, second copies, third extracts to
+`_shared/mekanik/<name>.tsx`. (Same rule-of-three already applied to `<g>`
+blocks, just extended to visual elements.)
+
 ## Adding a new mekanik sim
 
-1. Read this guide.
-2. Import from `@/simulations/_shared/mekanik/tokens`.
-3. If you find yourself reaching for a colour/spacing not in `tokens.ts`, add
-   it here first and reference it — don't inline. If three sims have copy-pasted
-   the same `<g>` (rule of three), extract a shared component into
-   `_shared/mekanik/<name>.tsx` at that point, not before.
+1. Read the visual-language section above.
+2. Pick a layout pattern from the catalogue (or raise if none fit).
+3. Import from `@/simulations/_shared/mekanik/tokens`.
+4. If you reach for a colour/spacing not in `tokens.ts`, add it there first.
+   Rule-of-three for `<g>` blocks and visual elements still applies.

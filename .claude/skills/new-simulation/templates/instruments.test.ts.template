@@ -1,0 +1,23 @@
+import { INSTRUMENTS } from '@/simulations/__ID__/instruments';
+import { meta } from '@/simulations/__ID__/meta';
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+
+describe('__ID__ instruments', () => {
+  describe('INSTRUMENTS map', () => {
+    // TODO: rename `instrument` to the actual paramSchema enum key, e.g. `dynamometer`.
+    const enumDef = meta.paramSchema.instrument as { values: string[] } | undefined;
+    const allowedIds = enumDef?.values ?? [];
+
+    it('has an entry for every id in meta.paramSchema', () => {
+      for (const id of allowedIds) {
+        expect(
+          (INSTRUMENTS as Record<string, unknown>)[id],
+          `missing entry for ${id}`,
+        ).toBeDefined();
+      }
+    });
+
+    // TODO: add apparatus-specific invariants (tick spacing, label format, ...).
+  });
+});

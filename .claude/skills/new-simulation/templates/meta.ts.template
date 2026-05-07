@@ -1,13 +1,19 @@
 import type { SimulationMeta } from '@/sim-contract';
+// If your sim has an apparatus catalogue, import it and derive the enum from its keys
+// so meta.ts and instruments.ts can never drift:
+//   import { INSTRUMENTS } from './instruments';
 
 export const meta: SimulationMeta = {
   id: '__ID__',
   title: '__TITLE__', // TODO: replace with the Danish working title.
+  mode: '__MODE__',
   defaultParams: {
-    // TODO: e.g. mass: 0.05
+    // TODO: e.g. mass: 0.05, instrument: 'dynamometer-10N'
   },
   paramSchema: {
     // TODO: e.g. mass: { type: 'range', min: 0, max: 0.1, step: 0.001, unit: 'kg' }
+    // For an apparatus enum, derive from the catalogue rather than re-listing names:
+    //   instrument: { type: 'enum', values: Object.keys(INSTRUMENTS) },
   },
   milestones: [
     // TODO: replace with real milestone ids fired via onProgress.

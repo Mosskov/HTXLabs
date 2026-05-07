@@ -5,8 +5,7 @@
  * Pure inputs → outputs only.
  */
 
-/** Tyngdeacceleration g i Danmark, m/s². */
-export const G_DK = 9.82;
+import { G_DK } from '@/lib/physics-constants';
 
 /** Tyngdekraft på en hængende masse: F = m·g. */
 export function forceFor(mass: number, g: number = G_DK): number {
@@ -25,29 +24,4 @@ export function pegReading(
   if (force > scaleMax) return { reading: scaleMax, overScale: true };
   if (force < 0) return { reading: 0, overScale: false };
   return { reading: force, overScale: false };
-}
-
-export interface DynamometerSpec {
-  scaleMax: number;
-  majorTick: number;
-  minorTick: number;
-  label: string;
-}
-
-/**
- * Per-instrument scale data. Keys match `meta.paramSchema.dynamometer.values`.
- * Tick spacing follows typical school dynamometers (5 minor steps per major).
- */
-export const DYNAMOMETERS: Record<string, DynamometerSpec> = {
-  'dynamometer-1N': { scaleMax: 1, majorTick: 0.2, minorTick: 0.04, label: '1 N' },
-  'dynamometer-5N': { scaleMax: 5, majorTick: 1, minorTick: 0.2, label: '5 N' },
-  'dynamometer-10N': { scaleMax: 10, majorTick: 2, minorTick: 0.4, label: '10 N' },
-  'dynamometer-50N': { scaleMax: 50, majorTick: 10, minorTick: 2, label: '50 N' },
-};
-
-const DEFAULT_DYNAMOMETER: DynamometerSpec = DYNAMOMETERS['dynamometer-10N'] as DynamometerSpec;
-
-/** Look up a dynamometer spec by id; falls back to the 10 N spec for unknown ids. */
-export function dynamometerSpec(id: string): DynamometerSpec {
-  return DYNAMOMETERS[id] ?? DEFAULT_DYNAMOMETER;
 }

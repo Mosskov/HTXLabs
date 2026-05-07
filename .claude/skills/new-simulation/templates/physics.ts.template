@@ -1,8 +1,9 @@
 /**
  * __ID__ — pure physics functions. Unit-tested in tests/unit/simulations/__ID__/physics.test.ts.
  *
- * Rule: no React, no DOM, no imports from '@/lab-guide' or '@/sim-runtime'.
- * Pure inputs → outputs only. This is what makes the math testable.
+ * Rule: no React, no DOM, no imports from '@/lab-guide' or '@/sim-runtime',
+ * no data tables (those go in instruments.ts). Pure inputs → outputs only.
+ * This is what makes the math testable.
  */
 
 /** Placeholder so the test stub has something to import. Replace with real physics. */
