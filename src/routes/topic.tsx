@@ -1,6 +1,6 @@
-import { Link, useParams } from 'react-router-dom';
-import { loadTopic } from '@/lib/content';
 import { strings } from '@/lab-guide/strings.da';
+import { loadTopic } from '@/lib/content';
+import { Link, useParams } from 'react-router-dom';
 
 export function TopicRoute() {
   const { topic } = useParams();
@@ -13,9 +13,7 @@ export function TopicRoute() {
         ← Forsiden
       </Link>
       <h1 className="text-3xl text-navy mt-2 mb-1">{t.frontmatter.title}</h1>
-      {t.frontmatter.subtitle && (
-        <p className="text-slate-600 mb-8">{t.frontmatter.subtitle}</p>
-      )}
+      {t.frontmatter.subtitle && <p className="text-slate-600 mb-8">{t.frontmatter.subtitle}</p>}
       <ul className="grid grid-cols-1 gap-4 list-none pl-0">
         {t.experiments.map((e) => (
           <li key={e.slug} className="lab-card before:hidden">

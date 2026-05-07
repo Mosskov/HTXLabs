@@ -1,6 +1,6 @@
-import type { ComponentType, ReactNode } from 'react';
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
+import type { ComponentType, ReactNode } from 'react';
 import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';

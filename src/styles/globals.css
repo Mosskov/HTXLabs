@@ -5,17 +5,24 @@
 @layer base {
   html {
     @apply text-slate-800;
-    font-family: theme('fontFamily.sans');
+    /* biome-ignore lint/correctness/noUnknownFunction: Tailwind v3 theme() helper */
+    /* biome-ignore lint/a11y/useGenericFontNames: Tailwind theme() resolves to a stack with generic fallback */
+    font-family: theme("fontFamily.sans");
   }
   body {
     @apply bg-slate-50;
   }
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     @apply text-navy font-semibold;
   }
   /* Phase content uses the serif heading at the top of each phase, matching mockup */
   .lab-heading {
-    font-family: theme('fontFamily.serif');
+    /* biome-ignore lint/correctness/noUnknownFunction: Tailwind v3 theme() helper */
+    /* biome-ignore lint/a11y/useGenericFontNames: Tailwind theme() resolves to a stack with generic fallback */
+    font-family: theme("fontFamily.serif");
   }
   /* DK-style blue-dot bullets */
   .prose ul {
@@ -25,7 +32,7 @@
     @apply pl-5 relative;
   }
   .prose ul > li::before {
-    content: '';
+    content: "";
     @apply absolute left-0 top-2 w-2 h-2 rounded-full bg-accent;
   }
 }
@@ -45,9 +52,17 @@
 /* Print stylesheet for the Rapportér phase. The ReportComposer toggles
    data-print-include attributes; only opted-in sections survive print. */
 @media print {
-  body * { visibility: hidden; }
-  [data-print-include='true'],
-  [data-print-include='true'] * { visibility: visible; }
-  [data-print-include='true'] { position: static; }
-  .no-print { display: none !important; }
+  body * {
+    visibility: hidden;
+  }
+  [data-print-include="true"],
+  [data-print-include="true"] * {
+    visibility: visible;
+  }
+  [data-print-include="true"] {
+    position: static;
+  }
+  .no-print {
+    display: none !important;
+  }
 }

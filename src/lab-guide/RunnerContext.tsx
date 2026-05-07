@@ -1,3 +1,5 @@
+import type { Phase } from '@/lib/schema';
+import type { ProgressEvent } from '@/sim-contract';
 import {
   type ReactNode,
   createContext,
@@ -8,8 +10,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { Phase } from '@/lib/schema';
-import type { ProgressEvent } from '@/sim-contract';
 import type { GateCtx, WidgetState } from './gates';
 import {
   type DataRow,
@@ -149,10 +149,9 @@ export function RunnerProvider({
     setState(emptyState(experimentId, experimentVersion, phases, initialMode, initialLabMode));
   }, [experimentId, experimentVersion, phases, initialMode, initialLabMode]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-create on every state change so consumers re-evaluate gates
   const gateCtx: GateCtx = useMemo(
     () => ({ widgets: widgetStateRef.current, simulationStateRef }),
-    // Re-create on every state change so consumers re-evaluate gates.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [state],
   );
 

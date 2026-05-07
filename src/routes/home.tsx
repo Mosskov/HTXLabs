@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
 import { listTopics } from '@/lib/content';
+import { Link } from 'react-router-dom';
 
 export function Home() {
   const topics = listTopics();
@@ -21,8 +21,7 @@ export function Home() {
                 <p className="text-sm text-slate-600">{t.frontmatter.subtitle}</p>
               )}
               <p className="mt-2 text-xs text-slate-500">
-                {t.experiments.length}{' '}
-                {t.experiments.length === 1 ? 'forsøg' : 'forsøg'}
+                {t.experiments.length} {t.experiments.length === 1 ? 'forsøg' : 'forsøg'}
               </p>
             </Link>
           </li>

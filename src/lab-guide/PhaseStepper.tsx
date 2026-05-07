@@ -1,15 +1,12 @@
 import type { Phase } from '@/lib/schema';
-import { canAdvanceTo } from './gates';
 import { useRunner } from './RunnerContext';
+import { canAdvanceTo } from './gates';
 
 export function PhaseStepper({ phases }: { phases: Phase[] }) {
   const { state, setCurrentPhase, gateCtx } = useRunner();
 
   return (
-    <ol
-      className="flex items-start justify-between gap-1 sm:gap-2 mb-6"
-      aria-label="Faseoversigt"
-    >
+    <ol className="flex items-start justify-between gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
       {phases.map((phase, idx) => {
         const isCurrent = phase.id === state.currentPhaseId;
         const isCompleted =
@@ -21,10 +18,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
         const clickable = reachable;
 
         return (
-          <li
-            key={phase.id}
-            className="flex-1 flex flex-col items-center text-center min-w-0"
-          >
+          <li key={phase.id} className="flex-1 flex flex-col items-center text-center min-w-0">
             <div className="flex items-center w-full">
               {idx > 0 && (
                 <div
@@ -58,9 +52,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
               </button>
               {idx < phases.length - 1 && (
                 <div
-                  className={`flex-1 h-px ${
-                    isCompleted ? 'bg-accent' : 'bg-slate-300'
-                  }`}
+                  className={`flex-1 h-px ${isCompleted ? 'bg-accent' : 'bg-slate-300'}`}
                   aria-hidden
                 />
               )}

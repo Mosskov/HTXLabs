@@ -1,8 +1,8 @@
-import type { ComponentType } from 'react';
 import type { ExperimentFrontmatter } from '@/lib/schema';
-import Theory from './theory.mdx';
+import type { ComponentType } from 'react';
 import PhaseKonkluder from './phase-konkluder.mdx';
 import PhasePlanlaeg from './phase-planlaeg.mdx';
+import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
   version: 1,
@@ -18,7 +18,7 @@ export const frontmatter: ExperimentFrontmatter = {
         {
           id: 'planlaeg',
           title: 'Planlæg',
-          intro: 'Skriv et svar i widget\'en herunder.',
+          intro: "Skriv et svar i widget'en herunder.",
           gate: { type: 'all-filled', widgetIds: ['hypotese-test'] },
         },
         {

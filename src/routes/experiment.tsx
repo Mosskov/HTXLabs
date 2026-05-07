@@ -1,12 +1,12 @@
-import { MDXProvider } from '@mdx-js/react';
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { strings } from '@/lab-guide/strings.da';
 import * as widgets from '@/lab-guide/widgets';
 import { loadExperiment } from '@/lib/content';
 import { loadSimulation } from '@/lib/simulations';
 import type { SimulationModule } from '@/sim-contract';
+import { MDXProvider } from '@mdx-js/react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
 const mdxComponents = {
   KeyEquation: widgets.KeyEquation,

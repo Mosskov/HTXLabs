@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
 import type { Phase } from '@/lib/schema';
-import { canAdvanceTo, gateMessage, isGateSatisfied } from './gates';
+import type { ReactNode } from 'react';
 import { useRunner } from './RunnerContext';
+import { canAdvanceTo, gateMessage, isGateSatisfied } from './gates';
 import { strings } from './strings.da';
 
 interface Props {
@@ -23,17 +23,12 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   if (!currentPhase) return null;
 
   const gateOk = isGateSatisfied(currentPhase.gate, state, undefined, gateCtx);
-  const nextReachable =
-    nextPhase && canAdvanceTo(nextPhase.id, phases, state, undefined, gateCtx);
+  const nextReachable = nextPhase && canAdvanceTo(nextPhase.id, phases, state, undefined, gateCtx);
   const message = gateOk ? '' : gateMessage(currentPhase.gate);
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-4 no-print">
-      {message && (
-        <p className="mb-3 text-sm text-amber-700" role="status">
-          {message}
-        </p>
-      )}
+      {message && <output className="mb-3 block text-sm text-amber-700">{message}</output>}
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1">
           {isFirst ? (

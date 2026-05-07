@@ -31,10 +31,9 @@ const experimentModules = import.meta.glob<ExperimentModule>(
   { eager: true },
 );
 
-const topicModules = import.meta.glob<{ frontmatter: unknown }>(
-  '../content/topics/*.ts',
-  { eager: true },
-);
+const topicModules = import.meta.glob<{ frontmatter: unknown }>('../content/topics/*.ts', {
+  eager: true,
+});
 
 interface Indexed {
   topicSlug: string;
@@ -84,9 +83,7 @@ for (const [path, mod] of Object.entries(topicModules)) {
 }
 
 export function loadExperiment(topic: string, slug: string): LoadedExperiment | null {
-  const found = experimentsIndex.find(
-    (e) => e.topicSlug === topic && e.experimentSlug === slug,
-  );
+  const found = experimentsIndex.find((e) => e.topicSlug === topic && e.experimentSlug === slug);
   if (!found) return null;
   return {
     frontmatter: found.validated,
