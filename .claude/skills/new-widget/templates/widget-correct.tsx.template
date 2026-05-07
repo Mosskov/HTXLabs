@@ -1,0 +1,57 @@
+import { useEffect, useState } from 'react';
+import { useRunner } from '../RunnerContext';
+
+interface Props {
+  id: string;
+  // TODO: declare authoring API (e.g. answer, options, tolerance).
+}
+
+/**
+ * __NAME__ — batch-checked widget.
+ * Gate-compatible via { type: 'all-correct', widgetIds: ['<id>'] }.
+ *
+ * The student types/picks an answer, then clicks "Tjek" to validate.
+ * On a correct check, registers { kind: 'correct', correct: true }.
+ */
+export function __NAME__({ id }: Props) {
+  const { state, setWidgetValue, registerWidgetState, bumpAttempts } = useRunner();
+  const value = state.widgetValues[id];
+  const [checked, setChecked] = useState(false);
+  const [correct, setCorrect] = useState(false);
+
+  useEffect(() => {
+    if (!checked) {
+      registerWidgetState(id, null);
+      return;
+    }
+    registerWidgetState(id, { kind: 'correct', correct });
+    return () => registerWidgetState(id, null);
+  }, [id, checked, correct, registerWidgetState]);
+
+  function onCheck() {
+    bumpAttempts(id);
+    // TODO: compare `value` against the authored answer; setCorrect(...) accordingly.
+    setChecked(true);
+  }
+
+  return (
+    <div className="my-4">
+      {/* TODO: render the answer input(s); call setWidgetValue(id, ...) on change. */}
+
+      {/* TODO(SPEC §13): migrate to phase-footer button registration when runner API lands. */}
+      <button
+        type="button"
+        onClick={onCheck}
+        className="mt-2 px-3 py-1.5 rounded-md bg-accent text-white text-sm"
+      >
+        Tjek
+      </button>
+
+      {checked && (
+        <p className={`mt-1 text-sm ${correct ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {/* TODO: feedback text */}
+        </p>
+      )}
+    </div>
+  );
+}

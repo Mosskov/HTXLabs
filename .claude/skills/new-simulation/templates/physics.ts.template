@@ -1,0 +1,15 @@
+/**
+ * __ID__ — pure physics functions. Unit-tested in tests/unit/simulations/__ID__/physics.test.ts.
+ *
+ * Rule: no React, no DOM, no imports from '@/lab-guide' or '@/sim-runtime'.
+ * Pure inputs → outputs only. This is what makes the math testable.
+ */
+
+/** Placeholder so the test stub has something to import. Replace with real physics. */
+export function noop(): void {}
+
+// TODO: add your physics here. Examples:
+//   export function forceFor(mass: number, g: number): number { return mass * g; }
+//   export function periodOfPendulum(L: number, g: number): number {
+//     return 2 * Math.PI * Math.sqrt(L / g);
+//   }

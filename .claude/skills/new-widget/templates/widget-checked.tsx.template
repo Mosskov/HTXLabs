@@ -1,0 +1,47 @@
+import { useEffect } from 'react';
+import { useRunner } from '../RunnerContext';
+
+interface Props {
+  id: string;
+  // TODO: declare authoring API (e.g. items: { id, label }[]).
+}
+
+/**
+ * __NAME__ — checklist widget.
+ * Gate-compatible via { type: 'all-checked', widgetIds: ['<id>'] }.
+ */
+export function __NAME__({ id }: Props) {
+  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  // The widget value is a record of itemId -> boolean.
+  const ticks = (state.widgetValues[id] as Record<string, boolean> | undefined) ?? {};
+
+  // TODO: replace with the authored items list.
+  const items: { id: string; label: string }[] = [];
+  const allChecked = items.length > 0 && items.every((it) => ticks[it.id]);
+
+  useEffect(() => {
+    registerWidgetState(id, { kind: 'checked', allChecked });
+    return () => registerWidgetState(id, null);
+  }, [id, allChecked, registerWidgetState]);
+
+  function toggle(itemId: string) {
+    setWidgetValue(id, { ...ticks, [itemId]: !ticks[itemId] });
+  }
+
+  return (
+    <ul className="my-4 space-y-2">
+      {items.map((it) => (
+        <li key={it.id}>
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!ticks[it.id]}
+              onChange={() => toggle(it.id)}
+            />
+            <span>{it.label}</span>
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -1,0 +1,14 @@
+interface Props {
+  // TODO: declare authoring API.
+}
+
+/**
+ * __NAME__ — display-only widget (no runner state, no gate).
+ */
+export function __NAME__(_props: Props) {
+  return (
+    <div className="my-4">
+      {/* TODO: render. */}
+    </div>
+  );
+}

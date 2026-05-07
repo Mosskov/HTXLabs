@@ -1,0 +1,68 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { SimulationProps } from '@/sim-contract';
+import { meta } from './meta';
+// Pure helpers go in ./physics — keep this component free of math.
+// import { step } from './physics';
+
+/**
+ * __ID__ — animated simulation with a requestAnimationFrame loop.
+ *
+ * Seam: do NOT import from '@/lab-guide'. Cross-talk happens via props.onProgress
+ * and props.initialParams only.
+ */
+function __ID___Component({
+  width,
+  height,
+  initialParams,
+  paused = false,
+  onProgress: _onProgress,
+  onParamChange: _onParamChange,
+}: SimulationProps) {
+  const params = useMemo(
+    () => ({ ...meta.defaultParams, ...(initialParams ?? {}) }),
+    [initialParams],
+  );
+
+  // TODO: replace with the real simulation state shape.
+  const [state, setState] = useState<{ t: number }>({ t: 0 });
+  const lastTsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (paused) {
+      lastTsRef.current = null;
+      return;
+    }
+    let raf = 0;
+    const tick = (ts: number) => {
+      const last = lastTsRef.current ?? ts;
+      const dt = (ts - last) / 1000;
+      lastTsRef.current = ts;
+
+      // TODO: integrate physics with `dt` and `params`.
+      setState((s) => ({ t: s.t + dt }));
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      lastTsRef.current = null;
+    };
+  }, [paused, params]);
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={meta.title}
+    >
+      {/* TODO: draw using `state` and `params`. */}
+      {/* Debug: t = {state.t.toFixed(2)} s */}
+    </svg>
+  );
+}
+
+export { meta } from './meta';
+export default __ID___Component;

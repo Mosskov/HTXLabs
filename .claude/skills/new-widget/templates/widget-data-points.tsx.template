@@ -1,0 +1,39 @@
+import { useEffect } from 'react';
+import { useRunner } from '../RunnerContext';
+import type { DataRow } from '../runner';
+
+interface Props {
+  id: string;
+  // TODO: declare authoring API (columns, units, minRows, etc.).
+}
+
+/**
+ * __NAME__ — data-collection table widget.
+ * Gate-compatible via { type: 'data-points', min: N, validOnly?: boolean }.
+ */
+export function __NAME__({ id }: Props) {
+  const { state, setDataTable, registerWidgetState } = useRunner();
+  const rows: DataRow[] = state.dataTables[id] ?? [];
+
+  // TODO: define what makes a row "valid" — typically all columns numeric and non-empty.
+  const valid = rows.filter((r) => false).length;
+  const total = rows.length;
+
+  useEffect(() => {
+    registerWidgetState(id, { kind: 'data-points', valid, total });
+    return () => registerWidgetState(id, null);
+  }, [id, valid, total, registerWidgetState]);
+
+  function setRows(next: DataRow[]) {
+    setDataTable(id, next);
+  }
+
+  return (
+    <div className="my-4">
+      {/* TODO: render the table; on edit call setRows(...). */}
+      <p className="text-sm text-slate-600">
+        {/* TODO: "Gyldige målinger: {valid} / {total}" */}
+      </p>
+    </div>
+  );
+}

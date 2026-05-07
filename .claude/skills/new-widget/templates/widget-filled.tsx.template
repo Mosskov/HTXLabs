@@ -1,0 +1,33 @@
+import { useEffect } from 'react';
+import { useRunner } from '../RunnerContext';
+import { ProtectedTextarea } from './ProtectedInput';
+
+interface Props {
+  id: string;
+  // TODO: declare the widget's authoring API (prompt, minWords, etc.).
+}
+
+/**
+ * __NAME__ — free-text widget.
+ * Gate-compatible via { type: 'all-filled', widgetIds: ['<id>'] }.
+ */
+export function __NAME__({ id }: Props) {
+  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  const value = (state.widgetValues[id] as string | undefined) ?? '';
+  const filled = value.trim().length > 0;
+
+  useEffect(() => {
+    registerWidgetState(id, { kind: 'filled', filled });
+    return () => registerWidgetState(id, null);
+  }, [id, filled, registerWidgetState]);
+
+  return (
+    <div className="my-4">
+      {/* TODO: render label, ProtectedTextarea, hints. */}
+      <ProtectedTextarea
+        value={value}
+        onChange={(e) => setWidgetValue(id, e.target.value)}
+      />
+    </div>
+  );
+}

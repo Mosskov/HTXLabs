@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply text-slate-800;
+    font-family: theme('fontFamily.sans');
+  }
+  body {
+    @apply bg-slate-50;
+  }
+  h1, h2, h3, h4 {
+    @apply text-navy font-semibold;
+  }
+  /* Phase content uses the serif heading at the top of each phase, matching mockup */
+  .lab-heading {
+    font-family: theme('fontFamily.serif');
+  }
+  /* DK-style blue-dot bullets */
+  .prose ul {
+    @apply list-none pl-0;
+  }
+  .prose ul > li {
+    @apply pl-5 relative;
+  }
+  .prose ul > li::before {
+    content: '';
+    @apply absolute left-0 top-2 w-2 h-2 rounded-full bg-accent;
+  }
+}
+
+@layer components {
+  .instruction-box {
+    @apply bg-instruction-bg border border-blue-200 rounded-lg p-4 text-slate-700;
+  }
+  .callout-equation {
+    @apply bg-callout-bg border border-callout-border rounded-lg py-6 px-4 flex justify-center;
+  }
+  .lab-card {
+    @apply bg-white border border-slate-200 rounded-lg shadow-sm;
+  }
+}
+
+/* Print stylesheet for the Rapportér phase. The ReportComposer toggles
+   data-print-include attributes; only opted-in sections survive print. */
+@media print {
+  body * { visibility: hidden; }
+  [data-print-include='true'],
+  [data-print-include='true'] * { visibility: visible; }
+  [data-print-include='true'] { position: static; }
+  .no-print { display: none !important; }
+}

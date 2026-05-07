@@ -1,0 +1,16 @@
+import type { SimulationMeta } from '@/sim-contract';
+
+export const meta: SimulationMeta = {
+  id: '__ID__',
+  title: '__TITLE__', // TODO: replace with the Danish working title.
+  defaultParams: {
+    // TODO: e.g. mass: 0.05
+  },
+  paramSchema: {
+    // TODO: e.g. mass: { type: 'range', min: 0, max: 0.1, step: 0.001, unit: 'kg' }
+  },
+  milestones: [
+    // TODO: replace with real milestone ids fired via onProgress.
+    // 'first-load',
+  ],
+};
