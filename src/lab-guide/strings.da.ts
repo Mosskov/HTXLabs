@@ -10,6 +10,7 @@ export const strings = {
     nextPhase: 'Næste fase →',
     previousPhase: '← Forrige fase',
     finishGuide: 'Afslut guide',
+    guideFinished: 'Forsøg afsluttet — godt arbejde!',
     switchInquiryForm: '← Skift undersøgelsesform',
     hideSimulation: 'Skjul simulation',
     showSimulation: 'Vis simulation',

@@ -12,13 +12,16 @@ interface Props {
 export function Reflection({ id, prompt, minWords }: Props) {
   const { state, setWidgetValue, registerWidgetState } = useRunner();
   const value = (state.widgetValues[id] as string | undefined) ?? '';
-  const filled = value.trim().length > 0;
+  const nonEmpty = value.trim().length > 0;
   const words = value.trim().split(/\s+/).filter(Boolean).length;
-  const tooShort = typeof minWords === 'number' && filled && words < minWords;
+  const meetsMinWords = typeof minWords !== 'number' || words >= minWords;
+  const filled = nonEmpty && meetsMinWords;
+  const tooShort = nonEmpty && !meetsMinWords;
 
+  // No unmount cleanup: the registered state must outlive a phase change so the
+  // gate stays satisfied when the student navigates away and back.
   useEffect(() => {
     registerWidgetState(id, { kind: 'filled', filled });
-    return () => registerWidgetState(id, null);
   }, [id, filled, registerWidgetState]);
 
   return (

@@ -13,9 +13,10 @@ export function ConclusionStatement({ id, prompt, maxChars = 300 }: Props) {
   const value = (state.widgetValues[id] as string | undefined) ?? '';
   const filled = value.trim().length > 0;
 
+  // No unmount cleanup: see Reflection.tsx — registered state must outlive
+  // phase changes so the gate stays satisfied across navigation.
   useEffect(() => {
     registerWidgetState(id, { kind: 'filled', filled });
-    return () => registerWidgetState(id, null);
   }, [id, filled, registerWidgetState]);
 
   return (

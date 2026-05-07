@@ -9,22 +9,27 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
     <ol className="flex items-start justify-between gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
       {phases.map((phase, idx) => {
         const isCurrent = phase.id === state.currentPhaseId;
-        const isCompleted =
-          state.visitedPhaseIds.has(phase.id) &&
-          !isCurrent &&
-          phases.findIndex((p) => p.id === phase.id) <
-            phases.findIndex((p) => p.id === state.currentPhaseId);
+        // Any visited non-current phase shows the ✓ — even if it sits ahead of
+        // the current phase (the student stepped backward). Cues that the work
+        // is preserved and a forward jump is available.
+        const isVisited = state.visitedPhaseIds.has(phase.id);
+        const isCompleted = isVisited && !isCurrent;
         const reachable = canAdvanceTo(phase.id, phases, state, undefined, gateCtx);
         const clickable = reachable;
+
+        // Edge between phase k and k+1 is "crossed" iff phase k+1 has been
+        // visited. Both halves of that edge use the same condition so the
+        // connector is a single colour, not a slate/accent splice.
+        const nextPhase = phases[idx + 1];
+        const nextEdgeCrossed = !!nextPhase && state.visitedPhaseIds.has(nextPhase.id);
+        const prevEdgeCrossed = isVisited;
 
         return (
           <li key={phase.id} className="flex-1 flex flex-col items-center text-center min-w-0">
             <div className="flex items-center w-full">
               {idx > 0 && (
                 <div
-                  className={`flex-1 h-px ${
-                    isCompleted || isCurrent ? 'bg-accent' : 'bg-slate-300'
-                  }`}
+                  className={`flex-1 h-px ${prevEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`}
                   aria-hidden
                 />
               )}
@@ -52,7 +57,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
               </button>
               {idx < phases.length - 1 && (
                 <div
-                  className={`flex-1 h-px ${isCompleted ? 'bg-accent' : 'bg-slate-300'}`}
+                  className={`flex-1 h-px ${nextEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`}
                   aria-hidden
                 />
               )}

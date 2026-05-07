@@ -1,11 +1,12 @@
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
 import PhaseKonkluder from './phase-konkluder.mdx';
+import PhaseOpstil from './phase-opstil.mdx';
 import PhasePlanlaeg from './phase-planlaeg.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 1,
+  version: 2,
   title: 'Hej, Verden — framework-test',
   topic: 'mekanik',
   simulationId: '__none',
@@ -20,6 +21,12 @@ export const frontmatter: ExperimentFrontmatter = {
           title: 'Planlæg',
           intro: "Skriv et svar i widget'en herunder.",
           gate: { type: 'all-filled', widgetIds: ['hypotese-test'] },
+        },
+        {
+          id: 'opstil',
+          title: 'Opstil',
+          intro: 'Always-gate (passerer altid).',
+          gate: { type: 'always' },
         },
         {
           id: 'konkluder',
@@ -38,5 +45,6 @@ export const frontmatter: ExperimentFrontmatter = {
 export { Theory };
 export const phaseBodies: Record<string, ComponentType> = {
   planlaeg: PhasePlanlaeg,
+  opstil: PhaseOpstil,
   konkluder: PhaseKonkluder,
 };
