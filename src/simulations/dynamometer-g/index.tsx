@@ -18,23 +18,32 @@ const BODY_BOTTOM = 420;
 const BODY_W = BODY_RIGHT - BODY_LEFT;
 
 // Scale strip lives near the right edge of the body.
-const SCALE_X = 165;
+const SCALE_X = 160;
 const SCALE_TOP = 88;
 const SCALE_BOTTOM = 404;
 const SCALE_H = SCALE_BOTTOM - SCALE_TOP;
 const MAJOR_TICK_LEN = 8;
 const MINOR_TICK_LEN = 4;
+const TICK_GAP = 4; // gap between vertical scale line and the start of each tick
 
 // Caps + ceiling.
-const TOP_CAP = { left: 132, right: 188, top: 54, bottom: 74 };
-const BOTTOM_CAP = { left: 132, right: 188, top: 420, bottom: 440 };
-const CEILING = { left: 60, right: 260, top: 30, bottom: 40 };
-const HATCH_TOP = 10;
-const EYE_BOLT_TOP = { cx: CENTER_X, cy: 47, r: 6, holeR: 2.5 };
+const TOP_CAP = { left: 122, right: 198, top: 54, bottom: 74 };
+const BOTTOM_CAP = { left: 122, right: 198, top: 420, bottom: 440 };
+const CEILING = { left: 55, right: 265, top: 30, bottom: 40 };
+const HATCH_TOP = 20;
+const EYE_BOLT_TOP = { cx: CENTER_X, cy: 47, r: 6 };
+
+// Indicator arrow (`→`): tip x is offset slightly left of the scale line.
+const INDICATOR_TIP_X = SCALE_X - 7;
+const INDICATOR_HEAD_LEN = 10;
+const INDICATOR_HEAD_HALF = 5;
+const INDICATOR_STEM_W = 12;
+const INDICATOR_STEM_H = 6;
+const INDICATOR_BASE_X = INDICATOR_TIP_X - INDICATOR_HEAD_LEN;
 
 // Hook + mass badge.
 const HOOK = { x: CENTER_X, top: 440, bottom: 452 };
-const HOOK_EYE = { cx: CENTER_X, cy: 456, r: 4, holeR: 1.5 };
+const HOOK_EYE = { cx: CENTER_X, cy: 456, r: 4 };
 const BADGE = { left: 130, right: 190, top: 466, bottom: 488 };
 
 // Over-scale break: jagged crack across the body. Bottom half drops by DROP px.
@@ -177,12 +186,22 @@ function DynamometerG_Component({
         stroke={COLORS.navy}
         strokeWidth={STROKE.medium}
       />
-      <circle cx={EYE_BOLT_TOP.cx} cy={EYE_BOLT_TOP.cy} r={EYE_BOLT_TOP.r} fill={COLORS.navy} />
       <circle
         cx={EYE_BOLT_TOP.cx}
         cy={EYE_BOLT_TOP.cy}
-        r={EYE_BOLT_TOP.holeR}
-        fill={COLORS.cardFill}
+        r={EYE_BOLT_TOP.r}
+        fill="none"
+        stroke={COLORS.navy}
+        strokeWidth={STROKE.thick}
+      />
+      {/* Pin/screw notch across the eye — reads as hardware. */}
+      <line
+        x1={EYE_BOLT_TOP.cx - EYE_BOLT_TOP.r + 1.5}
+        y1={EYE_BOLT_TOP.cy}
+        x2={EYE_BOLT_TOP.cx + EYE_BOLT_TOP.r - 1.5}
+        y2={EYE_BOLT_TOP.cy}
+        stroke={COLORS.navy}
+        strokeWidth={STROKE.thin}
       />
 
       {/* Top cap with instrument-max label */}
@@ -274,7 +293,7 @@ function DynamometerG_Component({
           rx={RADIUS.body}
           fill="url(#dyn-body)"
           stroke={COLORS.navy}
-          strokeWidth={STROKE.medium}
+          strokeWidth={0.75}
         />
       )}
 
@@ -294,9 +313,9 @@ function DynamometerG_Component({
         return (
           <line
             key={`min-${v}`}
-            x1={SCALE_X}
+            x1={SCALE_X + TICK_GAP}
             y1={y}
-            x2={SCALE_X + MINOR_TICK_LEN}
+            x2={SCALE_X + TICK_GAP + MINOR_TICK_LEN}
             y2={y}
             stroke={COLORS.navy}
             strokeWidth={STROKE.thin}
@@ -310,15 +329,15 @@ function DynamometerG_Component({
         return (
           <g key={`maj-${v}`}>
             <line
-              x1={SCALE_X}
+              x1={SCALE_X + TICK_GAP}
               y1={y}
-              x2={SCALE_X + MAJOR_TICK_LEN}
+              x2={SCALE_X + TICK_GAP + MAJOR_TICK_LEN}
               y2={y}
               stroke={COLORS.navy}
               strokeWidth={STROKE.medium}
             />
             <text
-              x={SCALE_X + MAJOR_TICK_LEN + 3}
+              x={SCALE_X + TICK_GAP + MAJOR_TICK_LEN + 3}
               y={y + 3}
               textAnchor="start"
               fontSize={FONT.tick}
@@ -330,14 +349,21 @@ function DynamometerG_Component({
         );
       })}
 
-      {/* Indicator arrow — chunky red triangle pointing right at the scale.
+      {/* Indicator arrow — red `→` (stem + triangle head) pointing right at the scale.
           SVG transform attribute (not CSS) so the offset is in viewBox units, not screen pixels. */}
       <g
         transform={`translate(0 ${indicatorY - SCALE_TOP})`}
         style={{ transition: TRANSITION.indicator }}
       >
+        <rect
+          x={INDICATOR_BASE_X - INDICATOR_STEM_W}
+          y={SCALE_TOP - INDICATOR_STEM_H / 2}
+          width={INDICATOR_STEM_W}
+          height={INDICATOR_STEM_H}
+          fill={COLORS.indicator}
+        />
         <polygon
-          points={`${SCALE_X},${SCALE_TOP} ${SCALE_X - 14},${SCALE_TOP - 5} ${SCALE_X - 14},${SCALE_TOP + 5}`}
+          points={`${INDICATOR_TIP_X},${SCALE_TOP} ${INDICATOR_BASE_X},${SCALE_TOP - INDICATOR_HEAD_HALF} ${INDICATOR_BASE_X},${SCALE_TOP + INDICATOR_HEAD_HALF}`}
           fill={COLORS.indicator}
           stroke={COLORS.indicator}
           strokeWidth={STROKE.thin}
@@ -375,8 +401,23 @@ function DynamometerG_Component({
           strokeWidth={STROKE.medium}
         />
         {/* Hook eye */}
-        <circle cx={HOOK_EYE.cx} cy={HOOK_EYE.cy} r={HOOK_EYE.r} fill={COLORS.navy} />
-        <circle cx={HOOK_EYE.cx} cy={HOOK_EYE.cy} r={HOOK_EYE.holeR} fill={COLORS.cardFill} />
+        <circle
+          cx={HOOK_EYE.cx}
+          cy={HOOK_EYE.cy}
+          r={HOOK_EYE.r}
+          fill="none"
+          stroke={COLORS.navy}
+          strokeWidth={STROKE.medium}
+        />
+        {/* Pin/screw notch across the hook eye. */}
+        <line
+          x1={HOOK_EYE.cx - HOOK_EYE.r + 1}
+          y1={HOOK_EYE.cy}
+          x2={HOOK_EYE.cx + HOOK_EYE.r - 1}
+          y2={HOOK_EYE.cy}
+          stroke={COLORS.navy}
+          strokeWidth={STROKE.thin}
+        />
 
         {/* Connector wire from hook eye down to the top of the badge — stretches with sag. */}
         {mass > 0 && (
