@@ -13,14 +13,24 @@
 export const COLORS = {
   /** Primary structural strokes and dark fills (caps, ceiling bar). */
   navy: '#3a4a63',
-  /** Body interior — slightly off-white so ticks read clearly. */
+  /** Lighter navy for cap top-edge highlight (pill 3D illusion). */
+  navyHighlight: '#5a6a83',
+  /** Body interior — slightly off-white so ticks read clearly. Used as the mid stop in the body gradient. */
   bodyFill: '#fafbfc',
+  /** Left highlight stop for the body gradient (cylindrical-tube illusion). */
+  bodyFillHighlight: '#ffffff',
+  /** Right shadow stop for the body gradient. */
+  bodyFillShadow: '#e8edf2',
   /** Hatched ceiling lines. */
   hatch: '#3a4a63',
   /** Indicator arrow + over-scale break-apart strokes. */
   indicator: '#e53935',
-  /** Mass badge background. */
+  /** Mass badge background — used as the mid stop in the metallic badge gradient. */
   badgeFill: '#3b82f6',
+  /** Bright highlight band in the metallic badge gradient. */
+  badgeFillHighlight: '#7baef5',
+  /** Top/bottom edges of the metallic badge gradient. */
+  badgeFillShadow: '#1e5fc7',
   /** Text on the mass badge. */
   badgeText: '#ffffff',
   /** Tick / scale numeric labels. */

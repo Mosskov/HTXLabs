@@ -18,7 +18,7 @@ const BODY_BOTTOM = 420;
 const BODY_W = BODY_RIGHT - BODY_LEFT;
 
 // Scale strip lives near the right edge of the body.
-const SCALE_X = 170;
+const SCALE_X = 165;
 const SCALE_TOP = 88;
 const SCALE_BOTTOM = 404;
 const SCALE_H = SCALE_BOTTOM - SCALE_TOP;
@@ -120,10 +120,22 @@ function DynamometerG_Component({
           patternUnits="userSpaceOnUse"
           width={10}
           height={10}
-          patternTransform="rotate(-45)"
+          patternTransform="rotate(45)"
         >
           <line x1={0} y1={0} x2={0} y2={10} stroke={COLORS.hatch} strokeWidth={STROKE.medium} />
         </pattern>
+        {/* Cylindrical-tube illusion: bright highlight on the left, soft shadow on the right. */}
+        <linearGradient id="dyn-body" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={COLORS.bodyFillHighlight} />
+          <stop offset="40%" stopColor={COLORS.bodyFill} />
+          <stop offset="100%" stopColor={COLORS.bodyFillShadow} />
+        </linearGradient>
+        {/* Metallic badge: vertical gradient with a bright mid-band. */}
+        <linearGradient id="dyn-badge" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={COLORS.badgeFillShadow} />
+          <stop offset="50%" stopColor={COLORS.badgeFillHighlight} />
+          <stop offset="100%" stopColor={COLORS.badgeFillShadow} />
+        </linearGradient>
       </defs>
 
       {/* Outer card background */}
@@ -182,6 +194,16 @@ function DynamometerG_Component({
         rx={RADIUS.cap}
         fill={COLORS.navy}
       />
+      {/* Top-edge highlight stripe — pill 3D illusion. */}
+      <line
+        x1={TOP_CAP.left + 6}
+        y1={TOP_CAP.top + 3}
+        x2={TOP_CAP.right - 6}
+        y2={TOP_CAP.top + 3}
+        stroke={COLORS.navyHighlight}
+        strokeWidth={STROKE.medium}
+        strokeLinecap="round"
+      />
       <text
         x={CENTER_X}
         y={TOP_CAP.top + (TOP_CAP.bottom - TOP_CAP.top) / 2 + 4}
@@ -207,7 +229,7 @@ function DynamometerG_Component({
               L ${zigzag(BODY_RIGHT, BODY_LEFT, CRACK_TOP_Y, 3, 8)}
               Z
             `}
-            fill={COLORS.bodyFill}
+            fill="url(#dyn-body)"
             stroke={COLORS.navy}
             strokeWidth={STROKE.medium}
             strokeLinejoin="round"
@@ -224,7 +246,7 @@ function DynamometerG_Component({
                 A ${RADIUS.body},${RADIUS.body} 0 0 1 ${BODY_LEFT},${BODY_BOTTOM - RADIUS.body}
                 Z
               `}
-              fill={COLORS.bodyFill}
+              fill="url(#dyn-body)"
               stroke={COLORS.navy}
               strokeWidth={STROKE.medium}
               strokeLinejoin="round"
@@ -250,7 +272,7 @@ function DynamometerG_Component({
           width={BODY_W}
           height={BODY_BOTTOM - BODY_TOP}
           rx={RADIUS.body}
-          fill={COLORS.bodyFill}
+          fill="url(#dyn-body)"
           stroke={COLORS.navy}
           strokeWidth={STROKE.medium}
         />
@@ -308,12 +330,11 @@ function DynamometerG_Component({
         );
       })}
 
-      {/* Indicator arrow — chunky red triangle pointing right at the scale */}
+      {/* Indicator arrow — chunky red triangle pointing right at the scale.
+          SVG transform attribute (not CSS) so the offset is in viewBox units, not screen pixels. */}
       <g
-        style={{
-          transform: `translateY(${indicatorY - SCALE_TOP}px)`,
-          transition: TRANSITION.indicator,
-        }}
+        transform={`translate(0 ${indicatorY - SCALE_TOP})`}
+        style={{ transition: TRANSITION.indicator }}
       >
         <polygon
           points={`${SCALE_X},${SCALE_TOP} ${SCALE_X - 14},${SCALE_TOP - 5} ${SCALE_X - 14},${SCALE_TOP + 5}`}
@@ -334,6 +355,16 @@ function DynamometerG_Component({
           rx={RADIUS.cap}
           fill={COLORS.navy}
         />
+        {/* Top-edge highlight stripe on bottom cap. */}
+        <line
+          x1={BOTTOM_CAP.left + 6}
+          y1={BOTTOM_CAP.top + 3}
+          x2={BOTTOM_CAP.right - 6}
+          y2={BOTTOM_CAP.top + 3}
+          stroke={COLORS.navyHighlight}
+          strokeWidth={STROKE.medium}
+          strokeLinecap="round"
+        />
         {/* Hook stem */}
         <line
           x1={HOOK.x}
@@ -347,21 +378,31 @@ function DynamometerG_Component({
         <circle cx={HOOK_EYE.cx} cy={HOOK_EYE.cy} r={HOOK_EYE.r} fill={COLORS.navy} />
         <circle cx={HOOK_EYE.cx} cy={HOOK_EYE.cy} r={HOOK_EYE.holeR} fill={COLORS.cardFill} />
 
-        {/* Mass badge — only visible when there's a mass */}
+        {/* Connector wire from hook eye down to the top of the badge — stretches with sag. */}
         {mass > 0 && (
-          <g
-            style={{
-              transform: `translateY(${massSag}px)`,
-              transition: TRANSITION.mass,
-            }}
-          >
+          <line
+            x1={CENTER_X}
+            y1={HOOK_EYE.cy + HOOK_EYE.r}
+            x2={CENTER_X}
+            y2={BADGE.top + massSag}
+            stroke={COLORS.navy}
+            strokeWidth={STROKE.medium}
+            style={{ transition: TRANSITION.mass }}
+          />
+        )}
+
+        {/* Mass badge — only visible when there's a mass. SVG transform attribute (not CSS) so it scales with the viewBox. */}
+        {mass > 0 && (
+          <g transform={`translate(0 ${massSag})`} style={{ transition: TRANSITION.mass }}>
             <rect
               x={BADGE.left}
               y={BADGE.top}
               width={BADGE.right - BADGE.left}
               height={BADGE.bottom - BADGE.top}
               rx={RADIUS.badge}
-              fill={COLORS.badgeFill}
+              fill="url(#dyn-badge)"
+              stroke={COLORS.badgeFillShadow}
+              strokeWidth={STROKE.thin}
             />
             <text
               x={CENTER_X}
