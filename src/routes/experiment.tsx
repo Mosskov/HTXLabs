@@ -11,6 +11,7 @@ import { useParams } from 'react-router-dom';
 const mdxComponents = {
   KeyEquation: widgets.KeyEquation,
   FreeTextResponse: widgets.FreeTextResponse,
+  Checklist: widgets.Checklist,
   NulstilButton: widgets.NulstilButton,
   GateDebug: widgets.GateDebug,
 };

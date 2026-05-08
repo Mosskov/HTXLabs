@@ -1,22 +1,22 @@
 import { useEffect } from 'react';
 import { useRunner } from '../RunnerContext';
 
-interface Props {
+interface Item {
   id: string;
-  // TODO: declare authoring API (e.g. items: { id, label }[]).
+  label: string;
 }
 
-/**
- * __NAME__ — checklist widget.
- * Gate-compatible via { type: 'all-checked', widgetIds: ['<id>'] }.
- */
-export function __NAME__({ id }: Props) {
-  const { state, setWidgetValue, registerWidgetState } = useRunner();
-  // The widget value is a record of itemId -> boolean.
-  const ticks = (state.widgetValues[id] as Record<string, boolean> | undefined) ?? {};
+interface Props {
+  id: string;
+  items: Item[];
+}
 
-  // TODO: replace with the authored items list.
-  const items: { id: string; label: string }[] = [];
+/** Generic checklist. Each item has an id and a label; the widget value is a
+ * record `{ [itemId]: boolean }`. Gate via
+ * `{ type: 'all-checked', widgetIds: [...] }`. */
+export function Checklist({ id, items }: Props) {
+  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  const ticks = (state.widgetValues[id] as Record<string, boolean> | undefined) ?? {};
   const allChecked = items.length > 0 && items.every((it) => ticks[it.id]);
 
   // No unmount cleanup: the registered state must outlive a phase change so the
@@ -33,7 +33,7 @@ export function __NAME__({ id }: Props) {
     <ul className="my-4 space-y-2">
       {items.map((it) => (
         <li key={it.id}>
-          <label className="inline-flex items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-slate-800">
             <input
               type="checkbox"
               checked={!!ticks[it.id]}

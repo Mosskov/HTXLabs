@@ -76,9 +76,12 @@ export function canAdvanceTo(
   // Backward / current: always reachable.
   if (targetIdx <= currentIdx) return true;
 
-  // Any forward move re-checks the current phase's gate. Emptying a previously
-  // valid answer locks future phases again, even if they were visited before.
-  if (!isGateSatisfied(currentPhase.gate, state, module, ctx)) return false;
+  // Any forward move re-checks every gate from current up to (but not
+  // including) target. Breaking an intermediate gate after the fact must
+  // re-lock leaps over it, even if the target phase was visited before.
+  for (const phase of phases.slice(currentIdx, targetIdx)) {
+    if (!isGateSatisfied(phase.gate, state, module, ctx)) return false;
+  }
 
   // Visited future phase → free leap (the work is preserved). Unvisited → only
   // the immediate next phase, no leap-frogging past intermediate steps.

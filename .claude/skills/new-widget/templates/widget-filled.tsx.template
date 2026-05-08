@@ -16,9 +16,10 @@ export function __NAME__({ id }: Props) {
   const value = (state.widgetValues[id] as string | undefined) ?? '';
   const filled = value.trim().length > 0;
 
+  // No unmount cleanup: the registered state must outlive a phase change so the
+  // gate stays satisfied when the student navigates away and back.
   useEffect(() => {
     registerWidgetState(id, { kind: 'filled', filled });
-    return () => registerWidgetState(id, null);
   }, [id, filled, registerWidgetState]);
 
   return (

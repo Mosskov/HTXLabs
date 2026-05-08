@@ -21,13 +21,16 @@ export function __NAME__({ id }: Props) {
   const [foundCount, setFoundCount] = useState(0);
   const [checked, setChecked] = useState(false);
 
+  // No unmount cleanup: the registered state must outlive a phase change so the
+  // gate stays satisfied when the student navigates away and back. The pre-check
+  // `null` registration below is intentional — that's the unchecked state, not
+  // unmount cleanup.
   useEffect(() => {
     if (!checked) {
       registerWidgetState(id, null);
       return;
     }
     registerWidgetState(id, { kind: 'keywords', foundCount });
-    return () => registerWidgetState(id, null);
   }, [id, checked, foundCount, registerWidgetState]);
 
   function onCheck() {
