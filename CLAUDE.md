@@ -19,7 +19,7 @@ npm run lint         # Biome check (also runs in CI; must pass)
 npm run format       # Biome format --write
 ```
 
-CI (`.github/workflows/deploy.yml`) runs `lint` → `test -- --run` → `build` and deploys `dist/` to GitHub Pages on push to `main`. The build sets `BASE_URL=/<repo>/` for project pages; clear it (and add `public/CNAME`) for a custom domain.
+CI (`.github/workflows/deploy.yml`) runs `lint` → `test -- --run` → `build` and deploys `dist/` to GitHub Pages. The workflow is **manual-only** (`workflow_dispatch`) — trigger it from the Actions tab when you want to deploy. The build sets `BASE_URL=/<repo>/` for project pages; clear it (and add `public/CNAME`) for a custom domain.
 
 ## Architecture
 
