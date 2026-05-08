@@ -1,4 +1,5 @@
 import type { Phase } from '@/lib/schema';
+import { Fragment } from 'react';
 import { useRunner } from './RunnerContext';
 import { canAdvanceTo, isGateSatisfied } from './gates';
 
@@ -6,7 +7,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
   const { state, setCurrentPhase, gateCtx } = useRunner();
 
   return (
-    <ol className="flex items-start justify-between gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
+    <ol className="flex items-start gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
       {phases.map((phase, idx) => {
         const isCurrent = phase.id === state.currentPhaseId;
         const isVisited = state.visitedPhaseIds.has(phase.id);
@@ -18,22 +19,14 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
         const reachable = canAdvanceTo(phase.id, phases, state, undefined, gateCtx);
         const clickable = reachable;
 
-        // Edge between phase k and k+1 is "crossed" iff phase k+1 has been
-        // visited. Both halves of that edge use the same condition so the
-        // connector is a single colour, not a slate/accent splice.
+        // Connector to the NEXT phase: accent iff the next phase has been
+        // visited. One div per gap, not two halves per phase.
         const nextPhase = phases[idx + 1];
         const nextEdgeCrossed = !!nextPhase && state.visitedPhaseIds.has(nextPhase.id);
-        const prevEdgeCrossed = isVisited;
 
         return (
-          <li key={phase.id} className="flex-1 flex flex-col items-center text-center min-w-0">
-            <div className="flex items-center w-full">
-              {idx > 0 && (
-                <div
-                  className={`flex-1 h-px ${prevEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`}
-                  aria-hidden
-                />
-              )}
+          <Fragment key={phase.id}>
+            <li className="flex flex-col items-center text-center">
               <button
                 type="button"
                 onClick={() => clickable && setCurrentPhase(phase.id)}
@@ -56,21 +49,20 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
               >
                 {isCompleted ? '✓' : idx + 1}
               </button>
-              {idx < phases.length - 1 && (
-                <div
-                  className={`flex-1 h-px ${nextEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`}
-                  aria-hidden
-                />
-              )}
-            </div>
-            <span
-              className={`mt-2 text-xs sm:text-sm truncate w-full ${
-                isCurrent ? 'text-accent font-medium' : 'text-slate-500'
-              }`}
-            >
-              {phase.title}
-            </span>
-          </li>
+              <span
+                className={`mt-2 text-xs sm:text-sm ${
+                  isCurrent ? 'text-accent font-medium' : 'text-slate-500'
+                }`}
+              >
+                {phase.title}
+              </span>
+            </li>
+            {idx < phases.length - 1 && (
+              <div className="flex-1 flex items-center h-9" aria-hidden>
+                <div className={`w-full h-px ${nextEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`} />
+              </div>
+            )}
+          </Fragment>
         );
       })}
     </ol>
