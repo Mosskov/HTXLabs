@@ -1,0 +1,15 @@
+Denne fase tester `all-correct`-porten med to `Quiz`-widgets. Begge skal besvares korrekt og bekræftes med **Tjek**, før du kan fortsætte. Hvis du ændrer dit svar efter et tjek, låses porten igen indtil du klikker **Tjek** på ny.
+
+<Quiz id="quiz1-test" prompt="Hvilken enhed bruges for kraft i SI-systemet?" options={[
+  { id: "n", label: "Newton (N)", correct: true },
+  { id: "kg", label: "Kilogram (kg)" },
+  { id: "j", label: "Joule (J)" }
+]} />
+
+<Quiz id="quiz2-test" prompt="Tyngdeaccelerationen g på Jordens overflade er ca.:" options={[
+  { id: "1", label: "1,0 m/s²" },
+  { id: "98", label: "9,8 m/s²", correct: true },
+  { id: "98e3", label: "9 800 m/s²" }
+]} />
+
+<NulstilButton />

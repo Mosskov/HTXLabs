@@ -1,5 +1,6 @@
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
+import PhaseAnalyser from './phase-analyser.mdx';
 import PhaseKonkluder from './phase-konkluder.mdx';
 import PhaseMaal from './phase-maal.mdx';
 import PhaseOpstil from './phase-opstil.mdx';
@@ -7,7 +8,7 @@ import PhasePlanlaeg from './phase-planlaeg.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 5,
+  version: 6,
   title: 'Hej, Verden — framework-test',
   topic: 'mekanik',
   simulationId: '__none',
@@ -39,6 +40,12 @@ export const frontmatter: ExperimentFrontmatter = {
           gate: { type: 'all-checked', widgetIds: ['materialer-test'] },
         },
         {
+          id: 'analyser',
+          title: 'Analysér',
+          intro: 'All-correct-gate: besvar begge quizzer korrekt og klik Tjek.',
+          gate: { type: 'all-correct', widgetIds: ['quiz1-test', 'quiz2-test'] },
+        },
+        {
           id: 'konkluder',
           title: 'Konkludér',
           intro: 'Skriv en kort konklusion.',
@@ -57,5 +64,6 @@ export const phaseBodies: Record<string, ComponentType> = {
   planlaeg: PhasePlanlaeg,
   opstil: PhaseOpstil,
   maal: PhaseMaal,
+  analyser: PhaseAnalyser,
   konkluder: PhaseKonkluder,
 };

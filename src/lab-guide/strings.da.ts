@@ -43,6 +43,10 @@ export const strings = {
       /** Vars: {n} = minWords threshold */
       tooShort: 'Skriv mindst {n} ord for et fyldestgørende svar.',
     },
+    quiz: {
+      correct: 'Korrekt!',
+      incorrect: 'Forkert — prøv igen.',
+    },
   },
   gates: {
     milestone: 'Du skal gennemføre forsøget mindst én gang for at fortsætte.',

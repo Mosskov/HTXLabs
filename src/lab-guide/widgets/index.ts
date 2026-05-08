@@ -7,4 +7,5 @@ export { GateDebug } from './GateDebug';
 export { KeyEquation } from './KeyEquation';
 export { NulstilButton } from './NulstilButton';
 export { ProtectedInput, ProtectedTextarea } from './ProtectedInput';
+export { Quiz } from './Quiz';
 export { ToastContext, ToastProvider } from './ToastContext';
