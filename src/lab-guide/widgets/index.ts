@@ -2,6 +2,7 @@
 // without explicit imports (via the MDXProvider in routes/experiment.tsx).
 
 export { ConclusionStatement } from './ConclusionStatement';
+export { GateDebug } from './GateDebug';
 export { KeyEquation } from './KeyEquation';
 export { NulstilButton } from './NulstilButton';
 export { ProtectedInput, ProtectedTextarea } from './ProtectedInput';

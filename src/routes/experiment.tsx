@@ -13,6 +13,7 @@ const mdxComponents = {
   Reflection: widgets.Reflection,
   ConclusionStatement: widgets.ConclusionStatement,
   NulstilButton: widgets.NulstilButton,
+  GateDebug: widgets.GateDebug,
 };
 
 export function ExperimentRoute() {

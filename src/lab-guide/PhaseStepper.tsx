@@ -1,6 +1,6 @@
 import type { Phase } from '@/lib/schema';
 import { useRunner } from './RunnerContext';
-import { canAdvanceTo } from './gates';
+import { canAdvanceTo, isGateSatisfied } from './gates';
 
 export function PhaseStepper({ phases }: { phases: Phase[] }) {
   const { state, setCurrentPhase, gateCtx } = useRunner();
@@ -9,11 +9,12 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
     <ol className="flex items-start justify-between gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
       {phases.map((phase, idx) => {
         const isCurrent = phase.id === state.currentPhaseId;
-        // Any visited non-current phase shows the ✓ — even if it sits ahead of
-        // the current phase (the student stepped backward). Cues that the work
-        // is preserved and a forward jump is available.
         const isVisited = state.visitedPhaseIds.has(phase.id);
-        const isCompleted = isVisited && !isCurrent;
+        // ✓ tracks the live gate, not just visit history: a phase whose gate
+        // flipped back to false (e.g. student emptied the answer) loses its ✓.
+        // The current phase shows ✓ too as soon as its gate passes. Visited
+        // is still required so unvisited `always`-gate phases don't pre-tick.
+        const isCompleted = isVisited && isGateSatisfied(phase.gate, state, undefined, gateCtx);
         const reachable = canAdvanceTo(phase.id, phases, state, undefined, gateCtx);
         const clickable = reachable;
 
