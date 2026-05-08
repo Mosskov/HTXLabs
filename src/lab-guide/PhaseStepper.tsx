@@ -2,6 +2,7 @@ import type { Phase } from '@/lib/schema';
 import { Fragment } from 'react';
 import { useRunner } from './RunnerContext';
 import { canAdvanceTo, isGateSatisfied } from './gates';
+import { format, strings } from './strings.da';
 
 export function PhaseStepper({ phases }: { phases: Phase[] }) {
   const { state, setCurrentPhase, gateCtx } = useRunner();
@@ -32,7 +33,11 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
                 onClick={() => clickable && setCurrentPhase(phase.id)}
                 disabled={!clickable}
                 aria-current={isCurrent ? 'step' : undefined}
-                aria-label={`Fase ${idx + 1}: ${phase.title}${isCurrent ? ' (nuværende)' : ''}`}
+                aria-label={format(strings.phaseStepper.phaseAriaLabel, {
+                  n: idx + 1,
+                  title: phase.title,
+                  current: isCurrent ? strings.phaseStepper.currentSuffix : '',
+                })}
                 className={`
                   shrink-0 w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-medium
                   transition-colors

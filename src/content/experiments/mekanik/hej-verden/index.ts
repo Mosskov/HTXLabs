@@ -6,7 +6,7 @@ import PhasePlanlaeg from './phase-planlaeg.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 2,
+  version: 4,
   title: 'Hej, Verden — framework-test',
   topic: 'mekanik',
   simulationId: '__none',
@@ -20,7 +20,10 @@ export const frontmatter: ExperimentFrontmatter = {
           id: 'planlaeg',
           title: 'Planlæg',
           intro: "Skriv et svar i widget'en herunder.",
-          gate: { type: 'all-filled', widgetIds: ['hypotese-test'] },
+          gate: {
+            type: 'all-filled',
+            widgetIds: ['hypotese-test', 'minord-test', 'override-test'],
+          },
         },
         {
           id: 'opstil',

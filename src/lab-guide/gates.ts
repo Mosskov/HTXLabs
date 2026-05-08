@@ -1,6 +1,7 @@
 import type { Gate, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { RunnerState } from './runner';
+import { format, strings } from './strings.da';
 
 export interface GateCtx {
   /** Live snapshot of widget state — keyed by widget id. */
@@ -85,24 +86,25 @@ export function canAdvanceTo(
   return targetIdx === currentIdx + 1;
 }
 
-/** Default lock-message map used when a phase's gate isn't satisfied. */
+/** Default lock-message map used when a phase's gate isn't satisfied. Strings
+ * live in `strings.da.ts`; this function only handles the param substitution. */
 export function gateMessage(gate: Gate): string {
   switch (gate.type) {
     case 'always':
       return '';
     case 'milestone':
-      return 'Du skal gennemføre forsøget mindst én gang for at fortsætte.';
+      return strings.gates.milestone;
     case 'data-points':
-      return `Indsamle mindst ${gate.min} gyldige målinger før næste fase.`;
+      return format(strings.gates.dataPoints, { min: gate.min });
     case 'all-correct':
-      return "Klik 'Tjek' og opnå alle korrekte svar.";
+      return strings.gates.allCorrect;
     case 'all-checked':
-      return 'Sæt flueben ved alle punkter på tjeklisten.';
+      return strings.gates.allChecked;
     case 'all-filled':
-      return 'Besvar alle spørgsmål for at fortsætte.';
+      return strings.gates.allFilled;
     case 'keyword-count':
-      return `Find mindst ${gate.min} nøgleord.`;
+      return format(strings.gates.keywordCount, { min: gate.min });
     case 'predicate':
-      return 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.';
+      return strings.gates.predicate;
   }
 }
