@@ -1,6 +1,7 @@
 import type { Gate, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { RunnerState } from './runner';
+import { format, strings } from './strings.da';
 
 export interface GateCtx {
   /** Live snapshot of widget state — keyed by widget id. */
@@ -12,8 +13,7 @@ export type WidgetState =
   | { kind: 'correct'; correct: boolean }
   | { kind: 'checked'; allChecked: boolean }
   | { kind: 'filled'; filled: boolean }
-  | { kind: 'keywords'; foundCount: number }
-  | { kind: 'data-points'; valid: number; total: number };
+  | { kind: 'keywords'; foundCount: number };
 
 const inquiryFreeAdvance = (mode: RunnerState['mode']) => mode === 'open';
 
@@ -30,20 +30,12 @@ export function isGateSatisfied(
       return true;
     case 'milestone':
       return state.firedMilestones.has(gate.requires);
-    case 'data-points': {
-      // Try widget-state first (live data table), fall back to runner counter.
-      const widgetEntries = Object.values(ctx.widgets).filter(
-        (w): w is Extract<WidgetState, { kind: 'data-points' }> => w.kind === 'data-points',
-      );
-      if (widgetEntries.length > 0) {
-        const total = widgetEntries.reduce(
-          (sum, w) => sum + (gate.validOnly ? w.valid : w.total),
-          0,
-        );
-        return total >= gate.min;
-      }
+    case 'data-points':
+      // Single source of truth: the runner counter, fed by simulation
+      // ProgressEvent('data-collected'). A data-table widget that wants to
+      // contribute should also fire that event — the widget-state path is gone
+      // because it disagreed with the counter when the widget was unmounted.
       return state.dataPointCount >= gate.min;
-    }
     case 'all-correct':
       return gate.widgetIds.every((id) => {
         const w = ctx.widgets[id];
@@ -77,28 +69,42 @@ export function canAdvanceTo(
 ): boolean {
   const targetIdx = phases.findIndex((p) => p.id === targetPhaseId);
   if (targetIdx < 0) return false;
-  if (targetIdx === 0) return true;
-  return phases.slice(0, targetIdx).every((p) => isGateSatisfied(p.gate, state, module, ctx));
+  const currentIdx = phases.findIndex((p) => p.id === state.currentPhaseId);
+  const currentPhase = currentIdx >= 0 ? phases[currentIdx] : undefined;
+  if (!currentPhase) return false;
+
+  // Backward / current: always reachable.
+  if (targetIdx <= currentIdx) return true;
+
+  // Any forward move re-checks the current phase's gate. Emptying a previously
+  // valid answer locks future phases again, even if they were visited before.
+  if (!isGateSatisfied(currentPhase.gate, state, module, ctx)) return false;
+
+  // Visited future phase → free leap (the work is preserved). Unvisited → only
+  // the immediate next phase, no leap-frogging past intermediate steps.
+  if (state.visitedPhaseIds.has(targetPhaseId)) return true;
+  return targetIdx === currentIdx + 1;
 }
 
-/** Default lock-message map used when a phase's gate isn't satisfied. */
+/** Default lock-message map used when a phase's gate isn't satisfied. Strings
+ * live in `strings.da.ts`; this function only handles the param substitution. */
 export function gateMessage(gate: Gate): string {
   switch (gate.type) {
     case 'always':
       return '';
     case 'milestone':
-      return 'Du skal gennemføre forsøget mindst én gang for at fortsætte.';
+      return strings.gates.milestone;
     case 'data-points':
-      return `Indsamle mindst ${gate.min} gyldige målinger før næste fase.`;
+      return format(strings.gates.dataPoints, { min: gate.min });
     case 'all-correct':
-      return "Klik 'Tjek' og opnå alle korrekte svar.";
+      return strings.gates.allCorrect;
     case 'all-checked':
-      return 'Sæt flueben ved alle punkter på tjeklisten.';
+      return strings.gates.allChecked;
     case 'all-filled':
-      return 'Besvar alle spørgsmål for at fortsætte.';
+      return strings.gates.allFilled;
     case 'keyword-count':
-      return `Find mindst ${gate.min} nøgleord.`;
+      return format(strings.gates.keywordCount, { min: gate.min });
     case 'predicate':
-      return 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.';
+      return strings.gates.predicate;
   }
 }

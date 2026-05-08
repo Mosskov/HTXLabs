@@ -76,7 +76,7 @@ export function RunnerProvider({
   const widgetStateRef = useRef<Record<string, WidgetState>>({});
   const simulationStateRef = useRef<unknown>(null);
   // Tick to force gate-evaluating subscribers to re-render after widget changes.
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
   const setCurrentPhase = useCallback(
     (phaseId: string) =>
@@ -149,10 +149,10 @@ export function RunnerProvider({
     setState(emptyState(experimentId, experimentVersion, phases, initialMode, initialLabMode));
   }, [experimentId, experimentVersion, phases, initialMode, initialLabMode]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-create on every state change so consumers re-evaluate gates
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-create on every state-or-tick change so consumers re-evaluate gates after widget (re)registration
   const gateCtx: GateCtx = useMemo(
     () => ({ widgets: widgetStateRef.current, simulationStateRef }),
-    [state],
+    [state, tick],
   );
 
   const api: RunnerApi = useMemo(

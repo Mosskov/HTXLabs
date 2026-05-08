@@ -6,7 +6,6 @@ export const Gate = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('data-points'),
     min: z.number().int(),
-    validOnly: z.boolean().default(true),
   }),
   z.object({ type: z.literal('all-correct'), widgetIds: z.array(z.string()) }),
   z.object({ type: z.literal('all-checked'), widgetIds: z.array(z.string()) }),

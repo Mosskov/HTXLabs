@@ -1,4 +1,16 @@
 Skriv en kort hypotese for at verificere at widget-state og persistens virker.
 
-<Reflection id="hypotese-test"
-  prompt="Hvad forventer du der sker når du opdaterer siden? (Test af persistens.)" />
+<FreeTextResponse id="hypotese-test"
+  prompt="Hvad forventer du der sker når du opdaterer siden? (Test af persistens — uden minWords.)" />
+
+<FreeTextResponse id="minord-test"
+  prompt="Skriv mindst 10 ord her for at teste minWords-tærsklen."
+  minWords={10} />
+
+<FreeTextResponse id="override-test"
+  prompt="Test af per-instance override af placeholder og tooShortMessage."
+  minWords={5}
+  placeholder="Jeg forventer at..."
+  tooShortMessage="Brug mindst 5 ord, gerne med en kort begrundelse." />
+
+<NulstilButton />

@@ -10,8 +10,9 @@ import { useParams } from 'react-router-dom';
 
 const mdxComponents = {
   KeyEquation: widgets.KeyEquation,
-  Reflection: widgets.Reflection,
-  ConclusionStatement: widgets.ConclusionStatement,
+  FreeTextResponse: widgets.FreeTextResponse,
+  NulstilButton: widgets.NulstilButton,
+  GateDebug: widgets.GateDebug,
 };
 
 export function ExperimentRoute() {

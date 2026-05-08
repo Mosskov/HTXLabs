@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useRunner } from '../RunnerContext';
 import type { DataRow } from '../runner';
 
@@ -9,20 +8,16 @@ interface Props {
 
 /**
  * __NAME__ — data-collection table widget.
- * Gate-compatible via { type: 'data-points', min: N, validOnly?: boolean }.
+ *
+ * Gate-compatible via { type: 'data-points', min: N }. The data-points gate
+ * reads state.dataPointCount, which is incremented by simulations firing
+ * ProgressEvent('data-collected'). A pure-widget data table that does NOT have
+ * an associated simulation will need a runner API (e.g. incrementDataPoints)
+ * before its rows can drive the gate.
  */
 export function __NAME__({ id }: Props) {
-  const { state, setDataTable, registerWidgetState } = useRunner();
+  const { state, setDataTable } = useRunner();
   const rows: DataRow[] = state.dataTables[id] ?? [];
-
-  // TODO: define what makes a row "valid" — typically all columns numeric and non-empty.
-  const valid = rows.filter((r) => false).length;
-  const total = rows.length;
-
-  useEffect(() => {
-    registerWidgetState(id, { kind: 'data-points', valid, total });
-    return () => registerWidgetState(id, null);
-  }, [id, valid, total, registerWidgetState]);
 
   function setRows(next: DataRow[]) {
     setDataTable(id, next);
@@ -32,7 +27,7 @@ export function __NAME__({ id }: Props) {
     <div className="my-4">
       {/* TODO: render the table; on edit call setRows(...). */}
       <p className="text-sm text-slate-600">
-        {/* TODO: "Gyldige målinger: {valid} / {total}" */}
+        {/* TODO: "Målinger: {rows.length}" */}
       </p>
     </div>
   );

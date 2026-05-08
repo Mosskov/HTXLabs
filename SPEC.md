@@ -585,27 +585,30 @@ Authored as MDX components. All widgets register themselves with the runner via 
 - When paired with a known target, the framework can compute and display the relative difference inline.
 - Persists value + correctness flag.
 
-### `<Reflection>` — guided open-ended question (phase 5 Diskutér)
+### `<FreeTextResponse>` — generic free-text input (phases 5 Diskutér, 6 Konkludér, anywhere)
 ```mdx
-<Reflection id="r1" prompt="Stemmer dine resultater overens med hypotesen? Beskriv hvilke mønstre du observerede." />
-<Reflection id="r2" prompt="Beregn eller aflæs nøgleparametren ud fra dine data. Hvordan passer det med den teoretiske værdi?" />
-<Reflection id="r3" prompt="Hvilke mulige fejlkilder kunne påvirke dit forsøg? Hvordan ville de ændre resultaterne?" />
-<Reflection id="r4" prompt="Hvis du skulle gentage forsøget, hvad ville du gøre anderledes for at forbedre præcisionen?" />
+{/* Reflection-style: floor on word count, no ceiling */}
+<FreeTextResponse id="r1" prompt="Stemmer dine resultater overens med hypotesen?" minWords={20} />
+
+{/* Conclusion-style: hard character cap with live counter */}
+<FreeTextResponse id="konklusion"
+  prompt="Skriv én kort konklusion (1–2 sætninger)."
+  maxChars={300} />
+
+{/* Author-tailored chrome: override placeholder + below-threshold hint per instance */}
+<FreeTextResponse id="hypotese-aapen"
+  prompt="Hvad forventer du der vil ske?"
+  minWords={5}
+  placeholder="Jeg forventer at..."
+  tooShortMessage="Brug mindst 5 ord, gerne med en kort begrundelse." />
 ```
-- Multi-line textarea, persisted to runner. No grading, only optional `minWords` warning.
-- Gate-compatible via `{ type: 'all-filled', widgetIds: ['r1','r2','r3','r4'] }`.
+- Multi-line textarea, persisted to runner. No correctness grading.
+- **Optional quantity constraints**: `minWords` (floor — amber hint when below; gate stays unfilled) and `maxChars` (ceiling — hard cap with live `X / Y` counter).
+- **Optional author overrides** (per the convention in §17): `placeholder` and `tooShortMessage` replace the framework defaults from `strings.da.ts`. Use sentence-starters or richer pedagogical hints when generic chrome doesn't fit the prompt.
+- Gate-compatible via `{ type: 'all-filled', widgetIds: ['r1', ...] }`.
 - Inherits global copy/paste protection (see §16).
 
-### `<ConclusionStatement>` — single-sentence conclusion (phase 6 Konkludér)
-```mdx
-<ConclusionStatement id="konklusion"
-  prompt="Skriv én kort konklusion (1–2 sætninger) der opsummerer det vigtigste fra forsøget."
-  maxChars={300} />
-```
-- Single textarea with a hard character limit (default 300). Forces concision.
-- Live char counter "234 / 300". Prevents typing past limit.
-- Gate-compatible via `{ type: 'all-filled', widgetIds: ['konklusion'] }`.
-- Inherits global copy/paste protection.
+> Earlier drafts of this spec listed `<Reflection>` and `<ConclusionStatement>` as separate widgets. They were unified into `FreeTextResponse` once it became clear the only difference was opposing quantity constraints. Future semantic wrappers (e.g. `<Reflection>`, `<Konklusion>`) can be thin presets over this primitive if author ergonomics warrant.
 
 ### `<ReportComposer>` — output curation (phase 7 Rapportér)
 ```mdx
@@ -689,13 +692,8 @@ Authored as MDX components. All widgets register themselves with the runner via 
 - Generates CSV client-side (no server). Optional reflections appended as commented rows.
 - Future: full PDF export (out of scope MVP but designed-for).
 
-### `<Reflection>` — free text
-```mdx
-<Reflection id="error-sources" prompt="Hvad er de største fejlkilder i dette forsøg?" minWords={20} />
-```
-- Multi-line textarea, persisted to runner.
-- Optional `minWords` for soft validation (warning, not gate).
-- Included in CSV export as commented rows.
+### Free-text — see `<FreeTextResponse>` above
+The legacy `<Reflection>` listing here predates the FreeTextResponse unification. Use `<FreeTextResponse id="error-sources" prompt="..." minWords={20} />` for the same behaviour.
 
 ### `<KeyEquation>` — boxed callout for the lab's defining equation
 ```mdx
@@ -860,7 +858,8 @@ All `<input>`, `<textarea>` and contenteditable surfaces in the framework block 
 - **Decimal comma**: all displayed numbers formatted as `4,91` via `Intl.NumberFormat('da-DK')`. Numeric inputs accept both `,` and `.`. Mixed-style entry triggers a soft warning (per your "students must be consistent" requirement).
 - **Units**: a `<Unit>` component handles SI display: `<Unit>m·s⁻²</Unit>`. Internally renders with proper Unicode (`·`, `⁻²`) and an `aria-label="meter per sekund i anden"` for screen readers.
 - **Dates**: weekdays/months in Danish via `Intl.DateTimeFormat('da-DK')`.
-- **Strings**: Danish-only. Hard-coded UI strings live in `src/lab-guide/strings.da.ts` so a future translation layer is a one-file change.
+- **Strings**: Danish-only. Framework-default UI strings live in `src/lab-guide/strings.da.ts` (templates use `{name}` placeholders, substituted via the `format()` helper in the same file) so a future translation layer is a one-file change.
+- **Author override convention**: any widget that exposes student-facing chrome — placeholders, hint messages, button labels — must also expose an optional override prop (e.g. `placeholder`, `tooShortMessage`) so a teacher can tailor per-instance from MDX without touching framework code. Defaults stay generic; overrides let a specific lab reach for richer pedagogical phrasing. This applies retroactively when new widgets land and forward-looking when introducing new inquiry-form variants.
 
 ---
 

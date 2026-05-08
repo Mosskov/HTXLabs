@@ -1,8 +1,9 @@
 import type { Phase } from '@/lib/schema';
-import type { ReactNode } from 'react';
+import { type ReactNode, useContext } from 'react';
 import { useRunner } from './RunnerContext';
-import { canAdvanceTo, gateMessage, isGateSatisfied } from './gates';
+import { gateMessage, isGateSatisfied } from './gates';
 import { strings } from './strings.da';
+import { ToastContext } from './widgets/ToastContext';
 
 interface Props {
   phases: Phase[];
@@ -13,6 +14,7 @@ interface Props {
 
 export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Props) {
   const { state, setCurrentPhase, gateCtx } = useRunner();
+  const { push: pushToast } = useContext(ToastContext);
   const currentIdx = phases.findIndex((p) => p.id === state.currentPhaseId);
   const currentPhase = phases[currentIdx];
   const prevPhase = currentIdx > 0 ? phases[currentIdx - 1] : undefined;
@@ -22,8 +24,11 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
 
   if (!currentPhase) return null;
 
+  // Footer cares only about advancing out of the current phase. canAdvanceTo
+  // for the next phase reduces to "current phase's gate passes" (see gates.ts),
+  // so we evaluate the gate once and reuse the result for both the inline
+  // message and the button's enabled/disabled state.
   const gateOk = isGateSatisfied(currentPhase.gate, state, undefined, gateCtx);
-  const nextReachable = nextPhase && canAdvanceTo(nextPhase.id, phases, state, undefined, gateCtx);
   const message = gateOk ? '' : gateMessage(currentPhase.gate);
 
   return (
@@ -56,17 +61,18 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
           <button
             type="button"
             onClick={() => {
+              if (!gateOk) return;
               if (isLast) {
-                // "Afslut guide" — jump to a "done" state by advancing to the rapporter phase if not already.
+                pushToast(strings.guide.guideFinished);
                 return;
               }
-              if (nextPhase && nextReachable) setCurrentPhase(nextPhase.id);
+              if (nextPhase) setCurrentPhase(nextPhase.id);
             }}
-            disabled={isLast ? false : !nextReachable}
+            disabled={!gateOk}
             className={`
               px-4 py-2 rounded-md text-sm font-medium transition-colors
               ${
-                isLast || nextReachable
+                gateOk
                   ? 'bg-accent text-white hover:bg-accent-700'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }
