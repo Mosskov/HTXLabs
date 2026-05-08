@@ -2,7 +2,7 @@
 //
 // Templates use {placeholder} syntax — substitute with `format()`. Keep them
 // literal (no backtick interpolation) so the registry stays a flat scannable
-// map. Per-instance overrides live as widget props (e.g. Reflection's
+// map. Per-instance overrides live as widget props (e.g. FreeTextResponse's
 // `placeholder` / `tooShortMessage`); the entries here are framework defaults.
 export const strings = {
   brand: 'HTX Labs',
@@ -38,7 +38,7 @@ export const strings = {
     blocked: 'Indsæt er deaktiveret — skriv selv dit svar.',
   },
   widgets: {
-    reflection: {
+    freeText: {
       placeholder: 'Skriv dit svar her...',
       /** Vars: {n} = minWords threshold */
       tooShort: 'Skriv mindst {n} ord for et fyldestgørende svar.',
