@@ -19,8 +19,9 @@ After you have the name, ask **one** AskUserQuestion with two questions:
    - `correct` — batch-checked (Quiz, NumericAnswer, VariableIdentification). Used by `all-correct` gate.
    - `checked` — checklist (MaterialsList tjekliste). Used by `all-checked` gate.
    - `filled` — free-text presence (Reflection, ConclusionStatement). Used by `all-filled` gate.
-   - `keywords` — keyword-count (HypothesisInput). Used by `keyword-count` gate.
    - `data-points` — table validity (DataTable). Used by `data-points` gate.
+
+   For keyword-count gates, prefer adding a `keywordGroups` prop to a `FreeTextResponse` instance over scaffolding a new widget — `FreeTextResponse` already supports the `{kind:'keywords', foundCount}` registration via the shared `src/lib/textMatch.ts` engine. Only scaffold a fresh `keywords`-kind widget if the UX needs to diverge meaningfully from `FreeTextResponse` (e.g. submit-then-check with a Tjek button).
    - `none` — display-only widget (KeyEquation, Plot for read-only viewing). No state registration.
 
 2. **Free-text input?** (single-select) — does the widget collect typed student text?
@@ -39,7 +40,7 @@ For all kinds **except `none`**, the component must:
 - Call `registerWidgetState(id, { kind: '<kind>', ...})` inside a `useEffect`, returning `registerWidgetState(id, null)` on cleanup.
 - Accept an `id: string` prop minimum.
 
-For `correct` / `keywords` / `data-points` widgets, the user will need a "check" action. **Do not** assume a `registerFooterButton` runner API exists — it doesn't yet (SPEC §13, not implemented). Render an inline `<button>` inside the widget body with a `// TODO(SPEC §13): migrate to phase-footer button registration when runner API lands` comment above it.
+For `correct` / `data-points` widgets (or any opt-in keyword widget that uses submit-then-check), the user will need a "check" action. **Do not** assume a `registerFooterButton` runner API exists — it doesn't yet (SPEC §13, not implemented). Render an inline `<button>` inside the widget body with a `// TODO(SPEC §13): migrate to phase-footer button registration when runner API lands` comment above it.
 
 For free-text widgets, use `ProtectedTextarea` from `./ProtectedInput` — never raw `<textarea>`. Single-line goes through `ProtectedInput`.
 

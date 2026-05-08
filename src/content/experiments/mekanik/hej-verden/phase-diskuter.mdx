@@ -1,0 +1,11 @@
+Keyword-count-gate: testfasen kontrollerer at FreeTextResponse i nøgleord-tilstand
+fodrer `{kind:'keywords', foundCount}` ind i runneren, og at `minWords`-gulvet
+spærrer for "spam" (kun nøgleord uden prosa).
+
+<FreeTextResponse id="diskussion-test"
+  prompt="Diskutér resultatet kort — nævn både hvordan kraften ændrer sig OG hvilken størrelse den afhænger af. Brug mindst 8 ord."
+  minWords={8}
+  keywordGroups={[
+    { id: 'relation', any: ['stiger', 'øges', 'vokser', 'falder', 'aftager'] },
+    { id: 'kraft', any: ['kraft', 'newton', 'tyngde'] },
+  ]} />

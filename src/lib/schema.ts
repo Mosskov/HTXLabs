@@ -13,7 +13,10 @@ export const Gate = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('keyword-count'),
     widgetId: z.string(),
-    min: z.number().int(),
+    /** Threshold of matched keyword-groups required. `'all'` means the widget
+     * must report `foundCount === total` — i.e. every group hit at least once.
+     * A numeric value enables partial credit (e.g. 3 of 5 groups). */
+    min: z.union([z.number().int(), z.literal('all')]),
   }),
   z.object({ type: z.literal('predicate'), name: z.string() }),
 ]);

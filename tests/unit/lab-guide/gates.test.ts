@@ -1,9 +1,9 @@
 import {
-  canAdvanceTo,
   type GateCtx,
+  type WidgetState,
+  canAdvanceTo,
   gateMessage,
   isGateSatisfied,
-  type WidgetState,
 } from '@/lab-guide/gates';
 import type { RunnerState } from '@/lab-guide/runner';
 import type { Gate, Phase } from '@/lib/schema';
@@ -191,9 +191,9 @@ describe('all-correct gate', () => {
   });
 
   it('open mode bypasses without correct widgets', () => {
-    expect(
-      isGateSatisfied(allCorrectGate, makeState({ mode: 'open' }), undefined, makeCtx()),
-    ).toBe(true);
+    expect(isGateSatisfied(allCorrectGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
+      true,
+    );
   });
 });
 
@@ -233,13 +233,13 @@ describe('all-checked gate', () => {
   });
 
   it('open mode bypasses without checked widgets', () => {
-    expect(
-      isGateSatisfied(allCheckedGate, makeState({ mode: 'open' }), undefined, makeCtx()),
-    ).toBe(true);
+    expect(isGateSatisfied(allCheckedGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
+      true,
+    );
   });
 });
 
-describe('keyword-count gate', () => {
+describe('keyword-count gate (numeric min — partial credit)', () => {
   const keywordGate: Gate = { type: 'keyword-count', widgetId: 'hyp', min: 2 };
 
   it('returns false when no widget state is registered', () => {
@@ -247,17 +247,17 @@ describe('keyword-count gate', () => {
   });
 
   it('returns false when foundCount is below the minimum', () => {
-    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 1 } });
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 1, total: 3 } });
     expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(false);
   });
 
   it('returns true when foundCount meets the minimum', () => {
-    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 2 } });
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 3 } });
     expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(true);
   });
 
   it('returns true when foundCount exceeds the minimum', () => {
-    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 5 } });
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 5, total: 5 } });
     expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(true);
   });
 
@@ -274,6 +274,48 @@ describe('keyword-count gate', () => {
     expect(isGateSatisfied(keywordGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
       true,
     );
+  });
+});
+
+describe("keyword-count gate (min: 'all' — every group required)", () => {
+  const allGate: Gate = { type: 'keyword-count', widgetId: 'hyp', min: 'all' };
+
+  it('returns false when no widget state is registered', () => {
+    expect(isGateSatisfied(allGate, makeState(), undefined, makeCtx())).toBe(false);
+  });
+
+  it('returns false when foundCount is below total', () => {
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 1, total: 2 } });
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(false);
+  });
+
+  it('returns true when foundCount equals total', () => {
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 2 } });
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(true);
+  });
+
+  it('decouples min from group count — adding a 3rd group keeps gate honest', () => {
+    // Author bumps groups in MDX from 2 to 3. With min:'all', the gate
+    // automatically requires foundCount===3; no frontmatter edit needed.
+    const ctxBefore = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 2 } });
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctxBefore)).toBe(true);
+    const ctxAfter = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 3 } });
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctxAfter)).toBe(false);
+  });
+
+  it('returns true vacuously when total is 0 (no groups configured)', () => {
+    // foundCount===total holds when both are 0. This is a defensible default —
+    // an author who removes all groups but leaves the gate has no requirement.
+    const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 0, total: 0 } });
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(true);
+  });
+
+  it("gateMessage returns the dedicated 'all' Danish prompt", () => {
+    expect(gateMessage(allGate)).toBe('Brug nøgleord fra alle krav for at fortsætte.');
+  });
+
+  it('open mode bypasses without any keywords', () => {
+    expect(isGateSatisfied(allGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(true);
   });
 });
 

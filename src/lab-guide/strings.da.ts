@@ -42,6 +42,8 @@ export const strings = {
       placeholder: 'Skriv dit svar her...',
       /** Vars: {n} = minWords threshold */
       tooShort: 'Skriv mindst {n} ord for et fyldestgørende svar.',
+      /** Vars: {n} = matched groups, {t} = total groups */
+      keywordsFound: 'Nøgleord fundet: {n} / {t}',
     },
     quiz: {
       correct: 'Korrekt!',
@@ -57,6 +59,7 @@ export const strings = {
     allFilled: 'Besvar alle spørgsmål for at fortsætte.',
     /** Vars: {min} */
     keywordCount: 'Find mindst {min} nøgleord.',
+    keywordCountAll: 'Brug nøgleord fra alle krav for at fortsætte.',
     predicate: 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.',
   },
   errors: {

@@ -13,7 +13,7 @@ export type WidgetState =
   | { kind: 'correct'; correct: boolean }
   | { kind: 'checked'; allChecked: boolean }
   | { kind: 'filled'; filled: boolean }
-  | { kind: 'keywords'; foundCount: number };
+  | { kind: 'keywords'; foundCount: number; total: number };
 
 const inquiryFreeAdvance = (mode: RunnerState['mode']) => mode === 'open';
 
@@ -53,7 +53,8 @@ export function isGateSatisfied(
       });
     case 'keyword-count': {
       const w = ctx.widgets[gate.widgetId];
-      return w?.kind === 'keywords' && w.foundCount >= gate.min;
+      if (w?.kind !== 'keywords') return false;
+      return gate.min === 'all' ? w.foundCount === w.total : w.foundCount >= gate.min;
     }
     case 'predicate':
       return module?.gates?.[gate.name]?.(ctx.simulationStateRef.current) ?? false;
@@ -106,7 +107,9 @@ export function gateMessage(gate: Gate): string {
     case 'all-filled':
       return strings.gates.allFilled;
     case 'keyword-count':
-      return format(strings.gates.keywordCount, { min: gate.min });
+      return gate.min === 'all'
+        ? strings.gates.keywordCountAll
+        : format(strings.gates.keywordCount, { min: gate.min });
     case 'predicate':
       return strings.gates.predicate;
   }
