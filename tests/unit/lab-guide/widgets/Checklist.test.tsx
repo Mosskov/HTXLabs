@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import * as Mod from './Checklist';
+import * as Mod from '@/lab-guide/widgets/Checklist';
 
 describe('Checklist', () => {
   it('exports the component', () => {

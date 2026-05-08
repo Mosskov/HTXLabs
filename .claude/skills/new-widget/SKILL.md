@@ -45,13 +45,16 @@ For free-text widgets, use `ProtectedTextarea` from `./ProtectedInput` — never
 
 Reference the existing widgets `Reflection.tsx` and `ConclusionStatement.tsx` for the `filled` shape; they are the canonical examples.
 
-### 2. `src/lab-guide/widgets/<Name>.test.tsx`
+### 2. `tests/unit/lab-guide/widgets/<Name>.test.tsx`
 
-Single Vitest file with one `it.todo(...)` and an existence check:
+Tests live under `tests/unit/<mirror>` to match the repo-wide convention
+(gate tests in `tests/unit/lab-guide/`, sim tests in `tests/unit/simulations/`).
+Create `tests/unit/lab-guide/widgets/` if it doesn't exist yet. Use the `@/`
+alias to import the source widget — relative paths from this depth are noisy.
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import * as Mod from './<Name>';
+import * as Mod from '@/lab-guide/widgets/<Name>';
 
 describe('<Name>', () => {
   it('exports the component', () => {

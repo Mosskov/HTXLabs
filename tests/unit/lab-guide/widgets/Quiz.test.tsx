@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import * as Mod from './Quiz';
+import * as Mod from '@/lab-guide/widgets/Quiz';
 
 describe('Quiz', () => {
   it('exports the component', () => {
