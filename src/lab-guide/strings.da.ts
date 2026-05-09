@@ -49,6 +49,10 @@ export const strings = {
       correct: 'Korrekt!',
       incorrect: 'Forkert — prøv igen.',
     },
+    resetButton: {
+      label: 'Nulstil eksperiment',
+      confirm: 'Nulstil dette eksperiment? Dine besvarelser i denne lab slettes.',
+    },
   },
   gates: {
     milestone: 'Du skal gennemføre forsøget mindst én gang for at fortsætte.',

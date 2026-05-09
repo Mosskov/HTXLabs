@@ -13,7 +13,7 @@ const mdxComponents = {
   FreeTextResponse: widgets.FreeTextResponse,
   Checklist: widgets.Checklist,
   Quiz: widgets.Quiz,
-  NulstilButton: widgets.NulstilButton,
+  ResetButton: widgets.ResetButton,
   GateDebug: widgets.GateDebug,
 };
 
