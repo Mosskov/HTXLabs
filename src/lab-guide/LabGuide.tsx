@@ -10,6 +10,10 @@ import { ToastProvider } from './widgets/ToastContext';
 
 interface LabGuideProps {
   experiment: ExperimentFrontmatter;
+  /** Folder slug for the experiment — uniquely identifies the lab within its
+   * topic. Used as the localStorage key suffix; do not derive from frontmatter
+   * (`simulationId` collides for theory-only labs that share `'__none'`). */
+  slug: string;
   /** MDX content above the guide — Formål, Centrale begreber, Nøgleligning, Teori. */
   theory: ReactNode;
   /** Map of phase id → MDX-rendered body. */
@@ -19,13 +23,13 @@ interface LabGuideProps {
 }
 
 export function LabGuide(props: LabGuideProps) {
-  const { experiment } = props;
+  const { experiment, slug } = props;
   const phases = experiment.modes.guided.phases;
 
   return (
     <ToastProvider>
       <RunnerProvider
-        experimentId={`${experiment.topic}/${experiment.simulationId}`}
+        experimentId={`${experiment.topic}/${slug}`}
         experimentVersion={experiment.version}
         phases={phases}
       >

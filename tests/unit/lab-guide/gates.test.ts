@@ -358,14 +358,19 @@ describe('predicate gate', () => {
     expect(isGateSatisfied(gate, makeState(), moduleWithGates, ctxBad)).toBe(false);
   });
 
-  // B7 (audit): gateMessage returns a generic Danish string for every predicate
-  // gate; SPEC §27 says the message is "author-provided in frontmatter" but the
-  // schema for predicate is { type, name } only. Test the current behaviour;
-  // B7 will be addressed in a separate schema change.
-  it('gateMessage returns the generic Danish prompt (B7 — author override not yet supported)', () => {
+  it('gateMessage falls back to the generic Danish prompt when no author message is set', () => {
     expect(gateMessage(predicateGate)).toBe(
       'Forsøget skal opfylde et bestemt kriterium for at fortsætte.',
     );
+  });
+
+  it('gateMessage returns the author-provided message when set (SPEC §27)', () => {
+    const gate: Gate = {
+      type: 'predicate',
+      name: 'passing',
+      message: 'Træk loddet helt op til 1,5 m før du fortsætter.',
+    };
+    expect(gateMessage(gate)).toBe('Træk loddet helt op til 1,5 m før du fortsætter.');
   });
 
   it('open mode bypasses even when the predicate would return false', () => {

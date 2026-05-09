@@ -29,11 +29,14 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   // so we evaluate the gate once and reuse the result for both the inline
   // message and the button's enabled/disabled state.
   const gateOk = isGateSatisfied(currentPhase.gate, state, undefined, gateCtx);
-  const message = gateOk ? '' : gateMessage(currentPhase.gate);
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-4 no-print">
-      {message && <output className="mb-3 block text-sm text-amber-700">{message}</output>}
+      {!gateOk && (
+        <output className="mb-3 block text-sm text-amber-700">
+          {gateMessage(currentPhase.gate)}
+        </output>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex-1">
           {isFirst ? (

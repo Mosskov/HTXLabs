@@ -111,6 +111,6 @@ export function gateMessage(gate: Gate): string {
         ? strings.gates.keywordCountAll
         : format(strings.gates.keywordCount, { min: gate.min });
     case 'predicate':
-      return strings.gates.predicate;
+      return gate.message ?? strings.gates.predicate;
   }
 }

@@ -46,6 +46,7 @@ export function ExperimentRoute() {
     <MDXProvider components={mdxComponents}>
       <LabGuide
         experiment={loaded.frontmatter}
+        slug={loaded.slug}
         theory={<Theory />}
         phaseBodies={phaseBodies}
         simulation={simulation}

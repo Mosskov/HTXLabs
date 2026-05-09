@@ -105,7 +105,7 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     // pre-B13-fix code their widgets would never mount and their gates would
     // evaluate false. With the B13 fix every phase body mounts and registers.
     const seeded = {
-      experimentId: 'test-topic/__none',
+      experimentId: 'test-topic/test-slug',
       experimentVersion: 1,
       mode: 'guided',
       labMode: 'virtual',
@@ -123,11 +123,12 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
       dataTables: {},
       attemptCounts: {},
     };
-    localStorage.setItem('htxlabs:state:test-topic/__none', JSON.stringify(seeded));
+    localStorage.setItem('htxlabs:state:test-topic/test-slug', JSON.stringify(seeded));
 
     render(
       <LabGuide
         experiment={experiment}
+        slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
       />,
@@ -145,6 +146,7 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     render(
       <LabGuide
         experiment={experiment}
+        slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
       />,

@@ -18,7 +18,13 @@ export const Gate = z.discriminatedUnion('type', [
      * A numeric value enables partial credit (e.g. 3 of 5 groups). */
     min: z.union([z.number().int(), z.literal('all')]),
   }),
-  z.object({ type: z.literal('predicate'), name: z.string() }),
+  z.object({
+    type: z.literal('predicate'),
+    name: z.string(),
+    /** Author override for the locked-phase message (SPEC §27). Falls back to
+     * the generic Danish prompt when omitted. */
+    message: z.string().optional(),
+  }),
 ]);
 export type Gate = z.infer<typeof Gate>;
 
