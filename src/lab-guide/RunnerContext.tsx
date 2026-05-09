@@ -58,7 +58,12 @@ export function RunnerProvider({
 }) {
   const [state, setState] = useState<RunnerState>(() => {
     const loaded = load(experimentId);
-    if (loaded && isStateCompatible(loaded, experimentVersion, phases)) return loaded;
+    if (loaded && isStateCompatible(loaded, experimentVersion, phases)) {
+      // URL-driven mode wins over the persisted mode field — mode is a view
+      // setting, not progress. Other fields (currentPhaseId, widgetValues, …)
+      // are preserved as-is.
+      return loaded.mode === initialMode ? loaded : { ...loaded, mode: initialMode };
+    }
     if (loaded) {
       console.info(`[htxlabs] state mismatch for ${experimentId} — wiping and restarting.`);
       wipe(experimentId);

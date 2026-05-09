@@ -3,10 +3,11 @@ import { strings } from '@/lab-guide/strings.da';
 import * as widgets from '@/lab-guide/widgets';
 import { loadExperiment } from '@/lib/content';
 import { loadSimulation } from '@/lib/simulations';
+import { parseModeParam } from '@/lib/url';
 import type { SimulationModule } from '@/sim-contract';
 import { MDXProvider } from '@mdx-js/react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 const mdxComponents = {
   KeyEquation: widgets.KeyEquation,
@@ -19,6 +20,8 @@ const mdxComponents = {
 
 export function ExperimentRoute() {
   const { topic, experiment } = useParams();
+  const [searchParams] = useSearchParams();
+  const mode = parseModeParam(searchParams.get('mode'));
   const loaded = topic && experiment ? loadExperiment(topic, experiment) : null;
   const [simulation, setSimulation] = useState<SimulationModule | undefined>(undefined);
   // Don't try to load a sim if the lab failed validation — `loaded` may be the
@@ -59,6 +62,7 @@ export function ExperimentRoute() {
       <LabGuide
         experiment={loaded.frontmatter}
         slug={loaded.slug}
+        mode={mode}
         theory={<Theory />}
         phaseBodies={phaseBodies}
         simulation={simulation}

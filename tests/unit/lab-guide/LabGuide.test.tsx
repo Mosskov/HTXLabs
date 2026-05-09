@@ -158,3 +158,64 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     expect(screen.getByTestId('gate-diskuter')).toHaveTextContent('fail');
   });
 });
+
+describe('LabGuide — open mode bypasses gates (B2)', () => {
+  it('all gates pass with mode="open" even when widgetValues are empty', () => {
+    render(
+      <LabGuide
+        experiment={experiment}
+        slug="test-slug"
+        mode="open"
+        theory={<AllPhasesProbe phases={phases} />}
+        phaseBodies={phaseBodies}
+      />,
+    );
+
+    expect(screen.getByTestId('gate-planlaeg')).toHaveTextContent('pass');
+    expect(screen.getByTestId('gate-maal')).toHaveTextContent('pass');
+    expect(screen.getByTestId('gate-analyser')).toHaveTextContent('pass');
+    expect(screen.getByTestId('gate-diskuter')).toHaveTextContent('pass');
+  });
+
+  it('URL-driven mode overrides a persisted mode without wiping progress', () => {
+    // Persist a save with mode='guided' and a non-default currentPhaseId.
+    // Loading with mode='open' should keep currentPhaseId but flip the gate
+    // bypass on.
+    const seeded = {
+      experimentId: 'test-topic/test-slug',
+      experimentVersion: 1,
+      mode: 'guided',
+      labMode: 'virtual',
+      currentPhaseId: 'maal',
+      visitedPhaseIds: ['planlaeg', 'maal'],
+      firedMilestones: [],
+      dataPointCount: 0,
+      widgetValues: {},
+      dataTables: {},
+      attemptCounts: {},
+    };
+    localStorage.setItem('htxlabs:state:test-topic/test-slug', JSON.stringify(seeded));
+
+    render(
+      <LabGuide
+        experiment={experiment}
+        slug="test-slug"
+        mode="open"
+        theory={<AllPhasesProbe phases={phases} />}
+        phaseBodies={phaseBodies}
+      />,
+    );
+
+    // Bypass active despite empty widgetValues — proves URL mode reached state.
+    expect(screen.getByTestId('gate-planlaeg')).toHaveTextContent('pass');
+    expect(screen.getByTestId('gate-maal')).toHaveTextContent('pass');
+
+    // Progress preserved: the persisted state is still the source of truth
+    // for everything but the mode field.
+    const persisted = JSON.parse(
+      localStorage.getItem('htxlabs:state:test-topic/test-slug') ?? '{}',
+    );
+    expect(persisted.currentPhaseId).toBe('maal');
+    expect(persisted.visitedPhaseIds).toEqual(expect.arrayContaining(['planlaeg', 'maal']));
+  });
+});

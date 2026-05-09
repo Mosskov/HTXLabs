@@ -5,6 +5,7 @@ import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';
 import { SimulationPanel } from './SimulationPanel';
+import type { Mode } from './runner';
 import { strings } from './strings.da';
 import { ToastProvider } from './widgets/ToastContext';
 
@@ -14,6 +15,10 @@ interface LabGuideProps {
    * topic. Used as the localStorage key suffix; do not derive from frontmatter
    * (`simulationId` collides for theory-only labs that share `'__none'`). */
   slug: string;
+  /** Inquiry mode (URL-driven via `?mode=`). Falls back to `'guided'` when the
+   * lab doesn't declare phases for the requested mode — gates auto-loosen for
+   * `'open'` via `inquiryFreeAdvance` in `gates.ts`. */
+  mode?: Mode;
   /** MDX content above the guide — Formål, Centrale begreber, Nøgleligning, Teori. */
   theory: ReactNode;
   /** Map of phase id → MDX-rendered body. */
@@ -23,8 +28,8 @@ interface LabGuideProps {
 }
 
 export function LabGuide(props: LabGuideProps) {
-  const { experiment, slug } = props;
-  const phases = experiment.modes.guided.phases;
+  const { experiment, slug, mode = 'guided' } = props;
+  const phases = experiment.modes[mode]?.phases ?? experiment.modes.guided.phases;
 
   return (
     <ToastProvider>
@@ -32,6 +37,7 @@ export function LabGuide(props: LabGuideProps) {
         experimentId={`${experiment.topic}/${slug}`}
         experimentVersion={experiment.version}
         phases={phases}
+        initialMode={mode}
       >
         <LabGuideInner {...props} phases={phases} />
       </RunnerProvider>
