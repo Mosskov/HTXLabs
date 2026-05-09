@@ -68,6 +68,8 @@ export const strings = {
   },
   errors: {
     notFound: 'Forsøget blev ikke fundet.',
+    labInvalidTitle: 'Forsøget kunne ikke indlæses',
+    labInvalidHelp: 'Ret frontmatter i forsøgets index.ts og genindlæs siden.',
   },
 } as const;
 

@@ -1,5 +1,43 @@
 import type { ComponentType } from 'react';
-import { ExperimentFrontmatter, TopicFrontmatter } from './schema';
+import { ExperimentFrontmatter, type Gate, TopicFrontmatter } from './schema';
+
+/**
+ * Gate kinds whose backing widget/sim wiring is implemented in this build.
+ * Authoring a gate of any other kind is rejected at module-load with a
+ * descriptive error — see `validateAuthorableGates`. Re-enable a kind here
+ * once the corresponding sim hook lands (e.g. `predicate` once a sim exports
+ * a `gates` map; `milestone` / `data-points` once a sim fires the matching
+ * `ProgressEvent`s).
+ */
+const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set([
+  'always',
+  'all-filled',
+  'all-checked',
+  'all-correct',
+  'keyword-count',
+]);
+
+export function validateAuthorableGates(
+  fm: ExperimentFrontmatter,
+  ctx: { topic: string; slug: string },
+): void {
+  const supported = Array.from(AUTHORABLE_GATE_KINDS).join(', ');
+  const modeEntries: Array<[string, { phases: { id: string; gate: Gate }[] } | undefined]> = [
+    ['guided', fm.modes.guided],
+    ['semi-guided', fm.modes['semi-guided']],
+    ['open', fm.modes.open],
+  ];
+  for (const [modeName, modeBlock] of modeEntries) {
+    if (!modeBlock) continue;
+    for (const phase of modeBlock.phases) {
+      if (!AUTHORABLE_GATE_KINDS.has(phase.gate.type)) {
+        throw new Error(
+          `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" uses gate kind "${phase.gate.type}", which requires sim wiring not yet implemented in this build. Supported kinds: ${supported}.`,
+        );
+      }
+    }
+  }
+}
 
 export interface LoadedExperiment {
   frontmatter: ExperimentFrontmatter;
@@ -35,15 +73,23 @@ const topicModules = import.meta.glob<{ frontmatter: unknown }>('../content/topi
   eager: true,
 });
 
-interface Indexed {
-  topicSlug: string;
-  experimentSlug: string;
-  validated: ExperimentFrontmatter;
-  Theory: ComponentType;
-  phaseBodies: Record<string, ComponentType>;
-}
+type IndexedEntry =
+  | {
+      ok: true;
+      topicSlug: string;
+      experimentSlug: string;
+      validated: ExperimentFrontmatter;
+      Theory: ComponentType;
+      phaseBodies: Record<string, ComponentType>;
+    }
+  | {
+      ok: false;
+      topicSlug: string;
+      experimentSlug: string;
+      error: string;
+    };
 
-const experimentsIndex: Indexed[] = [];
+const experimentsIndex: IndexedEntry[] = [];
 
 for (const [path, mod] of Object.entries(experimentModules)) {
   // path = '../content/experiments/<topic>/<slug>/index.ts'
@@ -54,12 +100,26 @@ for (const [path, mod] of Object.entries(experimentModules)) {
   const parsed = ExperimentFrontmatter.safeParse(mod.frontmatter);
   if (!parsed.success) {
     console.error(`[content] invalid frontmatter at ${path}:`, parsed.error.format());
-    throw new Error(`Invalid frontmatter at ${path}`);
+    experimentsIndex.push({
+      ok: false,
+      topicSlug,
+      experimentSlug,
+      error: `Ugyldig frontmatter:\n${JSON.stringify(parsed.error.format(), null, 2)}`,
+    });
+    continue;
   }
-  // Cross-validation: every gate's referenced widgetIds & milestones should exist
-  // at runtime; we can only check structurally here. Build-time deeper checks
-  // are a future enhancement.
+  // Reject gate kinds whose widget/sim wiring isn't implemented in this build —
+  // otherwise the student gets a silent permanent lock. See AUTHORABLE_GATE_KINDS.
+  try {
+    validateAuthorableGates(parsed.data, { topic: topicSlug, slug: experimentSlug });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`[content] ${topicSlug}/${experimentSlug} disabled:`, message);
+    experimentsIndex.push({ ok: false, topicSlug, experimentSlug, error: message });
+    continue;
+  }
   experimentsIndex.push({
+    ok: true,
     topicSlug,
     experimentSlug,
     validated: parsed.data,
@@ -82,9 +142,16 @@ for (const [path, mod] of Object.entries(topicModules)) {
   topicsIndex.set(slug, parsed.data);
 }
 
-export function loadExperiment(topic: string, slug: string): LoadedExperiment | null {
+/** Result of loading a single experiment by topic+slug. `null` = no such folder
+ * was indexed (404). `{ error }` = the lab exists but failed validation, so
+ * other labs aren't blocked but this one renders an error card. Otherwise the
+ * normal `LoadedExperiment` payload. */
+export type LoadExperimentResult = LoadedExperiment | { error: string };
+
+export function loadExperiment(topic: string, slug: string): LoadExperimentResult | null {
   const found = experimentsIndex.find((e) => e.topicSlug === topic && e.experimentSlug === slug);
   if (!found) return null;
+  if (!found.ok) return { error: found.error };
   return {
     frontmatter: found.validated,
     topic: found.topicSlug,
@@ -94,22 +161,25 @@ export function loadExperiment(topic: string, slug: string): LoadedExperiment | 
   };
 }
 
+function validExperimentsForTopic(
+  topicSlug: string,
+): Array<{ slug: string; frontmatter: ExperimentFrontmatter }> {
+  return experimentsIndex.flatMap((e) =>
+    e.ok && e.topicSlug === topicSlug ? [{ slug: e.experimentSlug, frontmatter: e.validated }] : [],
+  );
+}
+
 export function listTopics(): LoadedTopic[] {
   return Array.from(topicsIndex.entries())
-    .map(([_, frontmatter]) => {
-      const experiments = experimentsIndex
-        .filter((e) => e.topicSlug === frontmatter.id)
-        .map((e) => ({ slug: e.experimentSlug, frontmatter: e.validated }));
-      return { frontmatter, experiments };
-    })
+    .map(([_, frontmatter]) => ({
+      frontmatter,
+      experiments: validExperimentsForTopic(frontmatter.id),
+    }))
     .sort((a, b) => a.frontmatter.order - b.frontmatter.order);
 }
 
 export function loadTopic(slug: string): LoadedTopic | null {
   const fm = topicsIndex.get(slug);
   if (!fm) return null;
-  const experiments = experimentsIndex
-    .filter((e) => e.topicSlug === slug)
-    .map((e) => ({ slug: e.experimentSlug, frontmatter: e.validated }));
-  return { frontmatter: fm, experiments };
+  return { frontmatter: fm, experiments: validExperimentsForTopic(slug) };
 }
