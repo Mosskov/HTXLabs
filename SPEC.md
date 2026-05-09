@@ -73,7 +73,7 @@ Phases 1, 4, 5, 6, and 7 are identical across virtual and real modes.
 2. Clicks Mekanik → clicks "Bestemmelse af g med dynamometer"
 3. Lab page loads. Reads theory (Formål, Centrale begreber, Nøgleligning, Teori) at the top of the page.
 4. Plays with the simulation (collapsible card below the theory). Adjusts mass slider, switches dynamometer, types readings. Discovers experimentally that the 50 N range is too coarse for small masses.
-5. Scrolls to **Laboratorieguide** below the simulation. (Mode picker shown as "Skift undersøgelsesform" footer link — defaults to Guided.)
+5. Scrolls to **Laboratorieguide** below the simulation. (Defaults to Guided; mode is set via the `?mode=` URL param — no in-page picker UI in MVP.)
 6. **Phase 1 — Planlæg**: fills 9 variable-identification fields (Uafhængig variabel: masse / m / kg, etc.). Clicks "Tjek variable" → "Korrekte svar: 7 / 9" + orange hint reveals. Adjusts and clicks again → 9/9, fields turn green. Writes hypothesis in textarea. Clicks "Tjek hypotese" → "Nøgleord fundet: 2 / 2". "Næste fase" enables.
 7. **Phase 2 — Opstil**: ticks materials and tjekliste checkboxes; "Næste fase" enables.
 8. **Phase 3 — Mål**: types known constants into Konstanter table; types measurements (m, F) into Målinger table while reading the simulation's spring scale. Auto-validation: rows with both m and F filled count as "gyldige". "Gyldige målinger: 5 / 6". "Næste fase" enables once min threshold and constants are filled.
@@ -103,7 +103,8 @@ Clones repo. Runs `npm install && npm run dev`. Opens `src/lab-guide/` and `src/
 /emner                                              all topics
 /emner/:topic                                       topic landing (e.g. /emner/mekanik)
 /emner/:topic/:experiment                           lab page
-/emner/:topic/:experiment?mode=guided&lab=virtual   defaults; URL-controlled
+/emner/:topic/:experiment?mode=guided               mode is URL-controlled (guided | semi-guided | open; defaults to guided)
+                                                    ?lab=virtual|real designed-for, not yet wired (revisit when <Equipment> lands)
 /playground/:simulationId                           dev-only sim harness
 /about                                              optional
 ```
@@ -131,12 +132,25 @@ src/content/
 const Gate = z.discriminatedUnion('type', [
   z.object({ type: z.literal('always') }),
   z.object({ type: z.literal('milestone'), requires: z.string() }),
-  z.object({ type: z.literal('data-points'), min: z.number().int(), validOnly: z.boolean().default(true) }),
+  z.object({ type: z.literal('data-points'), min: z.number().int() }),
   z.object({ type: z.literal('all-correct'), widgetIds: z.array(z.string()) }),    // batch-check widgets all passed
   z.object({ type: z.literal('all-checked'), widgetIds: z.array(z.string()) }),    // checklist widgets all ticked
   z.object({ type: z.literal('all-filled'), widgetIds: z.array(z.string()) }),     // reflections / inputs all non-empty
-  z.object({ type: z.literal('keyword-count'), widgetId: z.string(), min: z.number().int() }),
-  z.object({ type: z.literal('predicate'), name: z.string() }),
+  z.object({
+    type: z.literal('keyword-count'),
+    widgetId: z.string(),
+    /** Threshold of matched keyword-groups required. `'all'` means the widget
+     * must report `foundCount === total` (every group hit at least once);
+     * a numeric value enables partial credit (e.g. 3 of 5 groups). */
+    min: z.union([z.number().int(), z.literal('all')]),
+  }),
+  z.object({
+    type: z.literal('predicate'),
+    name: z.string(),
+    /** Author override for the locked-phase message (§27). Falls back to the
+     * generic Danish prompt when omitted. */
+    message: z.string().optional(),
+  }),
 ]);
 
 const Phase = z.object({
@@ -184,7 +198,7 @@ const ExperimentFrontmatter = z.object({
 });
 ```
 
-A second build-time validation cross-references every `gate.requires` milestone against the simulation module's `meta.milestones`, every `gate.questionId` against quiz IDs found in the MDX, and every `equipment` ID against `library.json`. Mismatches fail the build.
+A second module-load validation (`validateAuthorableGates` in [src/lib/content.ts](./src/lib/content.ts)) rejects gate kinds whose widget/sim wiring isn't implemented in this build — currently the authorable allowlist is `{always, all-correct, all-checked, all-filled, keyword-count}`. The unimplemented kinds (`milestone`, `data-points`, `predicate`) stay in the Zod union and the gate engine — flipping one from "experimental" to "authorable" is a one-line edit once the corresponding sim hook (`ProgressEvent`, `gates` map) lands. Future iteration: per-sim capability matching (consult the resolved `SimulationModule.gates` / `meta.milestones`) and an equipment-ID cross-check against `library.json`.
 
 ---
 
@@ -363,39 +377,74 @@ For the rare lab that needs custom widgets:
 ### State
 ```ts
 type RunnerState = {
-  experimentId: string;
+  experimentId: string;                     // `${topic}/${slug}`
   experimentVersion: number;
   mode: 'guided' | 'semi-guided' | 'open';
   labMode: 'virtual' | 'real';
   currentPhaseId: string;
   visitedPhaseIds: Set<string>;
-  firedMilestones: Set<string>;
-  dataPointCount: number;
-  correctQuizIds: Set<string>;       // hashed-input matches stored hash
-  attemptCounts: Record<string, number>;  // for hint progression
-  reflections: Record<string, string>;     // textareas saved per phase
-  dataTable: Row[];                        // live data table state
+  firedMilestones: Set<string>;             // sim ProgressEvent('milestone') sink
+  dataPointCount: number;                   // sim ProgressEvent('data-collected') sink
+  widgetValues: Record<string, unknown>;    // per-widget freeform value bag
+                                            // (widgets MAY use `${id}:<suffix>` sibling
+                                            //  keys for ephemeral state, e.g. Quiz's
+                                            //  `${id}:checked`); see runner.ts
+  dataTables: Record<string, DataRow[]>;    // <DataTable> rows, keyed by table id
+  attemptCounts: Record<string, number>;    // for retry-limited widgets
 };
 ```
 
-Persisted to `localStorage` keyed by `experimentId`. Wiped if `experimentVersion` differs from frontmatter.
+Persisted to `localStorage['htxlabs:state:${experimentId}']`. Wiped silently if `experimentVersion` differs from frontmatter (auto-detect-and-restart per §14).
 
 ### Gate evaluation (pure)
+Widgets register live state into a ref-backed `GateCtx.widgets` map (kind-tagged: `correct | checked | filled | keywords`); the gate engine reads from there rather than from React state, so widget edits don't cascade through the runner.
+
 ```ts
-function isGateSatisfied(gate: Gate, s: RunnerState, mod: SimulationModule, ctx: PhaseCtx): boolean {
+type GateCtx = {
+  widgets: Record<string, WidgetState>;     // kind-tagged live snapshot
+  simulationStateRef: { current: unknown }; // for predicate gates
+};
+
+function isGateSatisfied(gate: Gate, s: RunnerState, mod: SimulationModule | undefined, ctx: GateCtx): boolean {
+  // Open mode: gates are unconditionally satisfied (inquiry-mode convention;
+  // authors don't repeat themselves). Guided / semi-guided run the actual gate.
+  if (s.mode === 'open') return true;
+
   switch (gate.type) {
-    case 'always':       return true;
-    case 'milestone':    return s.firedMilestones.has(gate.requires);
-    case 'data-points':  return s.dataPointCount >= gate.min;
-    case 'quiz':         return s.correctQuizIds.has(gate.questionId);
-    case 'all-quizzes':  return ctx.quizIdsOnPhase.every(id => s.correctQuizIds.has(id));
-    case 'predicate':    return mod.gates?.[gate.name]?.(ctx.simulationStateRef.current) ?? false;
+    case 'always':        return true;
+    case 'milestone':     return s.firedMilestones.has(gate.requires);
+    case 'data-points':   return s.dataPointCount >= gate.min;
+    case 'all-correct':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'correct'  && ctx.widgets[id].correct);
+    case 'all-checked':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'checked'  && ctx.widgets[id].allChecked);
+    case 'all-filled':    return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'filled'   && ctx.widgets[id].filled);
+    case 'keyword-count': {
+      const w = ctx.widgets[gate.widgetId];
+      if (w?.kind !== 'keywords') return false;
+      return gate.min === 'all' ? w.foundCount === w.total : w.foundCount >= gate.min;
+    }
+    case 'predicate':     return mod?.gates?.[gate.name]?.(ctx.simulationStateRef.current) ?? false;
   }
 }
 
-function canAdvanceTo(targetPhaseId: string, phases: Phase[], s: RunnerState, mod: SimulationModule): boolean {
-  const idx = phases.findIndex(p => p.id === targetPhaseId);
-  return phases.slice(0, idx).every(p => isGateSatisfied(p.gate, s, mod, ctxFor(p)));
+function canAdvanceTo(targetPhaseId: string, phases: Phase[], s: RunnerState, mod: SimulationModule | undefined, ctx: GateCtx): boolean {
+  const targetIdx = phases.findIndex(p => p.id === targetPhaseId);
+  const currentIdx = phases.findIndex(p => p.id === s.currentPhaseId);
+  if (targetIdx < 0 || currentIdx < 0) return false;
+
+  // Backward / current: always reachable (free backward navigation).
+  if (targetIdx <= currentIdx) return true;
+
+  // Forward: every gate from current up to (but not including) target must
+  // pass right now. A previously-satisfied gate that flipped back to false
+  // (e.g. student emptied a required answer) re-locks any leap over it.
+  for (const p of phases.slice(currentIdx, targetIdx)) {
+    if (!isGateSatisfied(p.gate, s, mod, ctx)) return false;
+  }
+
+  // Visited future phase → free leap (the work is preserved). Unvisited →
+  // only the immediate next phase, no leap-frogging past intermediate steps.
+  if (s.visitedPhaseIds.has(targetPhaseId)) return true;
+  return targetIdx === currentIdx + 1;
 }
 ```
 
@@ -559,7 +608,7 @@ Authored as MDX components. All widgets register themselves with the runner via 
 - A row is **gyldig (valid)** when all required cells are non-empty and parse as numbers in their unit.
 - Live counter "Gyldige målinger: X / Y" matches mockup wording.
 - Persists to runner state.
-- Gate-compatible via `{ type: 'data-points', min: 4, validOnly: true }`.
+- Gate-compatible via `{ type: 'data-points', min: 4 }` — only valid rows count toward `dataPointCount`.
 - Future: optional uncertainty columns and per-lab column extension hooks (designed-for, not built MVP).
 
 ### `<Plot>` — scatter with student-chosen axes + regression toggles (phase 4)
@@ -627,7 +676,7 @@ Authored as MDX components. All widgets register themselves with the runner via 
 - Renders one checkbox per section showing label + a small live preview snippet ("Du har skrevet 124 ord").
 - "Download som PDF" applies a print stylesheet that hides everything except the selected sections, then calls `window.print()`. Browser's "Save as PDF" handles the actual file generation — no JS lib needed (per §6 stack note: avoid heavy PDF libraries).
 - "Download data som CSV" exports just the raw data table + constants.
-- The framework injects the student's name (if entered in mode picker — future) and the lab title at the top of the PDF.
+- The framework injects the lab title at the top of the PDF. (Student name injection is future work — no name-entry UI in MVP.)
 - This phase replaces the previous standalone `<CSVExport>` widget. `CSVExport` remains available for other uses if a lab wants it inline elsewhere.
 
 ### `<NumericAnswer>` — typed number with tolerance
@@ -774,10 +823,10 @@ modes:
   guided:
     phases:
       - { id: introduktion, title: Introduktion, gate: { type: always } }
-      - { id: hypotese,     title: Hypotese,     gate: { type: all-quizzes } }
+      - { id: hypotese,     title: Hypotese,     gate: { type: all-correct, widgetIds: [hypotese] } }
       - { id: forsoeg,      title: Forsøg,       gate: { type: milestone, requires: tre-aflæsninger } }
       - { id: maaling,      title: Måling,       gate: { type: data-points, min: 5 } }
-      - { id: data,         title: Databehandling, gate: { type: quiz, questionId: g-meas } }
+      - { id: data,         title: Databehandling, gate: { type: all-filled, widgetIds: [g-meas] } }
       - { id: konklusion,   title: Konklusion,   gate: { type: always } }
   open:
     phases:
@@ -799,13 +848,11 @@ Open and semi-guided modes default gates to `{ type: 'always' }` and the runner 
 - `localStorage[`htxlabs:index`]` = `{ [experimentId]: { lastVisited: ISO, mode, labMode, currentPhaseId } }` (used for a future "continue" surface).
 
 ### Version mismatch behaviour (auto-detect-and-restart)
-On mount, runner reads the saved state and validates:
+On mount, `isStateCompatible` ([src/lab-guide/runner.ts](./src/lab-guide/runner.ts)) validates the loaded state:
 1. `state.experimentVersion === frontmatter.version` — if not, wipe and start fresh.
 2. `state.currentPhaseId` exists in the current mode's phase list — if not, wipe.
-3. Each `correctQuizIds` entry corresponds to a quiz id present in the current MDX — strip those that don't.
-4. `dataTable.columns` matches frontmatter — if column shape changed, reset table only.
 
-Wipes are silent; a `console.info` is logged for the maintainer's benefit.
+Wipes are silent; a `console.info` is logged for the maintainer's benefit. Bump `frontmatter.version` whenever phase ids or gate structure change so existing students get the restart on next visit. Finer-grained partial restoration (e.g. strip orphaned `widgetValues` keys, reset just a `<DataTable>` whose column shape changed) is not implemented — the spec previously described it as planned, but the trade-off lands on simplicity: full restart on any structural change.
 
 ### Privacy
 Nothing leaves the device. No cookies. No analytics in MVP. If Plausible is added later, configure it to respect `Do Not Track` and document the privacy posture in `/about`.
@@ -991,7 +1038,7 @@ modes:
         intro: |
           Indsamle et passende antal målinger. Hvis et felt kan beregnes automatisk,
           udfyldes det af sig selv.
-        gate: { type: data-points, min: 4, validOnly: true }
+        gate: { type: data-points, min: 4 }
       - id: analyser
         title: Analysér
         intro: Sammenlign dine målinger med den teoretiske værdi.
