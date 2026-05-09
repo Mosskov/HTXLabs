@@ -53,7 +53,6 @@ function LabGuideInner({
   };
 
   const currentPhase = phases.find((p) => p.id === state.currentPhaseId);
-  const currentBody = currentPhase ? phaseBodies[currentPhase.id] : undefined;
 
   return (
     <article className="space-y-8">
@@ -80,7 +79,13 @@ function LabGuideInner({
         {currentPhase?.intro && (
           <div className="instruction-box mb-6 whitespace-pre-line">{currentPhase.intro}</div>
         )}
-        <div className="prose max-w-none">{currentBody}</div>
+        <div className="prose max-w-none">
+          {phases.map((p) => (
+            <section key={p.id} hidden={p.id !== state.currentPhaseId}>
+              {phaseBodies[p.id]}
+            </section>
+          ))}
+        </div>
         <PhaseFooter phases={phases} />
       </section>
     </article>

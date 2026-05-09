@@ -16,7 +16,11 @@ export interface RunnerState {
   visitedPhaseIds: Set<string>;
   firedMilestones: Set<string>;
   dataPointCount: number;
-  /** Per-widget freeform value bag — text inputs, reflections, etc. */
+  /** Per-widget freeform value bag — text inputs, reflections, etc.
+   *  Widgets MAY use `${id}:<suffix>` sibling keys for persisted ephemeral
+   *  state that isn't the primary value (e.g. Quiz stores its last-checked
+   *  option id under `${id}:checked`). This keeps registration pure-derived
+   *  from persisted state so gates survive reload + remount. */
   widgetValues: Record<string, unknown>;
   /** Live data tables keyed by table id. */
   dataTables: Record<string, DataRow[]>;

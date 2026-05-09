@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRunner } from '../RunnerContext';
 import { strings } from '../strings.da';
 
@@ -25,7 +25,7 @@ interface Props {
 export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: Props) {
   const { state, setWidgetValue, registerWidgetState, bumpAttempts } = useRunner();
   const value = state.widgetValues[id] as string | undefined;
-  const [checkedFor, setCheckedFor] = useState<string | null>(null);
+  const checkedFor = (state.widgetValues[`${id}:checked`] as string | null | undefined) ?? null;
 
   const correctOptionId = options.find((o) => o.correct)?.id;
   const checkedNow = checkedFor != null && value === checkedFor;
@@ -45,15 +45,12 @@ export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: 
 
   function onPick(optId: string) {
     setWidgetValue(id, optId);
-    // Explicit reset: changing the answer must clear any prior feedback so the
-    // student is forced to press "Tjek" again to re-validate.
-    if (checkedFor !== null && optId !== checkedFor) setCheckedFor(null);
   }
 
   function onCheck() {
     if (!value) return;
     bumpAttempts(id);
-    setCheckedFor(value);
+    setWidgetValue(`${id}:checked`, value);
   }
 
   return (
