@@ -34,11 +34,7 @@ export function Checklist({ id, items }: Props) {
       {items.map((it) => (
         <li key={it.id}>
           <label className="inline-flex items-center gap-2 text-slate-800">
-            <input
-              type="checkbox"
-              checked={!!ticks[it.id]}
-              onChange={() => toggle(it.id)}
-            />
+            <input type="checkbox" checked={!!ticks[it.id]} onChange={() => toggle(it.id)} />
             <span>{it.label}</span>
           </label>
         </li>
