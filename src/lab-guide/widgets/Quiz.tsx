@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useId } from 'react';
 import { useRunner } from '../RunnerContext';
 import { strings } from '../strings.da';
+import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 
 interface Option {
   id: string;
@@ -12,6 +13,8 @@ interface Props {
   id: string;
   prompt: string;
   options: Option[];
+  /** Override the default "Tjek" button label. */
+  checkLabel?: string;
   /** Override the default "Korrekt!" feedback. */
   correctMessage?: string;
   /** Override the default "Forkert — prøv igen." feedback. */
@@ -22,8 +25,8 @@ interface Props {
  * after the student presses "Tjek". Gate via
  * `{ type: 'all-correct', widgetIds: [...] }`. Picking a different option
  * after a check re-locks the gate until the student presses "Tjek" again. */
-export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: Props) {
-  const { state, setWidgetValue, registerWidgetState, bumpAttempts } = useRunner();
+export function Quiz({ id, prompt, options, checkLabel, correctMessage, incorrectMessage }: Props) {
+  const { state, setWidgetValue, bumpAttempts } = useRunner();
   const value = state.widgetValues[id] as string | undefined;
   const checkedFor = (state.widgetValues[`${id}:checked`] as string | null | undefined) ?? null;
 
@@ -31,17 +34,15 @@ export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: 
   const checkedNow = checkedFor != null && value === checkedFor;
   const correct = checkedNow && value === correctOptionId;
 
-  // No unmount cleanup: the registered state must outlive a phase change so the
-  // gate stays satisfied when the student navigates away and back. The pre-check
-  // `null` registration below is intentional — that's the unchecked state, not
-  // unmount cleanup.
-  useEffect(() => {
-    if (!checkedNow) {
-      registerWidgetState(id, null);
-      return;
-    }
-    registerWidgetState(id, { kind: 'correct', correct });
-  }, [id, checkedNow, correct, registerWidgetState]);
+  // The pre-check `null` registration is intentional — that's the unchecked
+  // state, distinct from unmount cleanup (which the hook does not do).
+  useRegisteredWidgetState(id, checkedNow ? { kind: 'correct', correct } : null, [
+    checkedNow,
+    correct,
+  ]);
+
+  const promptId = useId();
+  const feedbackId = useId();
 
   function onPick(optId: string) {
     setWidgetValue(id, optId);
@@ -55,8 +56,10 @@ export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: 
 
   return (
     <div className="my-4">
-      <p className="text-sm font-medium text-slate-800 mb-2">{prompt}</p>
-      <ul className="space-y-1">
+      <p id={promptId} className="text-sm font-medium text-slate-800 mb-2">
+        {prompt}
+      </p>
+      <ul className="space-y-1" role="radiogroup" aria-labelledby={promptId}>
         {options.map((opt) => (
           <li key={opt.id}>
             <label className="inline-flex items-center gap-2 text-slate-800">
@@ -77,18 +80,21 @@ export function Quiz({ id, prompt, options, correctMessage, incorrectMessage }: 
         type="button"
         onClick={onCheck}
         disabled={!value}
+        aria-controls={feedbackId}
         className="mt-2 px-3 py-1.5 rounded-md bg-accent text-white text-sm disabled:opacity-50"
       >
-        Tjek
+        {checkLabel ?? strings.widgets.quiz.checkLabel}
       </button>
 
-      {checkedNow && (
-        <p className={`mt-1 text-sm ${correct ? 'text-emerald-700' : 'text-amber-700'}`}>
-          {correct
-            ? (correctMessage ?? strings.widgets.quiz.correct)
-            : (incorrectMessage ?? strings.widgets.quiz.incorrect)}
-        </p>
-      )}
+      <div id={feedbackId} aria-live="polite" className="contents">
+        {checkedNow && (
+          <p className={`mt-1 text-sm ${correct ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {correct
+              ? (correctMessage ?? strings.widgets.quiz.correct)
+              : (incorrectMessage ?? strings.widgets.quiz.incorrect)}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

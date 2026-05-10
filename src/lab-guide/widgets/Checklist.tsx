@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
 import { useRunner } from '../RunnerContext';
+import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 
 interface Item {
   id: string;
@@ -13,17 +13,14 @@ interface Props {
 
 /** Generic checklist. Each item has an id and a label; the widget value is a
  * record `{ [itemId]: boolean }`. Gate via
- * `{ type: 'all-checked', widgetIds: [...] }`. */
+ * `{ type: 'all-checked', widgetIds: [...] }`. The wrapping `<ul>` is a
+ * native list — surrounding MDX provides the visible/labelling heading. */
 export function Checklist({ id, items }: Props) {
-  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  const { state, setWidgetValue } = useRunner();
   const ticks = (state.widgetValues[id] as Record<string, boolean> | undefined) ?? {};
   const allChecked = items.length > 0 && items.every((it) => ticks[it.id]);
 
-  // No unmount cleanup: the registered state must outlive a phase change so the
-  // gate stays satisfied when the student navigates away and back.
-  useEffect(() => {
-    registerWidgetState(id, { kind: 'checked', allChecked });
-  }, [id, allChecked, registerWidgetState]);
+  useRegisteredWidgetState(id, { kind: 'checked', allChecked }, [allChecked]);
 
   function toggle(itemId: string) {
     setWidgetValue(id, { ...ticks, [itemId]: !ticks[itemId] });

@@ -1,7 +1,7 @@
 import { type VariantGroup, matchVariantGroups } from '@/lib/textMatch';
-import { useEffect } from 'react';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
+import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import { ProtectedTextarea } from './ProtectedInput';
 
 interface Props {
@@ -45,7 +45,7 @@ export function FreeTextResponse({
   matchOptions,
   keywordsFoundLabel,
 }: Props) {
-  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  const { state, setWidgetValue } = useRunner();
   const value = (state.widgetValues[id] as string | undefined) ?? '';
   const nonEmpty = value.trim().length > 0;
   const words = value.trim().split(/\s+/).filter(Boolean).length;
@@ -60,18 +60,16 @@ export function FreeTextResponse({
   const foundCount = keywordMode && meetsMinWords ? (matchResult?.matchedCount ?? 0) : 0;
   const total = matchResult?.total ?? 0;
 
-  // No unmount cleanup: the registered state must outlive a phase change so the
-  // gate stays satisfied when the student navigates away and back.
-  useEffect(() => {
-    if (keywordMode) {
-      registerWidgetState(id, { kind: 'keywords', foundCount, total });
-    } else {
-      registerWidgetState(id, { kind: 'filled', filled });
-    }
-  }, [id, keywordMode, filled, foundCount, total, registerWidgetState]);
+  useRegisteredWidgetState(
+    id,
+    keywordMode ? { kind: 'keywords', foundCount, total } : { kind: 'filled', filled },
+    [keywordMode, filled, foundCount, total],
+  );
 
   const tooShortText =
     tooShortMessage ?? format(strings.widgets.freeText.tooShort, { n: minWords ?? 0 });
+
+  const helpId = `ft-${id}-help`;
 
   return (
     <div className="my-4">
@@ -83,22 +81,26 @@ export function FreeTextResponse({
         value={value}
         maxLength={maxChars}
         placeholder={placeholder ?? strings.widgets.freeText.placeholder}
+        aria-describedby={helpId}
+        aria-invalid={tooShort || undefined}
         onChange={(e) => setWidgetValue(id, e.target.value)}
       />
-      {tooShort && <p className="mt-1 text-xs text-amber-700">{tooShortText}</p>}
-      {keywordMode && matchResult && (
-        <p className="mt-1 text-xs text-slate-600">
-          {format(keywordsFoundLabel ?? strings.widgets.freeText.keywordsFound, {
-            n: foundCount,
-            t: matchResult.total,
-          })}
-        </p>
-      )}
-      {typeof maxChars === 'number' && (
-        <div className="mt-1 text-xs text-slate-500 text-right">
-          {value.length} / {maxChars}
-        </div>
-      )}
+      <div id={helpId} aria-live="polite" className="contents">
+        {tooShort && <p className="mt-1 text-xs text-amber-700">{tooShortText}</p>}
+        {keywordMode && matchResult && (
+          <p className="mt-1 text-xs text-slate-600">
+            {format(keywordsFoundLabel ?? strings.widgets.freeText.keywordsFound, {
+              n: foundCount,
+              t: matchResult.total,
+            })}
+          </p>
+        )}
+        {typeof maxChars === 'number' && (
+          <div className="mt-1 text-xs text-slate-500 text-right">
+            {value.length} / {maxChars}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

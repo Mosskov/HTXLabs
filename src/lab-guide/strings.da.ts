@@ -46,6 +46,7 @@ export const strings = {
       keywordsFound: 'Nøgleord fundet: {n} / {t}',
     },
     quiz: {
+      checkLabel: 'Tjek',
       correct: 'Korrekt!',
       incorrect: 'Forkert — prøv igen.',
     },
