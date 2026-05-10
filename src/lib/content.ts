@@ -1,22 +1,36 @@
+import { GATE_KINDS, SIM_DRIVEN_GATE_KINDS } from '@/lab-guide/gates';
+import type { SimulationMeta } from '@/sim-contract';
 import type { ComponentType } from 'react';
-import { ExperimentFrontmatter, type Gate, TopicFrontmatter } from './schema';
+import {
+  CANONICAL_PHASE_IDS,
+  ExperimentFrontmatter,
+  type Gate,
+  type Phase,
+  TopicFrontmatter,
+} from './schema';
 
 /**
- * Gate kinds whose backing widget/sim wiring is implemented for any author to
- * use. Other kinds (`milestone`, `data-points`, `predicate`) require a sim
- * that explicitly fires the matching `ProgressEvent`s or exports a `gates`
- * map, so authoring them in a regular lab is rejected at module-load with a
- * descriptive error — see `validateAuthorableGates`. The `test` tag opts a
- * lab out of this guard so the framework testbed (sim-gate-test) can exercise
- * those kinds end-to-end against a known-good testbed sim.
+ * Gate kinds whose backing widget wiring is implemented for any author to use.
+ * Sim-driven kinds (`SIM_DRIVEN_GATE_KINDS`) require a sim that explicitly
+ * fires the matching `ProgressEvent`s or exports a `gates` map, so authoring
+ * them in a regular lab is rejected at module-load with a descriptive error —
+ * see `validateAuthorableGates`. The `test` tag opts a lab out of this guard
+ * so the framework testbed (sim-gate-test) can exercise those kinds
+ * end-to-end against a known-good testbed sim.
  */
-const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set([
-  'always',
-  'all-filled',
-  'all-checked',
-  'all-correct',
-  'keyword-count',
-]);
+const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set(
+  GATE_KINDS.filter((k) => !(SIM_DRIVEN_GATE_KINDS as readonly Gate['type'][]).includes(k)),
+);
+
+const CANONICAL_PHASE_ID_SET: ReadonlySet<string> = new Set(CANONICAL_PHASE_IDS);
+
+function modeEntries(fm: ExperimentFrontmatter): Array<[string, { phases: Phase[] } | undefined]> {
+  return [
+    ['guided', fm.modes.guided],
+    ['semi-guided', fm.modes['semi-guided']],
+    ['open', fm.modes.open],
+  ];
+}
 
 export function validateAuthorableGates(
   fm: ExperimentFrontmatter,
@@ -24,17 +38,42 @@ export function validateAuthorableGates(
 ): void {
   if (fm.tags?.includes('test')) return;
   const supported = Array.from(AUTHORABLE_GATE_KINDS).join(', ');
-  const modeEntries: Array<[string, { phases: { id: string; gate: Gate }[] } | undefined]> = [
-    ['guided', fm.modes.guided],
-    ['semi-guided', fm.modes['semi-guided']],
-    ['open', fm.modes.open],
-  ];
-  for (const [modeName, modeBlock] of modeEntries) {
+  for (const [modeName, modeBlock] of modeEntries(fm)) {
     if (!modeBlock) continue;
     for (const phase of modeBlock.phases) {
       if (!AUTHORABLE_GATE_KINDS.has(phase.gate.type)) {
         throw new Error(
           `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" uses gate kind "${phase.gate.type}", which requires sim wiring not yet implemented in this build. Supported kinds: ${supported}.`,
+        );
+      }
+      if (!CANONICAL_PHASE_ID_SET.has(phase.id)) {
+        console.warn(
+          `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" uses non-canonical phase id "${phase.id}". SPEC §2 defines: ${CANONICAL_PHASE_IDS.join(', ')}. Tag the lab with "test" to silence.`,
+        );
+      }
+    }
+  }
+}
+
+/** Cross-check that every `milestone` gate references an id the resolved sim
+ * has declared in `meta.milestones`. Catches typos like `m11` for `m1` that
+ * would otherwise silently never satisfy. Runs for any lab that has a sim
+ * with declared milestones; safe to skip when either is missing. */
+export function validateSimGateRefs(
+  fm: ExperimentFrontmatter,
+  simMeta: SimulationMeta | undefined,
+  ctx: { topic: string; slug: string },
+): void {
+  if (!simMeta) return;
+  const declared = new Set(simMeta.milestones);
+  for (const [modeName, modeBlock] of modeEntries(fm)) {
+    if (!modeBlock) continue;
+    for (const phase of modeBlock.phases) {
+      if (phase.gate.type !== 'milestone') continue;
+      if (!declared.has(phase.gate.requires)) {
+        const known = simMeta.milestones.length ? simMeta.milestones.join(', ') : '(none declared)';
+        throw new Error(
+          `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" requires milestone "${phase.gate.requires}", which sim "${simMeta.id}" does not declare. Known milestones: ${known}.`,
         );
       }
     }
@@ -75,6 +114,18 @@ const topicModules = import.meta.glob<{ frontmatter: unknown }>('../content/topi
   eager: true,
 });
 
+/** Eagerly indexed sim metadata, keyed by `meta.id`. Used to cross-check lab
+ * `milestone` gate ids against the resolved sim's declared milestones at
+ * module-load (see `validateSimGateRefs`). The component itself stays lazy via
+ * `simulationRegistry`; only the small `meta` export is eager. */
+const simMetaModules = import.meta.glob<{ meta: SimulationMeta }>('../simulations/*/meta.ts', {
+  eager: true,
+});
+const simMetasById = new Map<string, SimulationMeta>();
+for (const mod of Object.values(simMetaModules)) {
+  if (mod.meta?.id) simMetasById.set(mod.meta.id, mod.meta);
+}
+
 type IndexedEntry =
   | {
       ok: true;
@@ -114,6 +165,10 @@ for (const [path, mod] of Object.entries(experimentModules)) {
   // otherwise the student gets a silent permanent lock. See AUTHORABLE_GATE_KINDS.
   try {
     validateAuthorableGates(parsed.data, { topic: topicSlug, slug: experimentSlug });
+    validateSimGateRefs(parsed.data, simMetasById.get(parsed.data.simulationId), {
+      topic: topicSlug,
+      slug: experimentSlug,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error(`[content] ${topicSlug}/${experimentSlug} disabled:`, message);

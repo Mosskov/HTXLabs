@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { validateAuthorableGates } from '@/lib/content';
+import { validateAuthorableGates, validateSimGateRefs } from '@/lib/content';
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { Gate, Phase } from '@/lib/schema';
-import { describe, expect, it } from 'vitest';
+import type { SimulationMeta } from '@/sim-contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 function makePhase(id: string, gate: Gate): Phase {
   return { id, title: id, gate };
@@ -33,6 +34,17 @@ function makeFrontmatter(overrides: {
 }
 
 const ctx = { topic: 'mekanik', slug: 'demo' };
+
+// The phase-id soft warn fires for any non-canonical id. Most tests below use
+// short throwaway ids (`p1`, `a`, `mid`) that aren't in CANONICAL_PHASE_IDS;
+// silence warn at the file level so the noise doesn't bury real failures.
+// The dedicated soft-warn describe block re-spies and asserts on the calls.
+beforeEach(() => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('validateAuthorableGates', () => {
   describe('accepts supported kinds', () => {
@@ -92,11 +104,13 @@ describe('validateAuthorableGates', () => {
     }
 
     it('lists the supported kinds in the error message', () => {
+      // Order reflects GATE_HANDLERS insertion order in src/lab-guide/gates.ts —
+      // the handler map is the source of truth for AUTHORABLE_GATE_KINDS.
       const fm = makeFrontmatter({
         guided: [makePhase('p', { type: 'predicate', name: 'foo' })],
       });
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-        /Supported kinds: always, all-filled, all-checked, all-correct, keyword-count\./,
+        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count\./,
       );
     });
 
@@ -143,5 +157,119 @@ describe('validateAuthorableGates', () => {
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(/phase "first-bad"/);
       expect(() => validateAuthorableGates(fm, ctx)).not.toThrow(/phase "second-bad"/);
     });
+  });
+
+  describe('canonical phase id soft warn', () => {
+    // The file-level beforeEach already stubs console.warn — these tests
+    // assert against that same mock (vi.mocked(console.warn)).
+
+    it('does not warn for canonical ids', () => {
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('planlaeg', { type: 'always' }),
+          makePhase('opstil', { type: 'always' }),
+          makePhase('rapporter', { type: 'always' }),
+        ],
+      });
+      validateAuthorableGates(fm, ctx);
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it('warns once per non-canonical id, naming SPEC §2', () => {
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('planlaeg', { type: 'always' }),
+          makePhase('udforsk', { type: 'always' }),
+        ],
+      });
+      validateAuthorableGates(fm, ctx);
+      expect(console.warn).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toMatch(
+        /non-canonical phase id "udforsk"/,
+      );
+      expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toMatch(/SPEC §2/);
+    });
+
+    it('does not warn for test-tagged labs (testbed escape hatch)', () => {
+      const fm = makeFrontmatter({
+        guided: [makePhase('udforsk', { type: 'always' })],
+      });
+      fm.tags = ['test'];
+      validateAuthorableGates(fm, ctx);
+      expect(console.warn).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('validateSimGateRefs', () => {
+  function makeMeta(milestones: string[]): SimulationMeta {
+    return {
+      id: 'testsim',
+      title: 'Test sim',
+      mode: 'interactive',
+      defaultParams: {},
+      paramSchema: {},
+      milestones,
+    };
+  }
+
+  it('is a no-op when no sim is resolved (theory-only labs)', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'milestone', requires: 'm1' })],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, undefined, ctx)).not.toThrow();
+  });
+
+  it('passes when every milestone gate references a declared id', () => {
+    const fm = makeFrontmatter({
+      guided: [
+        makePhase('planlaeg', { type: 'milestone', requires: 'm1' }),
+        makePhase('maal', { type: 'milestone', requires: 'm2' }),
+      ],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, makeMeta(['m1', 'm2']), ctx)).not.toThrow();
+  });
+
+  it('throws naming the typo, the sim, and the known milestones', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'milestone', requires: 'm11' })],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, makeMeta(['m1', 'm2']), ctx)).toThrow(
+      /requires milestone "m11", which sim "testsim" does not declare. Known milestones: m1, m2/,
+    );
+  });
+
+  it('reports `(none declared)` when the sim has an empty milestones list', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'milestone', requires: 'm1' })],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, makeMeta([]), ctx)).toThrow(/\(none declared\)/);
+  });
+
+  it('ignores non-milestone gates', () => {
+    const fm = makeFrontmatter({
+      guided: [
+        makePhase('planlaeg', { type: 'always' }),
+        makePhase('maal', { type: 'data-points', min: 3 }),
+        makePhase('analyser', { type: 'predicate', name: 'flag-on' }),
+      ],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, makeMeta([]), ctx)).not.toThrow();
+  });
+
+  it('checks milestone gates across all declared modes', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'always' })],
+      semiGuided: [makePhase('maal', { type: 'milestone', requires: 'bogus' })],
+    });
+    fm.tags = ['test'];
+    expect(() => validateSimGateRefs(fm, makeMeta(['m1']), ctx)).toThrow(
+      /mode "semi-guided".*"bogus"/,
+    );
   });
 });

@@ -107,13 +107,13 @@ A lab page has three stacked sections: **Theory** (always visible) → **Simulat
 
 - Runner state (`src/lab-guide/runner.ts`) is persisted to `localStorage['htxlabs:state:${experimentId}']` on every change.
 - On mount, `isStateCompatible` checks saved `experimentVersion` against current frontmatter; mismatch → silent wipe + restart (no banner; `console.info` only). Bump `frontmatter.version` whenever phase ids or gate structure change.
-- Gates are pure (`gates.ts`) — discriminated union over `always | milestone | data-points | all-correct | all-checked | all-filled | keyword-count | predicate`. **Open-mode advances are unconditional** (`inquiryFreeAdvance`); guided/semi-guided run the actual gate. Add a new gate kind: extend the Zod `Gate` union in `src/lib/schema.ts`, then handle it in `isGateSatisfied` and `gateMessage`.
+- Gates are pure (`gates.ts`) — discriminated union over `always | milestone | data-points | all-correct | all-checked | all-filled | keyword-count | predicate`. **Open-mode advances are unconditional** (`inquiryFreeAdvance`); guided/semi-guided run the actual gate. Add a new gate kind: extend the Zod `Gate` union in `src/lib/schema.ts`, then add one entry to `GATE_HANDLERS` in `gates.ts` (`{ check, message }`). `AUTHORABLE_GATE_KINDS` is derived from the handler map minus `SIM_DRIVEN_GATE_KINDS`, so a new widget-driven kind needs no further wiring; sim-driven kinds add themselves to the denylist.
 - **Navigation is asymmetric by design**: forward advance is gate-checked, but completed/current phases are always reachable via the stepper (backward navigation is free). Don't symmetrize `canAdvanceTo` — `PhaseStepper.tsx` relies on the asymmetry to keep completed circles clickable.
 - Widgets register live state (`registerWidgetState`) into a ref, not React state, so widget re-renders don't cascade through the runner. A `setTick` forces gate-evaluating subscribers to re-render after registration.
 
 ### Simulation registry
 
-`src/lib/simulations.ts` maps `simulationId` → lazy importer. Each sim ships as its own JS chunk, dynamic-imported when its lab opens. The sentinel id `__none` means "no simulation" (used by content scaffolds and `Hej, Verden`). Per-lab `simulationOverrides` in frontmatter let a teacher tighten params without forking the sim source.
+`src/lib/simulations.ts` maps `simulationId` → lazy importer. Each sim ships as its own JS chunk, dynamic-imported when its lab opens. The sentinel id `NO_SIMULATION` (`'__none'`, exported from `sim-contract`) means "no simulation" (used by content scaffolds and `Hej, Verden`). Per-lab `simulationOverrides.defaultParams` in frontmatter let a teacher tweak the sim's starting values without forking the sim source.
 
 ### Adding a new lab
 

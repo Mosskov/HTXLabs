@@ -28,6 +28,21 @@ export const Gate = z.discriminatedUnion('type', [
 ]);
 export type Gate = z.infer<typeof Gate>;
 
+/** The 7 canonical phase ids per SPEC §2. The schema accepts any string so the
+ * framework testbed (`tags: ['test']`) can use ad-hoc ids; non-test labs that
+ * stray from this list get a console warning at module-load via
+ * `validateAuthorableGates`. */
+export const CANONICAL_PHASE_IDS = [
+  'planlaeg',
+  'opstil',
+  'maal',
+  'analyser',
+  'diskuter',
+  'konkluder',
+  'rapporter',
+] as const;
+export type CanonicalPhaseId = (typeof CANONICAL_PHASE_IDS)[number];
+
 export const Phase = z.object({
   id: z.string(),
   title: z.string(),
@@ -44,7 +59,6 @@ export const ExperimentFrontmatter = z.object({
   simulationOverrides: z
     .object({
       defaultParams: z.record(z.union([z.number(), z.string()])).optional(),
-      paramSchema: z.record(z.unknown()).optional(),
     })
     .optional(),
 

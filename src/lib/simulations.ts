@@ -1,4 +1,4 @@
-import type { SimulationModule } from '@/sim-contract';
+import { NO_SIMULATION, type SimulationModule } from '@/sim-contract';
 
 /**
  * Simulation registry — id → lazy importer. Lab pages dynamic-import via this
@@ -13,7 +13,7 @@ export const simulationRegistry: Record<string, () => Promise<SimulationModule>>
 };
 
 export async function loadSimulation(id: string): Promise<SimulationModule | undefined> {
-  if (id === '__none') return undefined;
+  if (id === NO_SIMULATION) return undefined;
   const loader = simulationRegistry[id];
   if (!loader) {
     console.warn(`[simulations] unknown id: ${id}`);

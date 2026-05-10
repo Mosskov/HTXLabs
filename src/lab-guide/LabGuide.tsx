@@ -17,7 +17,7 @@ interface LabGuideProps {
   topic: string;
   /** Folder slug for the experiment — uniquely identifies the lab within its
    * topic. Used as the localStorage key suffix; do not derive from frontmatter
-   * (`simulationId` collides for theory-only labs that share `'__none'`). */
+   * (`simulationId` collides for theory-only labs that share `NO_SIMULATION`). */
   slug: string;
   /** Inquiry mode (URL-driven via `?mode=`). Falls back to `'guided'` when the
    * lab doesn't declare phases for the requested mode — gates auto-loosen for

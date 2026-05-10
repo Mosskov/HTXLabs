@@ -166,11 +166,10 @@ const ExperimentFrontmatter = z.object({
   topic: z.string(),
   simulationId: z.string(),
 
-  // Per-lab override of the simulation's default params and/or schema.
-  // Used when a teacher wants to tighten the mass range for one lab without changing the simulation source.
+  // Per-lab override of the simulation's default starting values.
+  // Used when a teacher wants a different opening mass for one lab without changing the simulation source.
   simulationOverrides: z.object({
     defaultParams: z.record(z.number()).optional(),
-    paramSchema: z.record(z.any()).optional(),       // shape matches sim-contract ParamSchema
   }).optional(),
 
   learningObjectives: z.array(z.string()).min(1),
@@ -1007,8 +1006,6 @@ simulationId: dynamometer-g
 simulationOverrides:
   defaultParams:
     mass: 0.05
-  paramSchema:
-    mass: { type: range, min: 0, max: 0.1, step: 0.001, unit: kg }
 
 learningObjectives:
   - Forstå at tyngdeaccelerationen er en konstant uafhængig af den hængende masse

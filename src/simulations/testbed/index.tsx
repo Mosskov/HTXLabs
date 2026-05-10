@@ -7,7 +7,7 @@ interface TestbedState {
   value: number;
 }
 
-export default function Testbed({ onProgress, onState }: SimulationProps) {
+export default function Testbed({ paused = false, onProgress, onState }: SimulationProps) {
   const [flag, setFlag] = useState(false);
   const [value, setValue] = useState(0);
   const [datapoints, setDatapoints] = useState(0);
@@ -18,12 +18,19 @@ export default function Testbed({ onProgress, onState }: SimulationProps) {
   }, [flag, value, onState]);
 
   return (
-    <div className="flex flex-col gap-3 p-4 border rounded bg-white">
-      <h3 className="font-semibold">Gate testbed</h3>
+    <div
+      className="flex flex-col gap-3 p-4 border rounded bg-white"
+      aria-busy={paused || undefined}
+    >
+      <div className="flex items-baseline justify-between">
+        <h3 className="font-semibold">Gate testbed</h3>
+        {paused && <span className="text-xs text-slate-500">(paused)</span>}
+      </div>
       <div className="flex flex-col gap-2 text-sm">
         <button
           type="button"
-          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90"
+          disabled={paused}
+          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90 disabled:opacity-50"
           onClick={() => {
             onProgress?.({ type: 'milestone', id: 'm1' });
             setMilestoneFired(true);
@@ -34,7 +41,8 @@ export default function Testbed({ onProgress, onState }: SimulationProps) {
         </button>
         <button
           type="button"
-          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90"
+          disabled={paused}
+          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90 disabled:opacity-50"
           onClick={() => {
             onProgress?.({ type: 'data-collected', count: 1 });
             setDatapoints((n) => n + 1);
@@ -44,7 +52,8 @@ export default function Testbed({ onProgress, onState }: SimulationProps) {
         </button>
         <button
           type="button"
-          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90"
+          disabled={paused}
+          className="px-3 py-2 rounded bg-navy text-white hover:opacity-90 disabled:opacity-50"
           onClick={() => setFlag((f) => !f)}
         >
           Toggle prædikat-flag (nu: {flag ? 'true' : 'false'})
@@ -57,6 +66,7 @@ export default function Testbed({ onProgress, onState }: SimulationProps) {
             max={10}
             step={1}
             value={value}
+            disabled={paused}
             onChange={(e) => setValue(Number(e.target.value))}
             className="flex-1"
           />

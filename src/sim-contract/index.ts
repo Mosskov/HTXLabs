@@ -1,5 +1,10 @@
 import type React from 'react';
 
+/** Sentinel `simulationId` for theory-only labs that ship no simulation. The
+ * runtime registry (`src/lib/simulations.ts`) short-circuits to `undefined`
+ * for this id rather than warning about an unknown sim. */
+export const NO_SIMULATION = '__none';
+
 export type ParamSchemaEntry =
   | { type: 'range'; min: number; max: number; step: number; unit: string }
   | { type: 'enum'; values: string[] };
