@@ -93,7 +93,7 @@ The codebase is a **framework + content** split. Authors add labs as MDX content
 
 ### Three seams — do not cross
 
-1. **`src/lab-guide/`** — the LabGuide framework: state machine (`runner.ts`), gate evaluation (`gates.ts`), React context (`RunnerContext.tsx`), top-level component (`LabGuide.tsx`), phase stepper/footer, MDX widgets (`widgets/`). This is the only thing routes mount.
+1. **`src/lab-guide/`** — the LabGuide framework: state shape + persistence (`runner.ts`), pure transitions (`runnerReducer.ts`), gate evaluation (`gates.ts`), React context (`RunnerContext.tsx`), top-level component (`LabGuide.tsx`), phase stepper/footer, MDX widgets (`widgets/`). This is the only thing routes mount.
 2. **`src/sim-contract/index.ts`** — the only module a simulation may import from outside its own folder. Defines `SimulationProps`, `SimulationModule`, `ProgressEvent`, `SimulationMeta`. **Simulations must not import from `lab-guide/`.** This isolation is what lets sims be developed and tested independently.
 3. **`src/content/`** — pure content. Each experiment is `experiments/<topic>/<slug>/index.ts` exporting `frontmatter` (validated against `ExperimentFrontmatter` from `src/lib/schema.ts`), `Theory` (the theory MDX), and `phaseBodies` (a record of phase id → MDX component). Topics are `topics/<slug>.ts`.
 

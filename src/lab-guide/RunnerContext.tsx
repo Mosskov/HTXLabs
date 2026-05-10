@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -22,6 +23,7 @@ import {
   save,
   wipe,
 } from './runner';
+import { runnerReducer } from './runnerReducer';
 
 interface RunnerApi {
   state: RunnerState;
@@ -63,7 +65,7 @@ export function RunnerProvider({
   initialLabMode?: LabMode;
   children: ReactNode;
 }) {
-  const [state, setState] = useState<RunnerState>(() => {
+  const [state, dispatch] = useReducer(runnerReducer, undefined, () => {
     const loaded = load(experimentId);
     if (loaded && isStateCompatible(loaded, experimentVersion, phases)) {
       // URL-driven mode wins over the persisted mode field — mode is a view
@@ -91,62 +93,63 @@ export function RunnerProvider({
   const [tick, setTick] = useState(0);
   const [resetKey, setResetKey] = useState(0);
 
-  const setCurrentPhase = useCallback(
-    (phaseId: string) =>
-      setState((s) => {
-        const visited = new Set(s.visitedPhaseIds);
-        visited.add(phaseId);
-        return { ...s, currentPhaseId: phaseId, visitedPhaseIds: visited };
-      }),
-    [],
-  );
+  // Track latest committed state + pending in-render bumps so `bumpAttempts`
+  // can return the correct next count even on synchronous re-entry within
+  // the same render. Cleared on every commit.
+  const stateRef = useRef(state);
+  const pendingBumpsRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    stateRef.current = state;
+    pendingBumpsRef.current = {};
+  }, [state]);
 
-  const setMode = useCallback((mode: Mode) => setState((s) => ({ ...s, mode })), []);
-  const setLabMode = useCallback((labMode: LabMode) => setState((s) => ({ ...s, labMode })), []);
+  const setCurrentPhase = useCallback((id: string) => {
+    dispatch({ type: 'SET_CURRENT_PHASE', id });
+  }, []);
+
+  const setMode = useCallback((mode: Mode) => {
+    dispatch({ type: 'SET_MODE', mode });
+  }, []);
+
+  const setLabMode = useCallback((labMode: LabMode) => {
+    dispatch({ type: 'SET_LAB_MODE', labMode });
+  }, []);
 
   const setWidgetValue = useCallback((id: string, value: unknown) => {
-    setState((s) => ({ ...s, widgetValues: { ...s.widgetValues, [id]: value } }));
+    dispatch({ type: 'SET_WIDGET_VALUE', id, value });
   }, []);
 
   const setDataTable = useCallback((id: string, rows: DataRow[]) => {
-    setState((s) => ({ ...s, dataTables: { ...s.dataTables, [id]: rows } }));
+    dispatch({ type: 'SET_DATA_TABLE', id, rows });
   }, []);
 
   const bumpAttempts = useCallback((id: string): number => {
-    let next = 0;
-    setState((s) => {
-      next = (s.attemptCounts[id] ?? 0) + 1;
-      return { ...s, attemptCounts: { ...s.attemptCounts, [id]: next } };
-    });
+    const committed = stateRef.current.attemptCounts[id] ?? 0;
+    const pending = pendingBumpsRef.current[id] ?? 0;
+    const next = committed + pending + 1;
+    pendingBumpsRef.current[id] = pending + 1;
+    dispatch({ type: 'BUMP_ATTEMPTS', id });
     return next;
   }, []);
 
   const fireMilestone = useCallback((id: string) => {
-    setState((s) => {
-      if (s.firedMilestones.has(id)) return s;
-      const fm = new Set(s.firedMilestones);
-      fm.add(id);
-      return { ...s, firedMilestones: fm };
-    });
+    dispatch({ type: 'FIRE_MILESTONE', id });
   }, []);
 
-  const onSimulationProgress = useCallback(
-    (e: ProgressEvent) => {
-      switch (e.type) {
-        case 'milestone':
-          fireMilestone(e.id);
-          break;
-        case 'data-collected':
-          setState((s) => ({ ...s, dataPointCount: s.dataPointCount + e.count }));
-          break;
-        case 'reset':
-          // Resets are pedagogical, not destructive — just bump a milestone marker.
-          fireMilestone('__reset__');
-          break;
-      }
-    },
-    [fireMilestone],
-  );
+  const onSimulationProgress = useCallback((e: ProgressEvent) => {
+    switch (e.type) {
+      case 'milestone':
+        dispatch({ type: 'FIRE_MILESTONE', id: e.id });
+        break;
+      case 'data-collected':
+        dispatch({ type: 'INCREMENT_DATA_POINTS', count: e.count });
+        break;
+      case 'reset':
+        // Resets are pedagogical, not destructive — just bump a milestone marker.
+        dispatch({ type: 'FIRE_MILESTONE', id: '__reset__' });
+        break;
+    }
+  }, []);
 
   const setSimulationState = useCallback((s: unknown) => {
     simulationStateRef.current = s;
@@ -164,7 +167,10 @@ export function RunnerProvider({
 
   const resetLab = useCallback(() => {
     wipe(experimentId);
-    setState(emptyState(experimentId, experimentVersion, phases, initialMode, initialLabMode));
+    dispatch({
+      type: 'RESET',
+      nextState: emptyState(experimentId, experimentVersion, phases, initialMode, initialLabMode),
+    });
     simulationStateRef.current = null;
     setResetKey((k) => k + 1);
   }, [experimentId, experimentVersion, phases, initialMode, initialLabMode]);
@@ -175,44 +181,24 @@ export function RunnerProvider({
     [state, tick],
   );
 
-  const api: RunnerApi = useMemo(
-    () => ({
-      state,
-      phases,
-      simulation,
-      resetKey,
-      setCurrentPhase,
-      setMode,
-      setLabMode,
-      setWidgetValue,
-      setDataTable,
-      bumpAttempts,
-      fireMilestone,
-      onSimulationProgress,
-      setSimulationState,
-      registerWidgetState,
-      gateCtx,
-      resetLab,
-    }),
-    [
-      state,
-      phases,
-      simulation,
-      resetKey,
-      setCurrentPhase,
-      setMode,
-      setLabMode,
-      setWidgetValue,
-      setDataTable,
-      bumpAttempts,
-      fireMilestone,
-      onSimulationProgress,
-      setSimulationState,
-      registerWidgetState,
-      gateCtx,
-      resetLab,
-    ],
-  );
+  const api: RunnerApi = {
+    state,
+    phases,
+    simulation,
+    resetKey,
+    setCurrentPhase,
+    setMode,
+    setLabMode,
+    setWidgetValue,
+    setDataTable,
+    bumpAttempts,
+    fireMilestone,
+    onSimulationProgress,
+    setSimulationState,
+    registerWidgetState,
+    gateCtx,
+    resetLab,
+  };
 
   return <RunnerContext.Provider value={api}>{children}</RunnerContext.Provider>;
 }

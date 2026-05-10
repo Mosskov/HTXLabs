@@ -29,5 +29,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
+    // Exclude agent worktrees so a stale worktree under .claude/ can't double-run the suite.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 });
