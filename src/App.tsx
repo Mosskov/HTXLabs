@@ -1,4 +1,5 @@
 import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { strings } from './lab-guide/strings.da';
 import { ExperimentRoute } from './routes/experiment';
 import { Home } from './routes/home';
 import { PlaygroundIndex, PlaygroundRoute } from './routes/playground';
@@ -12,14 +13,14 @@ export function App() {
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-lab mx-auto px-4 py-4 flex items-center gap-6">
           <Link to="/" className="font-semibold text-navy">
-            HTX Labs
+            {strings.brand}
           </Link>
           <nav className="flex gap-4 text-sm text-slate-600">
             <Link to="/" className="hover:text-accent">
-              Forsiden
+              {strings.nav.home}
             </Link>
             <Link to="/emner" className="hover:text-accent">
-              Emner
+              {strings.nav.topics}
             </Link>
           </nav>
         </div>

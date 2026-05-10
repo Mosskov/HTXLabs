@@ -9,6 +9,13 @@ export const strings = {
   nav: {
     home: 'Forsiden',
     topics: 'Emner',
+    /** Back-link from a topic page to the home/landing page. */
+    backToHome: '← Forsiden',
+  },
+  home: {
+    intro: 'Interaktive fysikforsøg til HTX-elever. Vælg et emne for at komme i gang.',
+    /** "Forsøg" is uncountable in Danish — same form for 1 and N. Vars: {n} */
+    experimentCount: '{n} forsøg',
   },
   guide: {
     heading: 'Laboratorieguide',
