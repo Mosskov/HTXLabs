@@ -9,6 +9,7 @@ import type { SimulationModule } from '@/sim-contract';
  */
 export const simulationRegistry: Record<string, () => Promise<SimulationModule>> = {
   'dynamometer-g': () => import('@/simulations/dynamometer-g'),
+  testbed: () => import('@/simulations/testbed'),
 };
 
 export async function loadSimulation(id: string): Promise<SimulationModule | undefined> {

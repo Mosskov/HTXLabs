@@ -121,6 +121,18 @@ describe('validateAuthorableGates', () => {
       );
     });
 
+    it('skips the check when the lab is tagged "test" (framework testbed escape hatch)', () => {
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('a', { type: 'milestone', requires: 'm1' }),
+          makePhase('b', { type: 'data-points', min: 3 }),
+          makePhase('c', { type: 'predicate', name: 'flag-on' }),
+        ],
+      });
+      fm.tags = ['test'];
+      expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
+    });
+
     it('reports the first offending phase only', () => {
       const fm = makeFrontmatter({
         guided: [

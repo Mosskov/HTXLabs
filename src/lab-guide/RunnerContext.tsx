@@ -1,5 +1,5 @@
 import type { Phase } from '@/lib/schema';
-import type { ProgressEvent } from '@/sim-contract';
+import type { ProgressEvent, SimulationModule } from '@/sim-contract';
 import {
   type ReactNode,
   createContext,
@@ -26,6 +26,7 @@ import {
 interface RunnerApi {
   state: RunnerState;
   phases: Phase[];
+  simulation: SimulationModule | undefined;
   setCurrentPhase: (phaseId: string) => void;
   setMode: (mode: Mode) => void;
   setLabMode: (mode: LabMode) => void;
@@ -34,6 +35,7 @@ interface RunnerApi {
   bumpAttempts: (id: string) => number;
   fireMilestone: (id: string) => void;
   onSimulationProgress: (e: ProgressEvent) => void;
+  setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
   gateCtx: GateCtx;
   resetLab: () => void;
@@ -45,6 +47,7 @@ export function RunnerProvider({
   experimentId,
   experimentVersion,
   phases,
+  simulation,
   children,
   initialMode = 'guided',
   initialLabMode = 'virtual',
@@ -52,6 +55,7 @@ export function RunnerProvider({
   experimentId: string;
   experimentVersion: number;
   phases: Phase[];
+  simulation?: SimulationModule;
   initialMode?: Mode;
   initialLabMode?: LabMode;
   children: ReactNode;
@@ -140,6 +144,11 @@ export function RunnerProvider({
     [fireMilestone],
   );
 
+  const setSimulationState = useCallback((s: unknown) => {
+    simulationStateRef.current = s;
+    setTick((t) => t + 1);
+  }, []);
+
   const registerWidgetState = useCallback((id: string, ws: WidgetState | null) => {
     if (ws === null) {
       delete widgetStateRef.current[id];
@@ -164,6 +173,7 @@ export function RunnerProvider({
     () => ({
       state,
       phases,
+      simulation,
       setCurrentPhase,
       setMode,
       setLabMode,
@@ -172,6 +182,7 @@ export function RunnerProvider({
       bumpAttempts,
       fireMilestone,
       onSimulationProgress,
+      setSimulationState,
       registerWidgetState,
       gateCtx,
       resetLab,
@@ -179,6 +190,7 @@ export function RunnerProvider({
     [
       state,
       phases,
+      simulation,
       setCurrentPhase,
       setMode,
       setLabMode,
@@ -187,6 +199,7 @@ export function RunnerProvider({
       bumpAttempts,
       fireMilestone,
       onSimulationProgress,
+      setSimulationState,
       registerWidgetState,
       gateCtx,
       resetLab,

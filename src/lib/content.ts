@@ -2,12 +2,13 @@ import type { ComponentType } from 'react';
 import { ExperimentFrontmatter, type Gate, TopicFrontmatter } from './schema';
 
 /**
- * Gate kinds whose backing widget/sim wiring is implemented in this build.
- * Authoring a gate of any other kind is rejected at module-load with a
- * descriptive error — see `validateAuthorableGates`. Re-enable a kind here
- * once the corresponding sim hook lands (e.g. `predicate` once a sim exports
- * a `gates` map; `milestone` / `data-points` once a sim fires the matching
- * `ProgressEvent`s).
+ * Gate kinds whose backing widget/sim wiring is implemented for any author to
+ * use. Other kinds (`milestone`, `data-points`, `predicate`) require a sim
+ * that explicitly fires the matching `ProgressEvent`s or exports a `gates`
+ * map, so authoring them in a regular lab is rejected at module-load with a
+ * descriptive error — see `validateAuthorableGates`. The `test` tag opts a
+ * lab out of this guard so the framework testbed (sim-gate-test) can exercise
+ * those kinds end-to-end against a known-good testbed sim.
  */
 const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set([
   'always',
@@ -21,6 +22,7 @@ export function validateAuthorableGates(
   fm: ExperimentFrontmatter,
   ctx: { topic: string; slug: string },
 ): void {
+  if (fm.tags?.includes('test')) return;
   const supported = Array.from(AUTHORABLE_GATE_KINDS).join(', ');
   const modeEntries: Array<[string, { phases: { id: string; gate: Gate }[] } | undefined]> = [
     ['guided', fm.modes.guided],

@@ -5,10 +5,7 @@ import { canAdvanceTo, isGateSatisfied } from '@/lab-guide/gates';
  * can verify gate logic without trusting the visual stepper/footer. Drop
  * into hej-verden's theory.mdx — not for student-facing labs. */
 export function GateDebug() {
-  const { state, phases, gateCtx } = useRunner();
-  // hej-verden has no simulation; predicate-gate evaluations will fall through
-  // to `false` here, which is the same behaviour the runner uses at runtime.
-  const module = undefined;
+  const { state, phases, gateCtx, simulation } = useRunner();
 
   return (
     <div className="my-6 rounded border border-amber-300 bg-amber-50 p-4 font-mono text-xs text-stone-800">
@@ -44,8 +41,8 @@ export function GateDebug() {
             {phases.map((p) => {
               const visited = state.visitedPhaseIds.has(p.id);
               const current = state.currentPhaseId === p.id;
-              const ok = isGateSatisfied(p.gate, state, module, gateCtx);
-              const reachable = canAdvanceTo(p.id, phases, state, module, gateCtx);
+              const ok = isGateSatisfied(p.gate, state, simulation, gateCtx);
+              const reachable = canAdvanceTo(p.id, phases, state, simulation, gateCtx);
               return (
                 <tr key={p.id} className="border-b border-amber-200 align-top">
                   <td className="py-1 pr-2">{p.id}</td>

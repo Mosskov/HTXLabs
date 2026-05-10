@@ -28,7 +28,7 @@ interface LabGuideProps {
 }
 
 export function LabGuide(props: LabGuideProps) {
-  const { experiment, slug, mode = 'guided' } = props;
+  const { experiment, slug, mode = 'guided', simulation } = props;
   const phases = experiment.modes[mode]?.phases ?? experiment.modes.guided.phases;
 
   return (
@@ -37,6 +37,7 @@ export function LabGuide(props: LabGuideProps) {
         experimentId={`${experiment.topic}/${slug}`}
         experimentVersion={experiment.version}
         phases={phases}
+        simulation={simulation}
         initialMode={mode}
       >
         <LabGuideInner {...props} phases={phases} />
@@ -52,7 +53,7 @@ function LabGuideInner({
   simulation,
   phases,
 }: LabGuideProps & { phases: Phase[] }) {
-  const { state, onSimulationProgress } = useRunner();
+  const { state, onSimulationProgress, setSimulationState } = useRunner();
   const Sim: ComponentType<import('@/sim-contract').SimulationProps> | undefined =
     simulation?.default;
   const meta = simulation?.meta;
@@ -79,6 +80,7 @@ function LabGuideInner({
             height={420}
             initialParams={initialParams}
             onProgress={onSimulationProgress}
+            onState={setSimulationState}
           />
         </SimulationPanel>
       )}

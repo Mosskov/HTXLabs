@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Props) {
-  const { state, setCurrentPhase, gateCtx } = useRunner();
+  const { state, setCurrentPhase, gateCtx, simulation } = useRunner();
   const { push: pushToast } = useContext(ToastContext);
   const currentIdx = phases.findIndex((p) => p.id === state.currentPhaseId);
   const currentPhase = phases[currentIdx];
@@ -28,7 +28,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   // for the next phase reduces to "current phase's gate passes" (see gates.ts),
   // so we evaluate the gate once and reuse the result for both the inline
   // message and the button's enabled/disabled state.
-  const gateOk = isGateSatisfied(currentPhase.gate, state, undefined, gateCtx);
+  const gateOk = isGateSatisfied(currentPhase.gate, state, simulation, gateCtx);
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-4 no-print">

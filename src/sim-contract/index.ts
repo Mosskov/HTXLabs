@@ -13,6 +13,11 @@ export interface SimulationProps {
   paused?: boolean;
   onProgress?: (e: ProgressEvent) => void;
   onParamChange?: (params: Record<string, number | string>) => void;
+  /** Publishes a snapshot of the sim's runtime state to the runner so that
+   * `predicate` gates (which call `module.gates[name](state)`) have something
+   * to evaluate. Optional: only sims with predicate-backed gates need to call
+   * it. Frequency is up to the sim — once per relevant change is enough. */
+  onState?: (state: unknown) => void;
 }
 
 export type ProgressEvent =

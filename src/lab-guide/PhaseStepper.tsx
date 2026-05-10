@@ -5,7 +5,7 @@ import { canAdvanceTo, isGateSatisfied } from './gates';
 import { format, strings } from './strings.da';
 
 export function PhaseStepper({ phases }: { phases: Phase[] }) {
-  const { state, setCurrentPhase, gateCtx } = useRunner();
+  const { state, setCurrentPhase, gateCtx, simulation } = useRunner();
 
   return (
     <ol className="flex items-start gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
@@ -16,8 +16,8 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
         // flipped back to false (e.g. student emptied the answer) loses its ✓.
         // The current phase shows ✓ too as soon as its gate passes. Visited
         // is still required so unvisited `always`-gate phases don't pre-tick.
-        const isCompleted = isVisited && isGateSatisfied(phase.gate, state, undefined, gateCtx);
-        const reachable = canAdvanceTo(phase.id, phases, state, undefined, gateCtx);
+        const isCompleted = isVisited && isGateSatisfied(phase.gate, state, simulation, gateCtx);
+        const reachable = canAdvanceTo(phase.id, phases, state, simulation, gateCtx);
         const clickable = reachable;
 
         // Connector to the NEXT phase: accent iff the next phase has been

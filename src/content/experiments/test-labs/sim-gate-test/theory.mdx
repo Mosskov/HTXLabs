@@ -1,0 +1,15 @@
+## Formål
+Verificere at de tre sim-drevne gate-typer (`milestone`, `data-points`, `predicate`)
+evalueres korrekt af lab-guiden. Søsterlabben *framework-test* dækker de fem
+øvrige gate-typer.
+
+## Centrale begreber
+- ProgressEvent (`milestone`, `data-collected`)
+- Predikat-gates der læser sim-state via `module.gates`
+
+## Teori
+Klik knapperne i simulationen ovenfor for at fyre events og se gate-status
+opdatere sig live. Brug `<GateDebug />`-snapshottet nedenfor til at verificere
+runner-state mod faserne.
+
+<GateDebug />
