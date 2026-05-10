@@ -1,5 +1,11 @@
-// Zod schemas for ExperimentFrontmatter, Phase, Gate, TopicFrontmatter; canonical phase ids.
+// Zod schemas for ExperimentFrontmatter, Phase, Gate, TopicFrontmatter; canonical phase ids; Mode/LabMode.
 import { z } from 'zod';
+
+export const Mode = z.enum(['guided', 'semi-guided', 'open']);
+export type Mode = z.infer<typeof Mode>;
+
+export const LabMode = z.enum(['virtual', 'real']);
+export type LabMode = z.infer<typeof LabMode>;
 
 export const Gate = z.discriminatedUnion('type', [
   z.object({ type: z.literal('always') }),

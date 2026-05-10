@@ -1,8 +1,7 @@
 // Persistent runner state: shape, defaults, localStorage save/load, version compatibility.
-import type { Phase } from '@/lib/schema';
+import type { LabMode, Mode, Phase } from '@/lib/schema';
 
-export type Mode = 'guided' | 'semi-guided' | 'open';
-export type LabMode = 'virtual' | 'real';
+export type { LabMode, Mode };
 
 export interface DataRow {
   [columnKey: string]: string;

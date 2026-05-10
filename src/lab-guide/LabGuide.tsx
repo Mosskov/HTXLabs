@@ -34,7 +34,13 @@ interface LabGuideProps {
 
 export function LabGuide(props: LabGuideProps) {
   const { experiment, topic, slug, mode = 'guided', simulation } = props;
-  const phases = experiment.modes[mode]?.phases ?? experiment.modes.guided.phases;
+  const requestedPhases = experiment.modes[mode]?.phases;
+  if (!requestedPhases && mode !== 'guided') {
+    console.info(
+      `[htxlabs] mode '${mode}' not declared by ${topic}/${slug} — falling back to guided.`,
+    );
+  }
+  const phases = requestedPhases ?? experiment.modes.guided.phases;
 
   return (
     <ToastProvider>

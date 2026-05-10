@@ -16,8 +16,6 @@ export type WidgetState =
   | { kind: 'filled'; filled: boolean }
   | { kind: 'keywords'; foundCount: number; total: number };
 
-const inquiryFreeAdvance = (mode: RunnerState['mode']) => mode === 'open';
-
 /** Gate kinds whose evaluation depends on the simulation rather than a widget.
  * Authorable labs (non-`tags: ['test']`) are limited to widget-driven kinds —
  * see `AUTHORABLE_GATE_KINDS` in `src/lib/content.ts`. */
@@ -112,7 +110,9 @@ export function isGateSatisfied(
   module: SimulationModule | undefined,
   ctx: GateCtx,
 ): boolean {
-  if (inquiryFreeAdvance(state.mode)) return true;
+  // Open-mode (`inquiryFreeAdvance`): gates are non-binding, advance is
+  // unconditional. Guided / semi-guided run the real check below. SPEC §5.
+  if (state.mode === 'open') return true;
   // The handler narrows on `gate.type`; the cast carries that to the call site
   // since TS can't tie the lookup result to the specific gate without a switch.
   const handler = GATE_HANDLERS[gate.type] as GateHandler<Gate>;
