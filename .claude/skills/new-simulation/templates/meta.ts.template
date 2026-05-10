@@ -5,7 +5,10 @@ import type { SimulationMeta } from '@/sim-contract';
 
 export const meta: SimulationMeta = {
   id: '__ID__',
-  title: '__TITLE__', // TODO: replace with the Danish working title.
+  // Stable canonical/internal title (used by playground/dev). Pick an
+  // English-ish slug; the Danish display title goes under `locale.da.title`.
+  title: '__TITLE__',
+  locale: { da: { title: '__TITLE__' } }, // TODO: replace with the Danish display title.
   mode: '__MODE__',
   defaultParams: {
     // TODO: e.g. mass: 0.05, instrument: 'dynamometer-10N'

@@ -1,5 +1,10 @@
 import { loadSimulation, simulationRegistry } from '@/lib/simulations';
-import type { ParamSchemaEntry, ProgressEvent, SimulationModule } from '@/sim-contract';
+import {
+  type ParamSchemaEntry,
+  type ProgressEvent,
+  type SimulationModule,
+  simTitleDa,
+} from '@/sim-contract';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -109,7 +114,7 @@ function PlaygroundHarness({
   return (
     <section>
       <header className="mb-4">
-        <h1 className="lab-heading">Playground: {meta.title}</h1>
+        <h1 className="lab-heading">Playground: {simTitleDa(meta)}</h1>
         <p className="text-sm text-slate-500">
           <code>{simId}</code>
         </p>

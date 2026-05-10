@@ -43,8 +43,7 @@ Phase-scope `milestone` and `data-points` gates via per-phase buckets; leave `pr
 
 ## Simulations
 
-### Sim-Danish convention (B-3 / R-G2)
-**Why:** decision deferred 2026-05-10 on whether sim-internal UI strings should follow the same Danish-only policy as framework chrome. Worth pinning before authoring real student-facing sim UI.
+*(No standing items.)*
 
 ---
 

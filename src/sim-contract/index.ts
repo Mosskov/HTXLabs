@@ -41,13 +41,35 @@ export type ProgressEvent =
  */
 export type SimulationMode = 'display' | 'interactive';
 
+/** Per-locale display strings for the sim. Sims own their own chrome rather
+ * than pulling from `lab-guide/strings.da.ts` — see CLAUDE.md "Conventions"
+ * (sim-Danish convention). Only `da` is shipped today; add more as needed. */
+export interface SimulationLocale {
+  da: {
+    /** Danish display title used in lab pages and dev playground. Falls back
+     * to `meta.title` when omitted. */
+    title?: string;
+  };
+}
+
 export interface SimulationMeta {
   id: string;
+  /** Canonical/internal title — kept stable for code references. The
+   * student-facing display string is `locale.da.title` (with this as
+   * fallback). */
   title: string;
   mode: SimulationMode;
   defaultParams: Record<string, number | string>;
   paramSchema: ParamSchema;
   milestones: string[];
+  /** Optional per-locale display overrides; see `SimulationLocale`. */
+  locale?: SimulationLocale;
+}
+
+/** Resolve the Danish display title from sim metadata. Use this in any UI
+ * that surfaces a sim title to a Danish-speaking student or teacher. */
+export function simTitleDa(meta: SimulationMeta): string {
+  return meta.locale?.da?.title ?? meta.title;
 }
 
 export interface SimulationModule {

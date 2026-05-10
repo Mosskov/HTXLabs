@@ -3,7 +3,8 @@ import { DYNAMOMETERS } from './instruments';
 
 export const meta: SimulationMeta = {
   id: 'dynamometer-g',
-  title: 'Bestemmelse af g med dynamometer',
+  title: 'Dynamometer (g determination)',
+  locale: { da: { title: 'Bestemmelse af g med dynamometer' } },
   mode: 'display',
   defaultParams: {
     mass: 0.05,
