@@ -25,5 +25,33 @@
       "trailingCommas": "all",
       "semicolons": "always"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["src/simulations/**", "src/sim-contract/**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@/lab-guide/LabGuide": "Three-seam rule: sims and sim-contract must not import from lab-guide. Re-route via sim-contract or content.",
+                  "@/lab-guide/PhaseFooter": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/PhaseStepper": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/RunnerContext": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/SimulationPanel": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/gates": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/runner": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/runnerReducer": "Three-seam rule: sims and sim-contract must not import from lab-guide.",
+                  "@/lab-guide/strings.da": "Three-seam rule: sims must keep their own strings (per-sim strings.da.ts); sim-contract must not import from lab-guide.",
+                  "@/lab-guide/useRegisteredWidgetState": "Three-seam rule: this is a widget hook, not for sims."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

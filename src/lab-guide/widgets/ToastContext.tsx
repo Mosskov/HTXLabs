@@ -1,3 +1,4 @@
+// Lightweight toast queue context for transient UI notifications.
 import { type ReactNode, createContext, useCallback, useEffect, useMemo, useState } from 'react';
 
 interface Toast {

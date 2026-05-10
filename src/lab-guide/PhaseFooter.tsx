@@ -1,3 +1,4 @@
+// Bottom-of-phase footer: previous/next buttons + gate-block tooltip.
 import type { Phase } from '@/lib/schema';
 import { type ReactNode, useContext } from 'react';
 import { useRunner } from './RunnerContext';

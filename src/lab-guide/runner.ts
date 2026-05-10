@@ -1,3 +1,4 @@
+// Persistent runner state: shape, defaults, localStorage save/load, version compatibility.
 import type { Phase } from '@/lib/schema';
 
 export type Mode = 'guided' | 'semi-guided' | 'open';

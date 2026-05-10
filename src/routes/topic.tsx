@@ -1,3 +1,4 @@
+// Topic route: lists experiment cards within a topic.
 import { LabCardLink } from '@/components/LabCardLink';
 import { strings } from '@/lab-guide/strings.da';
 import { loadTopic } from '@/lib/content';

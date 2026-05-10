@@ -1,3 +1,4 @@
+// <input>/<textarea> wrappers blocking copy/paste/drop with toast feedback.
 import {
   type ClipboardEvent,
   type DragEvent,

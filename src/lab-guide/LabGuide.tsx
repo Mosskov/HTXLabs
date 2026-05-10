@@ -1,3 +1,4 @@
+// Top-level lab page: theory + simulation panel + gated phase flow.
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { ComponentType, ReactNode } from 'react';

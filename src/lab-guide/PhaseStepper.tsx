@@ -1,3 +1,4 @@
+// Top-of-guide stepper showing phase circles, completion state, and click-to-jump.
 import type { Phase } from '@/lib/schema';
 import { Fragment } from 'react';
 import { useRunner } from './RunnerContext';

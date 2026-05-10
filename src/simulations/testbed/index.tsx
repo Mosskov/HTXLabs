@@ -1,3 +1,4 @@
+// Dev/test simulation: fires every gate-relevant ProgressEvent on demand.
 import type { SimulationProps } from '@/sim-contract';
 import { useEffect, useState } from 'react';
 import { meta } from './meta';

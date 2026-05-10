@@ -1,3 +1,4 @@
+// Landing route: lists topic cards.
 import { LabCardLink } from '@/components/LabCardLink';
 import { format, strings } from '@/lab-guide/strings.da';
 import { listTopics } from '@/lib/content';

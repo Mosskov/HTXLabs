@@ -1,3 +1,4 @@
+// Zod schemas for ExperimentFrontmatter, Phase, Gate, TopicFrontmatter; canonical phase ids.
 import { z } from 'zod';
 
 export const Gate = z.discriminatedUnion('type', [

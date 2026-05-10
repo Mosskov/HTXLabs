@@ -1,3 +1,4 @@
+// Dev-only sim harness: pick a sim id, drive its props, watch ProgressEvents.
 import { loadSimulation, simulationRegistry } from '@/lib/simulations';
 import {
   type ParamSchemaEntry,

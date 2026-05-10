@@ -1,3 +1,4 @@
+// React context wrapping runner state + dispatch + widget/sim live registries.
 import type { Phase } from '@/lib/schema';
 import type { ProgressEvent, SimulationModule } from '@/sim-contract';
 import {

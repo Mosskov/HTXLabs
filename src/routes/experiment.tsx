@@ -1,3 +1,4 @@
+// Experiment route: loads an experiment + its sim, mounts a LabGuide.
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { strings } from '@/lab-guide/strings.da';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';

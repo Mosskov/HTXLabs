@@ -1,3 +1,4 @@
+// Pure gate evaluation: GATE_HANDLERS map, isGateSatisfied, canAdvanceTo, gateMessage.
 import type { Gate, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { RunnerState } from './runner';

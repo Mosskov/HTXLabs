@@ -1,3 +1,4 @@
+// URL-param parsing helpers (?mode=) with safe defaults.
 import type { Mode } from '@/lab-guide/runner';
 
 const MODES: readonly Mode[] = ['guided', 'semi-guided', 'open'];

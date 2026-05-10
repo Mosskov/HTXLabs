@@ -1,3 +1,4 @@
+// Router root: site header + route table.
 import { Link, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { strings } from './lab-guide/strings.da';
 import { ExperimentRoute } from './routes/experiment';
