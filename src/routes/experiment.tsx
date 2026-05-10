@@ -15,7 +15,6 @@ const mdxComponents = {
   Checklist: widgets.Checklist,
   Quiz: widgets.Quiz,
   ResetButton: widgets.ResetButton,
-  GateDebug: widgets.GateDebug,
 };
 
 export function ExperimentRoute() {

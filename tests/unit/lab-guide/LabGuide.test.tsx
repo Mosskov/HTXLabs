@@ -1,11 +1,14 @@
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { useRunner } from '@/lab-guide/RunnerContext';
-import { isGateSatisfied } from '@/lab-guide/gates';
+import { gateMessage, isGateSatisfied } from '@/lab-guide/gates';
 import { Checklist } from '@/lab-guide/widgets/Checklist';
 import { FreeTextResponse } from '@/lab-guide/widgets/FreeTextResponse';
 import { Quiz } from '@/lab-guide/widgets/Quiz';
+import { strings } from '@/lab-guide/strings.da';
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
+import type { SimulationModule } from '@/sim-contract';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 /** Renders one row per phase showing whether its gate currently passes. The
@@ -217,5 +220,154 @@ describe('LabGuide — open mode bypasses gates (B2)', () => {
     );
     expect(persisted.currentPhaseId).toBe('maal');
     expect(persisted.visitedPhaseIds).toEqual(expect.arrayContaining(['planlaeg', 'maal']));
+  });
+});
+
+/** Probe that exposes runner side-effects as click targets so tests can drive
+ *  sim-driven gate state (milestone fires, data-collected events, predicate
+ *  state) without mounting a real simulation. */
+function RunnerActionsProbe() {
+  const { fireMilestone, onSimulationProgress, setSimulationState } = useRunner();
+  return (
+    <div>
+      <button
+        type="button"
+        data-testid="probe-fire-m1"
+        onClick={() => fireMilestone('m1')}
+      >
+        fire-m1
+      </button>
+      <button
+        type="button"
+        data-testid="probe-add-data"
+        onClick={() => onSimulationProgress({ type: 'data-collected', count: 1 })}
+      >
+        +1
+      </button>
+      <button
+        type="button"
+        data-testid="probe-set-flag-on"
+        onClick={() => setSimulationState({ flag: true })}
+      >
+        flag-on
+      </button>
+    </div>
+  );
+}
+
+/** Two-phase fixture so the advance button stays labelled "Næste fase →"
+ *  (single-phase labs flip it to "Afslut guide"). The second phase is a
+ *  trivial always-gate filler — only the first phase is under test. */
+function makeExperiment(phase: Phase, tags: string[] = []): ExperimentFrontmatter {
+  const filler: Phase = { id: 'maal', title: 'P2', gate: { type: 'always' } };
+  return {
+    version: 1,
+    title: 'Failure-path fixture',
+    topic: 'test-topic',
+    simulationId: '__none',
+    learningObjectives: ['x'],
+    keyConcepts: [],
+    difficulty: 'intro',
+    modes: { guided: { phases: [phase, filler] } },
+    labModes: { virtual: { enabled: true } },
+    allowPaste: false,
+    tags,
+  };
+}
+
+const stubSimulation: SimulationModule = {
+  default: () => null,
+  meta: {
+    id: 'stub',
+    title: 'Stub',
+    mode: 'interactive',
+    defaultParams: {},
+    paramSchema: {},
+    milestones: [],
+  },
+  gates: {
+    'flag-on': (state) => Boolean((state as { flag?: boolean } | null)?.flag),
+  },
+};
+
+describe('LabGuide — sim-driven gate failure paths', () => {
+  it('milestone gate blocks advance and surfaces gateMessage until milestone fires', async () => {
+    const user = userEvent.setup();
+    const phase: Phase = {
+      id: 'planlaeg',
+      title: 'P1',
+      gate: { type: 'milestone', requires: 'm1' },
+    };
+
+    render(
+      <LabGuide
+        experiment={makeExperiment(phase)}
+        slug="ms-fixture"
+        theory={<RunnerActionsProbe />}
+        phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}
+      />,
+    );
+
+    const nextBtn = screen.getByRole('button', { name: strings.guide.nextPhase });
+    expect(nextBtn).toBeDisabled();
+    expect(screen.getByText(gateMessage(phase.gate))).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('probe-fire-m1'));
+
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeEnabled();
+    expect(screen.queryByText(gateMessage(phase.gate))).not.toBeInTheDocument();
+  });
+
+  it('data-points gate stays blocked at min-1, satisfies at min', async () => {
+    const user = userEvent.setup();
+    const phase: Phase = {
+      id: 'planlaeg',
+      title: 'P1',
+      gate: { type: 'data-points', min: 2 },
+    };
+
+    render(
+      <LabGuide
+        experiment={makeExperiment(phase)}
+        slug="dp-fixture"
+        theory={<RunnerActionsProbe />}
+        phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeDisabled();
+    expect(screen.getByText(gateMessage(phase.gate))).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('probe-add-data'));
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeDisabled();
+
+    await user.click(screen.getByTestId('probe-add-data'));
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeEnabled();
+  });
+
+  it('predicate gate blocks until simulationState satisfies the named predicate', async () => {
+    const user = userEvent.setup();
+    const phase: Phase = {
+      id: 'planlaeg',
+      title: 'P1',
+      gate: { type: 'predicate', name: 'flag-on' },
+    };
+
+    render(
+      <LabGuide
+        experiment={makeExperiment(phase)}
+        slug="pred-fixture"
+        theory={<RunnerActionsProbe />}
+        phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}
+        simulation={stubSimulation}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeDisabled();
+    expect(screen.getByText(gateMessage(phase.gate))).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('probe-set-flag-on'));
+
+    expect(screen.getByRole('button', { name: strings.guide.nextPhase })).toBeEnabled();
   });
 });

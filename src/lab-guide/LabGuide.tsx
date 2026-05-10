@@ -7,6 +7,7 @@ import { RunnerProvider, useRunner } from './RunnerContext';
 import { SimulationPanel } from './SimulationPanel';
 import type { Mode } from './runner';
 import { strings } from './strings.da';
+import { GateDebug } from './widgets/GateDebug';
 import { ToastProvider } from './widgets/ToastContext';
 
 interface LabGuideProps {
@@ -64,12 +65,15 @@ function LabGuideInner({
   };
 
   const currentPhase = phases.find((p) => p.id === state.currentPhaseId);
+  const showGateDebug = import.meta.env.DEV && experiment.tags?.includes('test');
 
   return (
     <article className="space-y-8">
       <header>
         <h1 className="text-3xl text-navy mb-2">{experiment.title}</h1>
       </header>
+
+      {showGateDebug && <GateDebug />}
 
       <section className="prose max-w-prose">{theory}</section>
 

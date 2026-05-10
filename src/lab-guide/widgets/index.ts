@@ -3,7 +3,6 @@
 
 export { Checklist } from './Checklist';
 export { FreeTextResponse } from './FreeTextResponse';
-export { GateDebug } from './GateDebug';
 export { KeyEquation } from './KeyEquation';
 export { ProtectedInput, ProtectedTextarea } from './ProtectedInput';
 export { Quiz } from './Quiz';

@@ -1,11 +1,17 @@
 import { useRunner } from '@/lab-guide/RunnerContext';
 import { canAdvanceTo, isGateSatisfied } from '@/lab-guide/gates';
 
-/** Testbed-only widget: snapshots runner state and gate evaluations so you
- * can verify gate logic without trusting the visual stepper/footer. Drop
- * into hej-verden's theory.mdx — not for student-facing labs. */
+/** Testbed-only panel: snapshots runner state and gate evaluations so you can
+ * verify gate logic without trusting the visual stepper/footer. Auto-mounted
+ * by `LabGuide` on `tags: ['test']` labs in dev — not student-facing. */
 export function GateDebug() {
   const { state, phases, gateCtx, simulation } = useRunner();
+  const simState = gateCtx.simulationStateRef.current;
+  const simGateNames = Object.keys(simulation?.gates ?? {});
+  const referencedPredicates = phases
+    .filter((p) => p.gate.type === 'predicate')
+    .map((p) => (p.gate as { type: 'predicate'; name: string }).name);
+  const missingPredicates = referencedPredicates.filter((n) => !simGateNames.includes(n));
 
   return (
     <div className="my-6 rounded border border-amber-300 bg-amber-50 p-4 font-mono text-xs text-stone-800">
@@ -60,6 +66,19 @@ export function GateDebug() {
             })}
           </tbody>
         </table>
+      </Section>
+
+      <Section title="Simulation">
+        <KV k="exposed gates" v={simGateNames.length === 0 ? '∅' : simGateNames.join(', ')} />
+        {missingPredicates.length > 0 && (
+          <div className="mt-1 text-red-700">
+            ⚠ predicate gate(s) reference unknown sim gate name: {missingPredicates.join(', ')}
+          </div>
+        )}
+        <div className="mt-2 font-sans text-xs text-stone-500">simulationState</div>
+        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-white/60 p-2">
+          {simState === null || simState === undefined ? 'null' : JSON.stringify(simState, null, 2)}
+        </pre>
       </Section>
 
       <Section title={`Registered widget state (${Object.keys(gateCtx.widgets).length})`}>
