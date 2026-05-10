@@ -1,10 +1,10 @@
-// MDX widget registry. Components imported here become available in MDX
-// without explicit imports (via the MDXProvider in routes/experiment.tsx).
+// Author-callable MDX widgets. Components exported here are wired into the
+// MDXProvider via `./mdx.ts` so authors can use them in `.mdx` files without
+// explicit imports. Framework-internal helpers (ToastContext, ProtectedInput,
+// …) are intentionally not re-exported — consumers import them directly.
 
 export { Checklist } from './Checklist';
 export { FreeTextResponse } from './FreeTextResponse';
 export { KeyEquation } from './KeyEquation';
-export { ProtectedInput, ProtectedTextarea } from './ProtectedInput';
 export { Quiz } from './Quiz';
 export { ResetButton } from './ResetButton';
-export { ToastContext, ToastProvider } from './ToastContext';

@@ -5,13 +5,16 @@ import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';
 import { SimulationPanel } from './SimulationPanel';
+import { GateDebug } from './dev/GateDebug';
 import type { Mode } from './runner';
 import { strings } from './strings.da';
-import { GateDebug } from './widgets/GateDebug';
 import { ToastProvider } from './widgets/ToastContext';
 
 interface LabGuideProps {
   experiment: ExperimentFrontmatter;
+  /** Folder slug for the topic this lab belongs to — paired with `slug` to
+   * form the persistence key. Path-derived in routes; tests pass it directly. */
+  topic: string;
   /** Folder slug for the experiment — uniquely identifies the lab within its
    * topic. Used as the localStorage key suffix; do not derive from frontmatter
    * (`simulationId` collides for theory-only labs that share `'__none'`). */
@@ -29,13 +32,13 @@ interface LabGuideProps {
 }
 
 export function LabGuide(props: LabGuideProps) {
-  const { experiment, slug, mode = 'guided', simulation } = props;
+  const { experiment, topic, slug, mode = 'guided', simulation } = props;
   const phases = experiment.modes[mode]?.phases ?? experiment.modes.guided.phases;
 
   return (
     <ToastProvider>
       <RunnerProvider
-        experimentId={`${experiment.topic}/${slug}`}
+        experimentId={`${topic}/${slug}`}
         experimentVersion={experiment.version}
         phases={phases}
         simulation={simulation}

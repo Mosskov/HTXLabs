@@ -8,9 +8,8 @@ interface Props {
   confirmMessage?: string;
 }
 
-/** Testbed-only widget: wipes the current experiment's saved state and
- * resets the runner in place. Currently used in the hej-verden lab to
- * verify the fresh-start experience. */
+/** Author-callable widget: wipes the current experiment's saved state and
+ * resets the runner in place. Confirms via `window.confirm` before wiping. */
 export function ResetButton({ label, confirmMessage }: Props = {}) {
   const { resetLab } = useRunner();
 

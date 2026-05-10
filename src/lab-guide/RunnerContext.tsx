@@ -145,8 +145,6 @@ export function RunnerProvider({
         dispatch({ type: 'INCREMENT_DATA_POINTS', count: e.count });
         break;
       case 'reset':
-        // Resets are pedagogical, not destructive — just bump a milestone marker.
-        dispatch({ type: 'FIRE_MILESTONE', id: '__reset__' });
         break;
     }
   }, []);

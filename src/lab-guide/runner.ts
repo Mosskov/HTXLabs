@@ -67,7 +67,7 @@ export function emptyState(
   };
 }
 
-export function serialize(state: RunnerState): SerializedRunnerState {
+function serialize(state: RunnerState): SerializedRunnerState {
   return {
     ...state,
     visitedPhaseIds: Array.from(state.visitedPhaseIds),

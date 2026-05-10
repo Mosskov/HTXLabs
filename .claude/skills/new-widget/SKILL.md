@@ -75,7 +75,7 @@ For `kind: 'none'`, omit the registration `it.todo`.
 
 ## Registry edits — surface, don't apply
 
-After writing the two files, **do not edit** `src/lab-guide/widgets/index.ts` or `src/routes/experiment.tsx` automatically. Print this exactly to the user:
+After writing the two files, **do not edit** `src/lab-guide/widgets/index.ts` or `src/lab-guide/widgets/mdx.ts` automatically. Print this exactly to the user:
 
 > Two registry edits are needed. I have **not** applied them — confirm and I'll do it:
 >
@@ -84,10 +84,7 @@ After writing the two files, **do not edit** `src/lab-guide/widgets/index.ts` or
 > export { <Name> } from './<Name>';
 > ```
 >
-> **`src/routes/experiment.tsx`** — add this line to the `mdxComponents` object:
-> ```ts
-> <Name>: widgets.<Name>,
-> ```
+> **`src/lab-guide/widgets/mdx.ts`** — add `<Name>` to the imports and to the `mdxComponents` map (alphabetical).
 >
 > Apply both?
 

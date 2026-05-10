@@ -9,7 +9,6 @@ import Theory from './theory.mdx';
 export const frontmatter: ExperimentFrontmatter = {
   version: 2,
   title: 'Sim-gate-test — milestone/data-points/predicate',
-  topic: 'test-labs',
   simulationId: 'testbed',
   learningObjectives: ['Bekræft at sim-drevne gate-typer evalueres korrekt'],
   keyConcepts: ['frameworktest', 'gates'],

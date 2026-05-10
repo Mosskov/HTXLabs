@@ -39,7 +39,6 @@ export type Phase = z.infer<typeof Phase>;
 export const ExperimentFrontmatter = z.object({
   version: z.number().int().default(1),
   title: z.string(),
-  topic: z.string(),
   simulationId: z.string(),
 
   simulationOverrides: z

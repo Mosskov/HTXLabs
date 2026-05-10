@@ -56,7 +56,6 @@ const phases: Phase[] = [
 const experiment: ExperimentFrontmatter = {
   version: 1,
   title: 'Test',
-  topic: 'test-topic',
   simulationId: '__none',
   learningObjectives: ['x'],
   keyConcepts: [],
@@ -131,6 +130,7 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     render(
       <LabGuide
         experiment={experiment}
+        topic="test-topic"
         slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
@@ -149,6 +149,7 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     render(
       <LabGuide
         experiment={experiment}
+        topic="test-topic"
         slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
@@ -167,6 +168,7 @@ describe('LabGuide — open mode bypasses gates (B2)', () => {
     render(
       <LabGuide
         experiment={experiment}
+        topic="test-topic"
         slug="test-slug"
         mode="open"
         theory={<AllPhasesProbe phases={phases} />}
@@ -202,6 +204,7 @@ describe('LabGuide — open mode bypasses gates (B2)', () => {
     render(
       <LabGuide
         experiment={experiment}
+        topic="test-topic"
         slug="test-slug"
         mode="open"
         theory={<AllPhasesProbe phases={phases} />}
@@ -263,7 +266,6 @@ function makeExperiment(phase: Phase, tags: string[] = []): ExperimentFrontmatte
   return {
     version: 1,
     title: 'Failure-path fixture',
-    topic: 'test-topic',
     simulationId: '__none',
     learningObjectives: ['x'],
     keyConcepts: [],
@@ -302,6 +304,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
     render(
       <LabGuide
         experiment={makeExperiment(phase)}
+        topic="test-topic"
         slug="ms-fixture"
         theory={<RunnerActionsProbe />}
         phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}
@@ -329,6 +332,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
     render(
       <LabGuide
         experiment={makeExperiment(phase)}
+        topic="test-topic"
         slug="dp-fixture"
         theory={<RunnerActionsProbe />}
         phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}
@@ -356,6 +360,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
     render(
       <LabGuide
         experiment={makeExperiment(phase)}
+        topic="test-topic"
         slug="pred-fixture"
         theory={<RunnerActionsProbe />}
         phaseBodies={{ planlaeg: <p>body</p>, maal: <p>body2</p> }}

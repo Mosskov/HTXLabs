@@ -16,7 +16,6 @@ function makeFrontmatter(overrides: {
   return {
     version: 1,
     title: 'Test',
-    topic: 'mekanik',
     simulationId: '__none',
     simulationOverrides: undefined,
     learningObjectives: ['x'],

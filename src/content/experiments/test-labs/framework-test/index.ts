@@ -11,7 +11,6 @@ import Theory from './theory.mdx';
 export const frontmatter: ExperimentFrontmatter = {
   version: 7,
   title: 'Hej, Verden — framework-test',
-  topic: 'test-labs',
   simulationId: '__none',
   learningObjectives: ['Bekræft at lab-pipeline fungerer'],
   keyConcepts: ['frameworktest'],

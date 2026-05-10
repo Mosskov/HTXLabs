@@ -1,0 +1,14 @@
+// MDXProvider component map — what authors can write in `.mdx` files without
+// imports. One source of truth for "author-callable widgets"; mirrors the
+// public API of `./index.ts`. Add a new author-callable widget by exporting
+// it here (and from `./index.ts`).
+
+import { Checklist, FreeTextResponse, KeyEquation, Quiz, ResetButton } from '.';
+
+export const mdxComponents = {
+  Checklist,
+  FreeTextResponse,
+  KeyEquation,
+  Quiz,
+  ResetButton,
+};

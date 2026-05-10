@@ -1,6 +1,6 @@
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { strings } from '@/lab-guide/strings.da';
-import * as widgets from '@/lab-guide/widgets';
+import { mdxComponents } from '@/lab-guide/widgets/mdx';
 import { loadExperiment } from '@/lib/content';
 import { loadSimulation } from '@/lib/simulations';
 import { parseModeParam } from '@/lib/url';
@@ -8,14 +8,6 @@ import type { SimulationModule } from '@/sim-contract';
 import { MDXProvider } from '@mdx-js/react';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-
-const mdxComponents = {
-  KeyEquation: widgets.KeyEquation,
-  FreeTextResponse: widgets.FreeTextResponse,
-  Checklist: widgets.Checklist,
-  Quiz: widgets.Quiz,
-  ResetButton: widgets.ResetButton,
-};
 
 export function ExperimentRoute() {
   const { topic, experiment } = useParams();
@@ -60,6 +52,7 @@ export function ExperimentRoute() {
     <MDXProvider components={mdxComponents}>
       <LabGuide
         experiment={loaded.frontmatter}
+        topic={loaded.topic}
         slug={loaded.slug}
         mode={mode}
         theory={<Theory />}
