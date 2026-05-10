@@ -27,6 +27,9 @@ interface RunnerApi {
   state: RunnerState;
   phases: Phase[];
   simulation: SimulationModule | undefined;
+  /** Bumps on `resetLab()` — use as a React `key` on the simulation component
+   * so its internal state remounts cleanly along with the runner state. */
+  resetKey: number;
   setCurrentPhase: (phaseId: string) => void;
   setMode: (mode: Mode) => void;
   setLabMode: (mode: LabMode) => void;
@@ -86,6 +89,7 @@ export function RunnerProvider({
   const simulationStateRef = useRef<unknown>(null);
   // Tick to force gate-evaluating subscribers to re-render after widget changes.
   const [tick, setTick] = useState(0);
+  const [resetKey, setResetKey] = useState(0);
 
   const setCurrentPhase = useCallback(
     (phaseId: string) =>
@@ -161,6 +165,8 @@ export function RunnerProvider({
   const resetLab = useCallback(() => {
     wipe(experimentId);
     setState(emptyState(experimentId, experimentVersion, phases, initialMode, initialLabMode));
+    simulationStateRef.current = null;
+    setResetKey((k) => k + 1);
   }, [experimentId, experimentVersion, phases, initialMode, initialLabMode]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-create on every state-or-tick change so consumers re-evaluate gates after widget (re)registration
@@ -174,6 +180,7 @@ export function RunnerProvider({
       state,
       phases,
       simulation,
+      resetKey,
       setCurrentPhase,
       setMode,
       setLabMode,
@@ -191,6 +198,7 @@ export function RunnerProvider({
       state,
       phases,
       simulation,
+      resetKey,
       setCurrentPhase,
       setMode,
       setLabMode,

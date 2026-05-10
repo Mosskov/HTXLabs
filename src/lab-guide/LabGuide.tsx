@@ -53,7 +53,7 @@ function LabGuideInner({
   simulation,
   phases,
 }: LabGuideProps & { phases: Phase[] }) {
-  const { state, onSimulationProgress, setSimulationState } = useRunner();
+  const { state, onSimulationProgress, setSimulationState, resetKey } = useRunner();
   const Sim: ComponentType<import('@/sim-contract').SimulationProps> | undefined =
     simulation?.default;
   const meta = simulation?.meta;
@@ -76,6 +76,7 @@ function LabGuideInner({
       {Sim && meta && (
         <SimulationPanel>
           <Sim
+            key={resetKey}
             width={520}
             height={420}
             initialParams={initialParams}
