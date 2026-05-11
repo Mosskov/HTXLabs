@@ -99,28 +99,18 @@ The codebase is a **framework + content** split. Authors add labs as MDX content
 
 Content is auto-discovered at build time via `import.meta.glob` in `src/lib/content.ts` — adding a new lab requires no registry edits. Frontmatter is Zod-validated at module-load; a malformed lab fails dev startup, not runtime.
 
-### Lab page anatomy (`LabGuide.tsx`)
-
-A lab page has three stacked sections: **Theory** (always visible) → **SimulationPanel** (collapsible, mounted once for the lab — visibility toggles, state preserved across phases) → **Laboratorieguide** (the gated 7-phase flow). Phase navigation uses URL hash; mode/labMode are query params.
-
-### State, persistence, gates
-
-- Runner state (`src/lab-guide/runner.ts`) is persisted to `localStorage['htxlabs:state:${experimentId}']` on every change.
-- On mount, `isStateCompatible` checks saved `experimentVersion` against current frontmatter; mismatch → silent wipe + restart (no banner; `console.info` only). Bump `frontmatter.version` whenever phase ids or gate structure change.
-- Gates are pure (`gates.ts`) — discriminated union over `always | milestone | data-points | all-correct | all-checked | all-filled | keyword-count | predicate`. **Open-mode advances are unconditional** (`inquiryFreeAdvance`); guided/semi-guided run the actual gate. Add a new gate kind: extend the Zod `Gate` union in `src/lib/schema.ts`, then add one entry to `GATE_HANDLERS` in `gates.ts` (`{ check, message }`). `AUTHORABLE_GATE_KINDS` is derived from the handler map minus `SIM_DRIVEN_GATE_KINDS`, so a new widget-driven kind needs no further wiring; sim-driven kinds add themselves to the denylist.
-- **Navigation is asymmetric by design**: forward advance is gate-checked, but completed/current phases are always reachable via the stepper (backward navigation is free). Don't symmetrize `canAdvanceTo` — `PhaseStepper.tsx` relies on the asymmetry to keep completed circles clickable.
-- Widgets register live state (`registerWidgetState`) into a ref, not React state, so widget re-renders don't cascade through the runner. A `setTick` forces gate-evaluating subscribers to re-render after registration.
-
 ### Simulation registry
 
 `src/lib/simulations.ts` maps `simulationId` → lazy importer. Each sim ships as its own JS chunk, dynamic-imported when its lab opens. The sentinel id `NO_SIMULATION` (`'__none'`, exported from `sim-contract`) means "no simulation" (used by content scaffolds and `Hej, Verden`). Per-lab `simulationOverrides.defaultParams` in frontmatter let a teacher tweak the sim's starting values without forking the sim source.
 
-### Adding a new lab
+### Seam-specific rules
 
-1. `src/content/experiments/<topic>/<slug>/` with `theory.mdx`, one `phase-<id>.mdx` per phase, and `index.ts` exporting `{ frontmatter, Theory, phaseBodies }`.
-2. New topic? Add `src/content/topics/<slug>.ts` with `frontmatter: TopicFrontmatter` (the `id` field must equal the folder name under `experiments/`).
-3. New simulation? Add `src/simulations/<id>/` (default-exported component + `meta`) and register it in `src/lib/simulations.ts`.
-4. New MDX widget? Implement in `src/lab-guide/widgets/`, export from `widgets/index.ts`, then add it to the `mdxComponents` map in `src/lab-guide/widgets/mdx.ts` so it's available without explicit imports.
+Detailed rules for each seam live in nested `CLAUDE.md` files and load on demand when you open files under that path:
+
+- [src/lab-guide/CLAUDE.md](./src/lab-guide/CLAUDE.md) — lab page anatomy, state/persistence/gates, widget conventions (Danish strings, copy/paste protection).
+- [src/sim-contract/CLAUDE.md](./src/sim-contract/CLAUDE.md) — the contract lock.
+- [src/simulations/CLAUDE.md](./src/simulations/CLAUDE.md) — sim-Danish convention.
+- [src/content/CLAUDE.md](./src/content/CLAUDE.md) — adding-a-new-lab checklist.
 
 ## Conventions
 
@@ -128,8 +118,6 @@ A lab page has three stacked sections: **Theory** (always visible) → **Simulat
 - **Module-purpose headers**: every `src/**/*.{ts,tsx}` starts with one `//` comment line stating its role (e.g. `// Pure gate evaluation: GATE_HANDLERS, isGateSatisfied, canAdvanceTo.`). Mechanical, not prose; if removing the line wouldn't confuse a reader, the header was redundant — rewrite or drop. No CI check; convention enforced by review.
 - **Path alias**: `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`). Prefer it over relative paths.
 - **Tailwind v3** + custom tokens (`max-w-lab`, `text-navy`, `text-accent`, `instruction-box`, `lab-heading`). Stay on v3 for stability — v4 migration is a config-file swap when the ecosystem catches up.
-- **Danish UI strings & author overrides** (SPEC §17): framework defaults live in `src/lab-guide/strings.da.ts` (templates use `{name}` placeholders, substitute via the exported `format()` helper). **Every student-facing string in a widget must follow the rule:** (a) the default lives in `strings.da.ts`, and (b) the widget accepts an override prop (`checkLabel`, `placeholder`, `tooShortMessage`, `correctMessage`, …). No hardcoded Danish in widget JSX. Pattern: `{prop ?? strings.widgets.<name>.<key>}`.
-- **Sim Danish lives in the sim folder** (sim-Danish convention): `lab-guide/strings.da.ts` is for lab-shell + widgets only. Sims own their own chrome — display title via `meta.locale.da.title` in `meta.ts`, in-sim labels in a colocated `src/simulations/<id>/strings.da.ts`. Sims do not import from `lab-guide/`. Render the title via `simTitleDa(meta)` from `sim-contract` (falls back to `meta.title`).
-- **Copy/paste protection** is opt-out, not opt-in. Use `ProtectedInput` / `ProtectedTextarea` for student free-text. The escape hatch is per-lab `frontmatter.allowPaste: true` (SEN accommodation) — propagated as the `allowPaste` prop.
 - **Numbers**: students enter Danish-formatted numbers (`,` decimal). Use `src/lib/numbers.ts` for parse/format; don't roll your own.
 - **Regression**: hand-rolled OLS in `src/lib/regression.ts`. No new dependency for slope/intercept/R².
+- **Keep CLAUDE.md in sync**: when a change renames a referenced file, alters a convention, or introduces a new pattern, update the matching `CLAUDE.md` (root for cross-cutting, nested for seam-specific) in the same commit. Stale rules are worse than missing ones.
