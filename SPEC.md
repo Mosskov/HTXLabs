@@ -105,7 +105,8 @@ Clones repo. Runs `npm install && npm run dev`. Opens `src/lab-guide/` and `src/
 /emner/:topic/:experiment                           lab page
 /emner/:topic/:experiment?mode=guided               mode is URL-controlled (guided | semi-guided | open; defaults to guided)
                                                     ?lab=virtual|real designed-for, not yet wired (revisit when <Equipment> lands)
-/playground/:simulationId                           dev-only sim harness
+/simulationer                                       standalone sim playground index
+/simulationer/:simulationId                         standalone sim harness
 /about                                              optional
 ```
 
@@ -242,7 +243,7 @@ htxlabs/
 │   │   ├── topics/index.tsx
 │   │   ├── topics/[topic].tsx
 │   │   ├── topics/[topic]/[experiment].tsx
-│   │   └── playground/[simId].tsx       # dev-only
+│   │   └── simulationer/[simId].tsx     # standalone sim playground
 │   ├── lab-guide/                       # ★ THE FRAMEWORK
 │   │   ├── LabGuide.tsx                 # top-level component
 │   │   ├── PhaseStepper.tsx             # numbered-circle progress
@@ -289,7 +290,7 @@ htxlabs/
 │   │       ├── index.tsx                # default export = sim component
 │   │       ├── physics.ts               # pure functions (unit-tested)
 │   │       ├── meta.ts                  # SimulationMeta + milestones
-│   │       └── playground.tsx           # dev harness (not bundled in prod)
+│   │       └── playground.tsx           # optional per-sim harness (not used today — route-level /simulationer covers it)
 │   ├── content/
 │   │   ├── topics/mekanik.mdx
 │   │   └── experiments/
@@ -510,7 +511,7 @@ If a third mode starts to feel necessary, raise it before adding — extending t
 
 ### Per-simulation testing
 - **Pure physics** in `physics.ts` is unit-tested with Vitest. No DOM.
-- **Component** is dev-tested via `/playground/:simId` route — a dev-only Vite route that mounts the sim with a milestone-event log panel and parameter sliders. Not bundled in production.
+- **Component** is exercised via the `/simulationer/:simId` route — a standalone playground that mounts the sim with a milestone-event log panel and parameter sliders. Reachable from the `/emner` landing page so teachers/students can demo a sim outside a lab.
 
 ---
 
@@ -940,7 +941,7 @@ Use shadcn/ui defaults as the starting point; tweak `globals.css` (CSS variables
 ### Local dev
 ```
 npm install
-npm run dev       # Vite dev server with HMR; /playground/:simId routes available
+npm run dev       # Vite dev server with HMR; /simulationer/:simId routes available
 npm test          # Vitest in watch mode
 npm run test:e2e  # Playwright
 npm run build     # static output to ./dist

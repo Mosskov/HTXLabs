@@ -1,10 +1,12 @@
-// Landing route: lists topic cards.
+// Landing route: lists topic cards plus the standalone simulation playground.
 import { LabCardLink } from '@/components/LabCardLink';
 import { format, strings } from '@/lab-guide/strings.da';
 import { listTopics } from '@/lib/content';
+import { simulationRegistry } from '@/lib/simulations';
 
 export function Home() {
   const topics = listTopics();
+  const simCount = Object.keys(simulationRegistry).length;
   return (
     <div>
       <h1 className="text-3xl text-navy mb-2">{strings.brand}</h1>
@@ -24,6 +26,12 @@ export function Home() {
             </p>
           </LabCardLink>
         ))}
+        <LabCardLink to="/simulationer" title={strings.home.testSimsCard.title}>
+          <p className="text-sm text-slate-600">{strings.home.testSimsCard.subtitle}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {format(strings.home.testSimsCard.count, { n: simCount })}
+          </p>
+        </LabCardLink>
       </ul>
     </div>
   );

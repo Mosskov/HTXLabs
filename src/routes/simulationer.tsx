@@ -1,4 +1,4 @@
-// Dev-only sim harness: pick a sim id, drive its props, watch ProgressEvents.
+// Standalone sim playground: pick a sim id, drive its props, watch ProgressEvents.
 import { format, strings } from '@/lab-guide/strings.da';
 import { loadSimulation, simulationRegistry } from '@/lib/simulations';
 import {
@@ -10,19 +10,19 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-export function PlaygroundIndex() {
+export function SimulationerIndex() {
   const ids = Object.keys(simulationRegistry).sort();
   return (
     <section>
-      <h1 className="lab-heading">{strings.playground.title}</h1>
-      <p className="text-slate-600 mb-4">{strings.playground.indexIntro}</p>
+      <h1 className="lab-heading">{strings.simulationer.title}</h1>
+      <p className="text-slate-600 mb-4">{strings.simulationer.indexIntro}</p>
       {ids.length === 0 ? (
-        <p>{strings.playground.noSimulations}</p>
+        <p>{strings.simulationer.noSimulations}</p>
       ) : (
         <ul className="list-disc pl-6">
           {ids.map((id) => (
             <li key={id}>
-              <Link to={`/playground/${id}`} className="text-accent hover:underline">
+              <Link to={`/simulationer/${id}`} className="text-accent hover:underline">
                 {id}
               </Link>
             </li>
@@ -33,7 +33,7 @@ export function PlaygroundIndex() {
   );
 }
 
-export function PlaygroundRoute() {
+export function SimulationerRoute() {
   const { simId } = useParams();
   const [module, setModule] = useState<SimulationModule | null | undefined>(undefined);
 
@@ -52,18 +52,20 @@ export function PlaygroundRoute() {
   }, [simId]);
 
   if (module === undefined) {
-    return <p className="text-slate-600">{strings.playground.loading}</p>;
+    return <p className="text-slate-600">{strings.simulationer.loading}</p>;
   }
   if (module === null) {
     return (
-      <p className="text-slate-600">{format(strings.playground.unknownSim, { id: simId ?? '' })}</p>
+      <p className="text-slate-600">
+        {format(strings.simulationer.unknownSim, { id: simId ?? '' })}
+      </p>
     );
   }
 
-  return <PlaygroundHarness module={module} simId={simId ?? ''} />;
+  return <SimulationerHarness module={module} simId={simId ?? ''} />;
 }
 
-function PlaygroundHarness({
+function SimulationerHarness({
   module,
   simId,
 }: {
@@ -117,7 +119,7 @@ function PlaygroundHarness({
     <section>
       <header className="mb-4">
         <h1 className="lab-heading">
-          {format(strings.playground.titleWithSim, { title: simTitleDa(meta) })}
+          {format(strings.simulationer.titleWithSim, { title: simTitleDa(meta) })}
         </h1>
         <p className="text-sm text-slate-500">
           <code>{simId}</code>
@@ -140,13 +142,13 @@ function PlaygroundHarness({
               onParamChange={setParams}
             />
           ) : (
-            <span className="text-slate-400 text-sm">{strings.playground.measuringSize}</span>
+            <span className="text-slate-400 text-sm">{strings.simulationer.measuringSize}</span>
           )}
         </div>
 
         <aside className="border border-slate-200 rounded bg-white p-4 space-y-4">
           <div>
-            <h2 className="font-semibold text-navy mb-2">{strings.playground.params}</h2>
+            <h2 className="font-semibold text-navy mb-2">{strings.simulationer.params}</h2>
             <div className="space-y-3">
               {Object.entries(meta.paramSchema).map(([key, entry]) => (
                 <ParamControl
@@ -167,14 +169,14 @@ function PlaygroundHarness({
                 checked={paused}
                 onChange={(e) => setPaused(e.target.checked)}
               />
-              {strings.playground.pause}
+              {strings.simulationer.pause}
             </label>
             <button
               type="button"
               onClick={handleReset}
               className="text-sm rounded bg-slate-100 hover:bg-slate-200 px-3 py-1.5"
             >
-              {strings.playground.reset}
+              {strings.simulationer.reset}
             </button>
           </div>
         </aside>
@@ -183,19 +185,19 @@ function PlaygroundHarness({
       <div className="border border-slate-200 rounded bg-white">
         <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
           <h2 className="font-semibold text-navy">
-            {format(strings.playground.eventLog, { n: events.length })}
+            {format(strings.simulationer.eventLog, { n: events.length })}
           </h2>
           <button
             type="button"
             onClick={() => setEvents([])}
             className="text-sm text-slate-600 hover:text-accent"
           >
-            {strings.playground.clearLog}
+            {strings.simulationer.clearLog}
           </button>
         </div>
         <div className="max-h-64 overflow-y-auto p-4 font-mono text-xs space-y-1">
           {events.length === 0 ? (
-            <p className="text-slate-400">{strings.playground.noEvents}</p>
+            <p className="text-slate-400">{strings.simulationer.noEvents}</p>
           ) : (
             events.map(({ id, event }) => (
               <div key={id} className="text-slate-700">

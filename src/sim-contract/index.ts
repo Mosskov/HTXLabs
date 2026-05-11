@@ -46,7 +46,7 @@ export type SimulationMode = 'display' | 'interactive';
  * (sim-Danish convention). Only `da` is shipped today; add more as needed. */
 export interface SimulationLocale {
   da: {
-    /** Danish display title used in lab pages and dev playground. Falls back
+    /** Danish display title used in lab pages and the simulation playground. Falls back
      * to `meta.title` when omitted. */
     title?: string;
   };

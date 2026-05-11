@@ -16,6 +16,12 @@ export const strings = {
     intro: 'Interaktive fysikforsøg til HTX-elever. Vælg et emne for at komme i gang.',
     /** "Forsøg" is uncountable in Danish — same form for 1 and N. Vars: {n} */
     experimentCount: '{n} forsøg',
+    testSimsCard: {
+      title: 'Simulationer',
+      subtitle: 'Afprøv simulationer uden en lab-side.',
+      /** Vars: {n} = sim count. "Simulationer" same form for 1 and N. */
+      count: '{n} simulationer',
+    },
   },
   guide: {
     heading: 'Laboratorieguide',
@@ -79,17 +85,17 @@ export const strings = {
     labInvalidTitle: 'Forsøget kunne ikke indlæses',
     labInvalidHelp: 'Ret frontmatter i forsøgets index.ts og genindlæs siden.',
   },
-  /** Dev-only sim harness chrome (routes/playground.tsx). Not student-facing. */
-  playground: {
-    title: 'Playground',
-    indexIntro: 'Generic harness for at afprøve simulationer uden for en lab-side.',
+  /** Standalone sim playground chrome (routes/simulationer.tsx). */
+  simulationer: {
+    title: 'Simulationer',
+    indexIntro: 'Vælg en simulation for at afprøve den uden en lab-side.',
     noSimulations: 'Ingen simulationer registreret.',
     loading: 'Indlæser…',
     /** Vars: {id} = sim id from URL */
     unknownSim: 'Ukendt simulation: {id}',
     measuringSize: 'Måler størrelse…',
     /** Vars: {title} = sim display title */
-    titleWithSim: 'Playground: {title}',
+    titleWithSim: 'Simulation: {title}',
     params: 'Parametre',
     pause: 'Pause',
     reset: 'Reset',
