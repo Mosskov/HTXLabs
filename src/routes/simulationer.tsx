@@ -1,4 +1,5 @@
 // Standalone sim playground: pick a sim id, drive its props, watch ProgressEvents.
+// One file by design; if it outgrows ~300 lines, split into routes/simulationer/{index,Harness,ParamControl,EventLog}.tsx.
 import { format, strings } from '@/lab-guide/strings.da';
 import { loadSimulation, simulationRegistry } from '@/lib/simulations';
 import {

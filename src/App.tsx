@@ -11,6 +11,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 export function App() {
   return (
     <Router basename={base}>
+      {/* If a third top-level route joins, lift this header into a <SiteLayout> wrapper. */}
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-lab mx-auto px-4 py-4 flex items-center gap-6">
           <Link to="/" className="font-semibold text-navy">
