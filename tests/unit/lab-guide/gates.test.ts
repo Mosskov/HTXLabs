@@ -19,8 +19,8 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     labMode: 'virtual',
     currentPhaseId: 'planlaeg',
     visitedPhaseIds: new Set(['planlaeg']),
-    firedMilestones: new Set(),
-    dataPointCount: 0,
+    firedMilestones: {},
+    dataPointCount: {},
     widgetValues: {},
     dataTables: {},
     attemptCounts: {},
@@ -34,6 +34,9 @@ function makeCtx(widgets: Record<string, WidgetState> = {}): GateCtx {
     simulationStateRef: { current: null },
   };
 }
+
+/** Default phaseId for single-phase tests — most fixtures live in `planlaeg`. */
+const PHASE = 'planlaeg';
 
 const allFilledGate: Gate = { type: 'all-filled', widgetIds: ['hypotese', 'detail'] };
 const alwaysGate: Gate = { type: 'always' };
@@ -53,7 +56,7 @@ const filledHypotese = makeCtx({ 'hypotese-test': { kind: 'filled', filled: true
 
 describe('always gate', () => {
   it('isGateSatisfied returns true regardless of state', () => {
-    expect(isGateSatisfied(alwaysGate, makeState(), undefined, makeCtx())).toBe(true);
+    expect(isGateSatisfied(alwaysGate, makeState(), undefined, makeCtx(), PHASE)).toBe(true);
   });
 
   it('gateMessage returns empty string', () => {
@@ -61,15 +64,15 @@ describe('always gate', () => {
   });
 
   it('open mode also satisfies', () => {
-    expect(isGateSatisfied(alwaysGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(alwaysGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
 describe('all-filled gate', () => {
   it('returns false when no widget state is registered', () => {
-    expect(isGateSatisfied(allFilledGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(allFilledGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when at least one listed widget reports filled=false', () => {
@@ -77,7 +80,7 @@ describe('all-filled gate', () => {
       hypotese: { kind: 'filled', filled: true },
       detail: { kind: 'filled', filled: false },
     });
-    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('returns true when every listed widget reports filled=true', () => {
@@ -85,7 +88,7 @@ describe('all-filled gate', () => {
       hypotese: { kind: 'filled', filled: true },
       detail: { kind: 'filled', filled: true },
     });
-    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('returns false when a listed widget reports the wrong kind', () => {
@@ -93,7 +96,7 @@ describe('all-filled gate', () => {
       hypotese: { kind: 'correct', correct: true },
       detail: { kind: 'filled', filled: true },
     });
-    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allFilledGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('gateMessage returns the canonical Danish prompt', () => {
@@ -101,46 +104,55 @@ describe('all-filled gate', () => {
   });
 
   it('open mode bypasses even with no widgets registered', () => {
-    expect(isGateSatisfied(allFilledGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(allFilledGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
 describe('data-points gate', () => {
   const dataPointsGate: Gate = { type: 'data-points', min: 4 };
 
-  it('returns false when the runner counter is below the minimum', () => {
-    const state = makeState({ dataPointCount: 3 });
-    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx())).toBe(false);
+  it('returns false when the phase bucket is below the minimum', () => {
+    const state = makeState({ dataPointCount: { [PHASE]: 3 } });
+    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx(), PHASE)).toBe(false);
   });
 
-  it('returns true when the runner counter meets the minimum', () => {
-    const state = makeState({ dataPointCount: 4 });
-    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx())).toBe(true);
+  it('returns true when the phase bucket meets the minimum', () => {
+    const state = makeState({ dataPointCount: { [PHASE]: 4 } });
+    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx(), PHASE)).toBe(true);
   });
 
   it('open mode bypasses the count requirement', () => {
-    const state = makeState({ mode: 'open', dataPointCount: 0 });
-    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx())).toBe(true);
+    const state = makeState({ mode: 'open', dataPointCount: {} });
+    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx(), PHASE)).toBe(true);
+  });
+
+  it('points collected in another phase do NOT satisfy this phase', () => {
+    // Pedagogical guarantee: free-play exploration on phase A can't pre-tick
+    // a data-points gate on phase B.
+    const state = makeState({ dataPointCount: { 'other-phase': 10 } });
+    expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx(), PHASE)).toBe(false);
   });
 });
 
 describe('milestone gate', () => {
   const milestoneGate: Gate = { type: 'milestone', requires: 'first-run' };
 
-  it('returns false when the milestone has not fired', () => {
-    expect(isGateSatisfied(milestoneGate, makeState(), undefined, makeCtx())).toBe(false);
+  it('returns false when no milestone bucket exists for the phase', () => {
+    expect(isGateSatisfied(milestoneGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
-  it('returns true when the milestone is in firedMilestones', () => {
-    const state = makeState({ firedMilestones: new Set(['first-run']) });
-    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx())).toBe(true);
+  it('returns true when the milestone is in the phase bucket', () => {
+    const state = makeState({ firedMilestones: { [PHASE]: new Set(['first-run']) } });
+    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx(), PHASE)).toBe(true);
   });
 
-  it('ignores unrelated milestones', () => {
-    const state = makeState({ firedMilestones: new Set(['unrelated', 'also-unrelated']) });
-    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx())).toBe(false);
+  it('ignores unrelated milestones in the same phase', () => {
+    const state = makeState({
+      firedMilestones: { [PHASE]: new Set(['unrelated', 'also-unrelated']) },
+    });
+    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('gateMessage returns the canonical Danish prompt', () => {
@@ -151,7 +163,16 @@ describe('milestone gate', () => {
 
   it('open mode bypasses without the milestone', () => {
     const state = makeState({ mode: 'open' });
-    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx())).toBe(true);
+    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx(), PHASE)).toBe(true);
+  });
+
+  it('a milestone fired in another phase does NOT satisfy this phase', () => {
+    // Pedagogical guarantee: free-play firing of `first-run` on phase A can't
+    // satisfy a milestone gate on phase B.
+    const state = makeState({
+      firedMilestones: { 'other-phase': new Set(['first-run']) },
+    });
+    expect(isGateSatisfied(milestoneGate, state, undefined, makeCtx(), PHASE)).toBe(false);
   });
 });
 
@@ -159,7 +180,7 @@ describe('all-correct gate', () => {
   const allCorrectGate: Gate = { type: 'all-correct', widgetIds: ['q1', 'q2'] };
 
   it('returns false when no widget state is registered', () => {
-    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when one widget reports correct=false', () => {
@@ -167,7 +188,7 @@ describe('all-correct gate', () => {
       q1: { kind: 'correct', correct: true },
       q2: { kind: 'correct', correct: false },
     });
-    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('returns true when every listed widget reports correct=true', () => {
@@ -175,7 +196,7 @@ describe('all-correct gate', () => {
       q1: { kind: 'correct', correct: true },
       q2: { kind: 'correct', correct: true },
     });
-    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('returns false when a listed widget reports the wrong kind', () => {
@@ -183,7 +204,7 @@ describe('all-correct gate', () => {
       q1: { kind: 'filled', filled: true },
       q2: { kind: 'correct', correct: true },
     });
-    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allCorrectGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('gateMessage returns the canonical Danish prompt', () => {
@@ -191,9 +212,9 @@ describe('all-correct gate', () => {
   });
 
   it('open mode bypasses without correct widgets', () => {
-    expect(isGateSatisfied(allCorrectGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(allCorrectGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
@@ -201,7 +222,7 @@ describe('all-checked gate', () => {
   const allCheckedGate: Gate = { type: 'all-checked', widgetIds: ['list1', 'list2'] };
 
   it('returns false when no widget state is registered', () => {
-    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when one list reports allChecked=false', () => {
@@ -209,7 +230,7 @@ describe('all-checked gate', () => {
       list1: { kind: 'checked', allChecked: true },
       list2: { kind: 'checked', allChecked: false },
     });
-    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('returns true when every listed widget reports allChecked=true', () => {
@@ -217,7 +238,7 @@ describe('all-checked gate', () => {
       list1: { kind: 'checked', allChecked: true },
       list2: { kind: 'checked', allChecked: true },
     });
-    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('returns false when a listed widget reports the wrong kind', () => {
@@ -225,7 +246,7 @@ describe('all-checked gate', () => {
       list1: { kind: 'correct', correct: true },
       list2: { kind: 'checked', allChecked: true },
     });
-    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allCheckedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('gateMessage returns the canonical Danish prompt', () => {
@@ -233,9 +254,9 @@ describe('all-checked gate', () => {
   });
 
   it('open mode bypasses without checked widgets', () => {
-    expect(isGateSatisfied(allCheckedGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(allCheckedGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
@@ -243,27 +264,27 @@ describe('keyword-count gate (numeric min — partial credit)', () => {
   const keywordGate: Gate = { type: 'keyword-count', widgetId: 'hyp', min: 2 };
 
   it('returns false when no widget state is registered', () => {
-    expect(isGateSatisfied(keywordGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(keywordGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when foundCount is below the minimum', () => {
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 1, total: 3 } });
-    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('returns true when foundCount meets the minimum', () => {
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 3 } });
-    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('returns true when foundCount exceeds the minimum', () => {
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 5, total: 5 } });
-    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('returns false when the widget reports the wrong kind', () => {
     const ctx = makeCtx({ hyp: { kind: 'filled', filled: true } });
-    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(keywordGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('gateMessage substitutes the min into the Danish prompt', () => {
@@ -271,9 +292,9 @@ describe('keyword-count gate (numeric min — partial credit)', () => {
   });
 
   it('open mode bypasses without any keywords', () => {
-    expect(isGateSatisfied(keywordGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(keywordGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
@@ -281,33 +302,33 @@ describe("keyword-count gate (min: 'all' — every group required)", () => {
   const allGate: Gate = { type: 'keyword-count', widgetId: 'hyp', min: 'all' };
 
   it('returns false when no widget state is registered', () => {
-    expect(isGateSatisfied(allGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(allGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when foundCount is below total', () => {
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 1, total: 2 } });
-    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(false);
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
   it('returns true when foundCount equals total', () => {
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 2 } });
-    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it('decouples min from group count — adding a 3rd group keeps gate honest', () => {
     // Author bumps groups in MDX from 2 to 3. With min:'all', the gate
     // automatically requires foundCount===3; no frontmatter edit needed.
     const ctxBefore = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 2 } });
-    expect(isGateSatisfied(allGate, makeState(), undefined, ctxBefore)).toBe(true);
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctxBefore, PHASE)).toBe(true);
     const ctxAfter = makeCtx({ hyp: { kind: 'keywords', foundCount: 2, total: 3 } });
-    expect(isGateSatisfied(allGate, makeState(), undefined, ctxAfter)).toBe(false);
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctxAfter, PHASE)).toBe(false);
   });
 
   it('returns true vacuously when total is 0 (no groups configured)', () => {
     // foundCount===total holds when both are 0. This is a defensible default —
     // an author who removes all groups but leaves the gate has no requirement.
     const ctx = makeCtx({ hyp: { kind: 'keywords', foundCount: 0, total: 0 } });
-    expect(isGateSatisfied(allGate, makeState(), undefined, ctx)).toBe(true);
+    expect(isGateSatisfied(allGate, makeState(), undefined, ctx, PHASE)).toBe(true);
   });
 
   it("gateMessage returns the dedicated 'all' Danish prompt", () => {
@@ -315,7 +336,9 @@ describe("keyword-count gate (min: 'all' — every group required)", () => {
   });
 
   it('open mode bypasses without any keywords', () => {
-    expect(isGateSatisfied(allGate, makeState({ mode: 'open' }), undefined, makeCtx())).toBe(true);
+    expect(
+      isGateSatisfied(allGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
   });
 });
 
@@ -333,29 +356,31 @@ describe('predicate gate', () => {
   } as unknown as SimulationModule;
 
   it('returns false when module is undefined', () => {
-    expect(isGateSatisfied(predicateGate, makeState(), undefined, makeCtx())).toBe(false);
+    expect(isGateSatisfied(predicateGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns false when the named predicate is missing', () => {
     const gate: Gate = { type: 'predicate', name: 'does-not-exist' };
-    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx())).toBe(false);
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx(), PHASE)).toBe(false);
   });
 
   it('returns true when the named predicate returns true', () => {
-    expect(isGateSatisfied(predicateGate, makeState(), moduleWithGates, makeCtx())).toBe(true);
+    expect(isGateSatisfied(predicateGate, makeState(), moduleWithGates, makeCtx(), PHASE)).toBe(
+      true,
+    );
   });
 
   it('returns false when the named predicate returns false', () => {
     const gate: Gate = { type: 'predicate', name: 'failing' };
-    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx())).toBe(false);
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx(), PHASE)).toBe(false);
   });
 
   it('passes simulationStateRef.current to the predicate', () => {
     const gate: Gate = { type: 'predicate', name: 'reads_state' };
     const ctx: GateCtx = { widgets: {}, simulationStateRef: { current: { ok: true } } };
-    expect(isGateSatisfied(gate, makeState(), moduleWithGates, ctx)).toBe(true);
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, ctx, PHASE)).toBe(true);
     const ctxBad: GateCtx = { widgets: {}, simulationStateRef: { current: { ok: false } } };
-    expect(isGateSatisfied(gate, makeState(), moduleWithGates, ctxBad)).toBe(false);
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, ctxBad, PHASE)).toBe(false);
   });
 
   it('gateMessage falls back to the generic Danish prompt when no author message is set', () => {
@@ -375,9 +400,18 @@ describe('predicate gate', () => {
 
   it('open mode bypasses even when the predicate would return false', () => {
     const gate: Gate = { type: 'predicate', name: 'failing' };
-    expect(isGateSatisfied(gate, makeState({ mode: 'open' }), moduleWithGates, makeCtx())).toBe(
-      true,
-    );
+    expect(
+      isGateSatisfied(gate, makeState({ mode: 'open' }), moduleWithGates, makeCtx(), PHASE),
+    ).toBe(true);
+  });
+
+  it('predicate is phase-agnostic — same sim state satisfies any phaseId', () => {
+    // Pedagogical scope of phase-isolation is limited to *history* gates
+    // (milestone, data-points). Predicate reads instantaneous sim state and
+    // intentionally remains global.
+    const gate: Gate = { type: 'predicate', name: 'passing' };
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx(), 'phase-a')).toBe(true);
+    expect(isGateSatisfied(gate, makeState(), moduleWithGates, makeCtx(), 'phase-b')).toBe(true);
   });
 });
 
@@ -461,5 +495,29 @@ describe('canAdvanceTo', () => {
 
   it('returns false for an unknown phase id', () => {
     expect(canAdvanceTo('not-a-phase', phases, makeState(), undefined, makeCtx())).toBe(false);
+  });
+
+  it('routes each gate to its own phase bucket when walking forward', () => {
+    // Sim-driven gates on two consecutive phases. The student has fired
+    // milestone `m1` only in phase `a`, and collected only `b`-phase points.
+    // The forward walk must check phase `a`'s gate against `a`'s milestones
+    // and phase `b`'s gate against `b`'s data-point bucket — not the other
+    // way around. This is the per-call-site fix that the phaseId thread-through
+    // exists to enable.
+    const simPhases: Phase[] = [
+      { id: 'a', title: 'A', gate: { type: 'milestone', requires: 'm1' } },
+      { id: 'b', title: 'B', gate: { type: 'data-points', min: 2 } },
+      { id: 'c', title: 'C', gate: alwaysGate },
+    ];
+    const state = makeState({
+      currentPhaseId: 'a',
+      visitedPhaseIds: new Set(['a']),
+      firedMilestones: { a: new Set(['m1']) },
+      dataPointCount: { b: 2 },
+    });
+    // a's gate passes (m1 in a), b's gate passes (2 points in b) → c reachable.
+    // Without phaseId thread-through this would silently confuse the buckets.
+    expect(canAdvanceTo('c', simPhases, state, undefined, makeCtx())).toBe(false); // c unvisited, no leap
+    expect(canAdvanceTo('b', simPhases, state, undefined, makeCtx())).toBe(true);
   });
 });

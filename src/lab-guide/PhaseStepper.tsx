@@ -17,7 +17,8 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
         // flipped back to false (e.g. student emptied the answer) loses its ✓.
         // The current phase shows ✓ too as soon as its gate passes. Visited
         // is still required so unvisited `always`-gate phases don't pre-tick.
-        const isCompleted = isVisited && isGateSatisfied(phase.gate, state, simulation, gateCtx);
+        const isCompleted =
+          isVisited && isGateSatisfied(phase.gate, state, simulation, gateCtx, phase.id);
         const reachable = canAdvanceTo(phase.id, phases, state, simulation, gateCtx);
         const clickable = reachable;
 

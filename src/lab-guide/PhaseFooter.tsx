@@ -29,7 +29,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   // for the next phase reduces to "current phase's gate passes" (see gates.ts),
   // so we evaluate the gate once and reuse the result for both the inline
   // message and the button's enabled/disabled state.
-  const gateOk = isGateSatisfied(currentPhase.gate, state, simulation, gateCtx);
+  const gateOk = isGateSatisfied(currentPhase.gate, state, simulation, gateCtx, currentPhase.id);
 
   return (
     <div className="mt-8 border-t border-slate-200 pt-4 no-print">

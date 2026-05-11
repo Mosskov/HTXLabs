@@ -23,11 +23,8 @@ export function GateDebug() {
         <KV k="currentPhaseId" v={state.currentPhaseId} />
         <KV k="mode" v={state.mode} />
         <KV k="labMode" v={state.labMode} />
-        <KV k="dataPointCount" v={String(state.dataPointCount)} />
-        <KV
-          k="firedMilestones"
-          v={state.firedMilestones.size === 0 ? '∅' : Array.from(state.firedMilestones).join(', ')}
-        />
+        <KV k="dataPointCount (per phase)" v={formatDataPointCount(state.dataPointCount)} />
+        <KV k="firedMilestones (per phase)" v={formatFiredMilestones(state.firedMilestones)} />
         <KV k="visitedPhaseIds" v={Array.from(state.visitedPhaseIds).join(', ')} />
       </Section>
 
@@ -47,7 +44,7 @@ export function GateDebug() {
             {phases.map((p) => {
               const visited = state.visitedPhaseIds.has(p.id);
               const current = state.currentPhaseId === p.id;
-              const ok = isGateSatisfied(p.gate, state, simulation, gateCtx);
+              const ok = isGateSatisfied(p.gate, state, simulation, gateCtx, p.id);
               const reachable = canAdvanceTo(p.id, phases, state, simulation, gateCtx);
               return (
                 <tr key={p.id} className="border-b border-amber-200 align-top">
@@ -144,4 +141,16 @@ function KV({ k, v }: { k: string; v: string }) {
       <span>{v}</span>
     </div>
   );
+}
+
+function formatDataPointCount(rec: Record<string, number>): string {
+  const entries = Object.entries(rec).filter(([, n]) => n > 0);
+  if (entries.length === 0) return '∅';
+  return entries.map(([phaseId, n]) => `${phaseId}=${n}`).join(', ');
+}
+
+function formatFiredMilestones(rec: Record<string, Set<string>>): string {
+  const entries = Object.entries(rec).filter(([, set]) => set.size > 0);
+  if (entries.length === 0) return '∅';
+  return entries.map(([phaseId, set]) => `${phaseId}={${Array.from(set).join(',')}}`).join(' | ');
 }

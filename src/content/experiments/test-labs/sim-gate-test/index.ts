@@ -7,7 +7,7 @@ import PhasePlanlaeg from './phase-planlaeg.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 2,
+  version: 3,
   title: 'Sim-gate-test — milestone/data-points/predicate',
   simulationId: 'testbed',
   learningObjectives: ['Bekræft at sim-drevne gate-typer evalueres korrekt'],

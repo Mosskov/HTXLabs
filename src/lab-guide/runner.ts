@@ -14,8 +14,14 @@ export interface RunnerState {
   labMode: LabMode;
   currentPhaseId: string;
   visitedPhaseIds: Set<string>;
-  firedMilestones: Set<string>;
-  dataPointCount: number;
+  /** Milestones fired during a given phase — keyed by phaseId. Sim-driven gates
+   *  evaluate against the *current phase's* bucket so free-play exploration on
+   *  phase 1 can't pre-satisfy gates for later phases. Predicate gates remain
+   *  global because they read instantaneous sim state, not history. */
+  firedMilestones: Record<string, Set<string>>;
+  /** Data points collected during a given phase — keyed by phaseId. Same
+   *  phase-scoping rationale as firedMilestones. */
+  dataPointCount: Record<string, number>;
   /** Per-widget freeform value bag — text inputs, reflections, etc.
    *  Widgets MAY use `${id}:<suffix>` sibling keys for persisted ephemeral
    *  state that isn't the primary value (e.g. Quiz stores its last-checked
@@ -35,8 +41,8 @@ interface SerializedRunnerState {
   labMode: LabMode;
   currentPhaseId: string;
   visitedPhaseIds: string[];
-  firedMilestones: string[];
-  dataPointCount: number;
+  firedMilestones: Record<string, string[]>;
+  dataPointCount: Record<string, number>;
   widgetValues: Record<string, unknown>;
   dataTables: Record<string, DataRow[]>;
   attemptCounts: Record<string, number>;
@@ -59,8 +65,8 @@ export function emptyState(
     labMode,
     currentPhaseId: firstPhase ? firstPhase.id : '',
     visitedPhaseIds: firstPhase ? new Set([firstPhase.id]) : new Set(),
-    firedMilestones: new Set(),
-    dataPointCount: 0,
+    firedMilestones: {},
+    dataPointCount: {},
     widgetValues: {},
     dataTables: {},
     attemptCounts: {},
@@ -68,18 +74,27 @@ export function emptyState(
 }
 
 function serialize(state: RunnerState): SerializedRunnerState {
+  const firedMilestones: Record<string, string[]> = {};
+  for (const [phaseId, set] of Object.entries(state.firedMilestones)) {
+    firedMilestones[phaseId] = Array.from(set);
+  }
   return {
     ...state,
     visitedPhaseIds: Array.from(state.visitedPhaseIds),
-    firedMilestones: Array.from(state.firedMilestones),
+    firedMilestones,
   };
 }
 
 function deserialize(raw: SerializedRunnerState): RunnerState {
+  const firedMilestones: Record<string, Set<string>> = {};
+  for (const [phaseId, ids] of Object.entries(raw.firedMilestones ?? {})) {
+    firedMilestones[phaseId] = new Set(ids);
+  }
   return {
     ...raw,
     visitedPhaseIds: new Set(raw.visitedPhaseIds ?? []),
-    firedMilestones: new Set(raw.firedMilestones ?? []),
+    firedMilestones,
+    dataPointCount: raw.dataPointCount ?? {},
     widgetValues: raw.widgetValues ?? {},
     dataTables: raw.dataTables ?? {},
     attemptCounts: raw.attemptCounts ?? {},

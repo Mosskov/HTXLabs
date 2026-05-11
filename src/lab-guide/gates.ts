@@ -31,6 +31,7 @@ interface GateHandler<G extends Gate> {
     state: RunnerState,
     module: SimulationModule | undefined,
     ctx: GateCtx,
+    phaseId: string,
   ) => boolean;
   message: (gate: G) => string;
 }
@@ -46,16 +47,21 @@ const GATE_HANDLERS: GateHandlerMap = {
     check: () => true,
     message: () => '',
   },
+  // Phase-scoped: only milestones fired *during the gated phase* satisfy this
+  // gate. Free-play exploration on an earlier phase can't pre-tick it.
   milestone: {
-    check: (gate, state) => state.firedMilestones.has(gate.requires),
+    check: (gate, state, _module, _ctx, phaseId) =>
+      state.firedMilestones[phaseId]?.has(gate.requires) ?? false,
     message: () => strings.gates.milestone,
   },
-  // Single source of truth: the runner counter, fed by simulation
-  // ProgressEvent('data-collected'). A data-table widget that wants to
-  // contribute should also fire that event — the widget-state path is gone
-  // because it disagreed with the counter when the widget was unmounted.
+  // Phase-scoped counter, fed by simulation ProgressEvent('data-collected').
+  // Each phase has its own bucket so a student must collect fresh points in
+  // the gated phase. A data-table widget that wants to contribute should also
+  // fire that event — the widget-state path is gone because it disagreed with
+  // the counter when the widget was unmounted.
   'data-points': {
-    check: (gate, state) => state.dataPointCount >= gate.min,
+    check: (gate, state, _module, _ctx, phaseId) =>
+      (state.dataPointCount[phaseId] ?? 0) >= gate.min,
     message: (gate) => format(strings.gates.dataPoints, { min: gate.min }),
   },
   'all-correct': {
@@ -109,6 +115,7 @@ export function isGateSatisfied(
   state: RunnerState,
   module: SimulationModule | undefined,
   ctx: GateCtx,
+  phaseId: string,
 ): boolean {
   // Open-mode (`inquiryFreeAdvance`): gates are non-binding, advance is
   // unconditional. Guided / semi-guided run the real check below. SPEC §5.
@@ -116,7 +123,7 @@ export function isGateSatisfied(
   // The handler narrows on `gate.type`; the cast carries that to the call site
   // since TS can't tie the lookup result to the specific gate without a switch.
   const handler = GATE_HANDLERS[gate.type] as GateHandler<Gate>;
-  return handler.check(gate, state, module, ctx);
+  return handler.check(gate, state, module, ctx, phaseId);
 }
 
 export function canAdvanceTo(
@@ -138,8 +145,9 @@ export function canAdvanceTo(
   // Any forward move re-checks every gate from current up to (but not
   // including) target. Breaking an intermediate gate after the fact must
   // re-lock leaps over it, even if the target phase was visited before.
+  // Each gate is evaluated against its own phase's bucket.
   for (const phase of phases.slice(currentIdx, targetIdx)) {
-    if (!isGateSatisfied(phase.gate, state, module, ctx)) return false;
+    if (!isGateSatisfied(phase.gate, state, module, ctx, phase.id)) return false;
   }
 
   // Visited future phase → free leap (the work is preserved). Unvisited → only

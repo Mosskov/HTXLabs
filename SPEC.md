@@ -383,8 +383,8 @@ type RunnerState = {
   labMode: 'virtual' | 'real';
   currentPhaseId: string;
   visitedPhaseIds: Set<string>;
-  firedMilestones: Set<string>;             // sim ProgressEvent('milestone') sink
-  dataPointCount: number;                   // sim ProgressEvent('data-collected') sink
+  firedMilestones: Record<string, Set<string>>; // sim ProgressEvent('milestone') sink, phase-scoped
+  dataPointCount: Record<string, number>;       // sim ProgressEvent('data-collected') sink, phase-scoped
   widgetValues: Record<string, unknown>;    // per-widget freeform value bag
                                             // (widgets MAY use `${id}:<suffix>` sibling
                                             //  keys for ephemeral state, e.g. Quiz's
@@ -405,15 +405,19 @@ type GateCtx = {
   simulationStateRef: { current: unknown }; // for predicate gates
 };
 
-function isGateSatisfied(gate: Gate, s: RunnerState, mod: SimulationModule | undefined, ctx: GateCtx): boolean {
+function isGateSatisfied(gate: Gate, s: RunnerState, mod: SimulationModule | undefined, ctx: GateCtx, phaseId: string): boolean {
   // Open mode: gates are unconditionally satisfied (inquiry-mode convention;
   // authors don't repeat themselves). Guided / semi-guided run the actual gate.
   if (s.mode === 'open') return true;
 
+  // Sim-driven `milestone` and `data-points` gates evaluate against the
+  // *current phase's* bucket so free-play exploration on phase A can't pre-tick
+  // a gate on phase B. `predicate` stays global — it reads instantaneous sim
+  // state, not history.
   switch (gate.type) {
     case 'always':        return true;
-    case 'milestone':     return s.firedMilestones.has(gate.requires);
-    case 'data-points':   return s.dataPointCount >= gate.min;
+    case 'milestone':     return s.firedMilestones[phaseId]?.has(gate.requires) ?? false;
+    case 'data-points':   return (s.dataPointCount[phaseId] ?? 0) >= gate.min;
     case 'all-correct':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'correct'  && ctx.widgets[id].correct);
     case 'all-checked':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'checked'  && ctx.widgets[id].allChecked);
     case 'all-filled':    return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'filled'   && ctx.widgets[id].filled);

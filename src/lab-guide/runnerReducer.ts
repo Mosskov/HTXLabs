@@ -44,15 +44,27 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
         },
       };
     case 'FIRE_MILESTONE': {
-      // Idempotent: same state ref if already fired, so the [state] persistence
-      // effect doesn't trigger a redundant localStorage write.
-      if (state.firedMilestones.has(action.id)) return state;
-      const fm = new Set(state.firedMilestones);
-      fm.add(action.id);
-      return { ...state, firedMilestones: fm };
+      // Phase-scoped: milestone is tagged with the active phase so a free-play
+      // fire on phase 1 can't satisfy a milestone gate on phase 3. Idempotent
+      // within a phase to avoid redundant localStorage writes.
+      const phaseId = state.currentPhaseId;
+      const existing = state.firedMilestones[phaseId];
+      if (existing?.has(action.id)) return state;
+      const next = new Set(existing ?? []);
+      next.add(action.id);
+      return {
+        ...state,
+        firedMilestones: { ...state.firedMilestones, [phaseId]: next },
+      };
     }
-    case 'INCREMENT_DATA_POINTS':
-      return { ...state, dataPointCount: state.dataPointCount + action.count };
+    case 'INCREMENT_DATA_POINTS': {
+      const phaseId = state.currentPhaseId;
+      const prev = state.dataPointCount[phaseId] ?? 0;
+      return {
+        ...state,
+        dataPointCount: { ...state.dataPointCount, [phaseId]: prev + action.count },
+      };
+    }
     case 'RESET':
       return action.nextState;
   }
