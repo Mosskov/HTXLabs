@@ -4,7 +4,7 @@ Loaded on demand when files under `src/lab-guide/` are read.
 
 ## Lab page anatomy (`LabGuide.tsx`)
 
-A lab page has three stacked sections: **Theory** (always visible) → **SimulationPanel** (collapsible, mounted once for the lab — visibility toggles, state preserved across phases) → **Laboratorieguide** (the gated 7-phase flow). Phase navigation uses URL hash; mode/labMode are query params.
+A lab page has three stacked sections: **TheoryPanel** (collapsible, **default collapsed**) → **SimulationPanel** (collapsible, default expanded, mounted once for the lab — visibility toggles, state preserved across phases) → **Laboratorieguide** (the gated 7-phase flow; the PhaseStepper is wrapped in a `sticky top-0` bar in `LabGuide.tsx` so phase progress stays visible while the student scrolls). Phase navigation uses URL hash; mode/labMode are query params.
 
 ## State, persistence, gates
 

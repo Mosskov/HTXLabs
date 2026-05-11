@@ -32,6 +32,8 @@ export const strings = {
     switchInquiryForm: '← Skift undersøgelsesform',
     hideSimulation: 'Skjul simulation',
     showSimulation: 'Vis simulation',
+    hideTheory: 'Skjul formål og teori',
+    showTheory: 'Vis formål og teori',
   },
   phaseStepper: {
     /** Vars: {n} = 1-based phase number, {title} = phase title, {current} = currentSuffix or '' */

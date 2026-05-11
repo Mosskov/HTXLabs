@@ -6,6 +6,7 @@ import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';
 import { SimulationPanel } from './SimulationPanel';
+import { TheoryPanel } from './TheoryPanel';
 import { GateDebug } from './dev/GateDebug';
 import type { Mode } from './runner';
 import { strings } from './strings.da';
@@ -85,7 +86,7 @@ function LabGuideInner({
 
       {showGateDebug && <GateDebug />}
 
-      <section className="prose max-w-prose">{theory}</section>
+      <TheoryPanel>{theory}</TheoryPanel>
 
       {Sim && meta && (
         <SimulationPanel>
@@ -102,7 +103,9 @@ function LabGuideInner({
 
       <section data-print-include="true">
         <h2 className="lab-heading text-2xl mb-4">{strings.guide.heading}</h2>
-        <PhaseStepper phases={phases} />
+        <div className="sticky top-0 z-10 bg-white pt-2 pb-3 -mx-4 px-4 border-b border-slate-200 no-print">
+          <PhaseStepper phases={phases} />
+        </div>
         {currentPhase?.intro && (
           <div className="instruction-box mb-6 whitespace-pre-line">{currentPhase.intro}</div>
         )}

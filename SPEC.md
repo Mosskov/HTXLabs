@@ -928,9 +928,9 @@ Match htxlabs.dk's style closely. From your draft:
 - **Layout**:
   - Topic/experiment grids → cards
   - Lab page is **vertically stacked** (single column with ~768–960 px max content width):
-    1. Theory section (Formål, Centrale begreber, Nøgleligning, Teori)
-    2. Simulation panel inside a card with "Skjul simulation" header — collapsible. Internally two columns: scale visualization on the left, controls (dropdown + slider) on the right.
-    3. Laboratorieguide section: serif heading "Laboratorieguide", then horizontal stepper (1—2—3—4—5), then the phase's instruction box (light-blue rounded card), then phase content full-width, then footer.
+    1. Theory section (Formål, Centrale begreber, Nøgleligning, Teori) inside a card with "Vis teori" / "Skjul teori" header — collapsible, **default collapsed**, mirroring the simulation-panel chrome. Theory content still appears in print regardless of on-screen collapse state.
+    2. Simulation panel inside a card with "Skjul simulation" header — collapsible, default expanded. Internally two columns: scale visualization on the left, controls (dropdown + slider) on the right.
+    3. Laboratorieguide section: serif heading "Laboratorieguide", then horizontal stepper (1—2—3—4—5) **pinned to viewport top via `sticky top-0`** so phase progress stays visible while scrolling, then the phase's instruction box (light-blue rounded card), then phase content full-width, then footer.
   - Stepper visual: filled blue circle with ✓ for completed, filled blue circle with number for current, grey circle with number for future. Connected by horizontal lines that are blue for done segments, light-grey for upcoming.
   - Phase footer: three regions — left ("← Forrige fase" or "← Skift undersøgelsesform" on phase 1), middle (batch-check buttons like "Tjek variable", "Tjek hypotese", "Vis facit"), right ("Næste fase →" or "Afslut guide" on the last phase).
 - **Motion**: subtle phase-transition fade; respect `prefers-reduced-motion`.
