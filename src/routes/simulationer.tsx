@@ -139,7 +139,6 @@ function SimulationerHarness({
               initialParams={params}
               paused={paused}
               onProgress={handleProgress}
-              onParamChange={setParams}
             />
           ) : (
             <span className="text-slate-400 text-sm">{strings.simulationer.measuringSize}</span>

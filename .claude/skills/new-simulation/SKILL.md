@@ -52,7 +52,7 @@ Use `templates/index-input-driven.tsx.template` or `templates/index-animated.tsx
 The component must:
 - Default-export a function component typed `React.FC<SimulationProps>` (or accept `SimulationProps` directly).
 - Read `initialParams`, merge with defaults from `meta.defaultParams`.
-- Wire `onProgress` (and `onParamChange` if it changes params internally).
+- Wire `onProgress` to publish milestones / data-collected events.
 - Honour the `paused` prop in animated mode.
 
 ### 2. `src/simulations/<id>/physics.ts`

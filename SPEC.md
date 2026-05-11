@@ -472,7 +472,6 @@ export interface SimulationProps {
   initialParams?: Record<string, number>;
   paused?: boolean;
   onProgress?: (e: ProgressEvent) => void;
-  onParamChange?: (params: Record<string, number>) => void;
 }
 
 export type ProgressEvent =

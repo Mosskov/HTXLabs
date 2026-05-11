@@ -87,7 +87,6 @@ function DynamometerG_Component({
   height,
   initialParams,
   onProgress: _onProgress,
-  onParamChange: _onParamChange,
 }: SimulationProps) {
   const params = useMemo(
     () => ({ ...meta.defaultParams, ...(initialParams ?? {}) }),
