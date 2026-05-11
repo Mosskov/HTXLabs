@@ -11,3 +11,5 @@ playwright-report
 test-results
 coverage
 .claude/worktrees/
+.claude/settings.local.json
+codebase-map.html
