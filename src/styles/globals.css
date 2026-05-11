@@ -24,6 +24,18 @@
     /* biome-ignore lint/a11y/useGenericFontNames: Tailwind theme() resolves to a stack with generic fallback */
     font-family: theme("fontFamily.serif");
   }
+  /* Prose breathing room — `prose` has no Tailwind typography plugin behind it,
+     so define spacing here. Used by TheoryPanel and the per-phase MDX bodies. */
+  .prose {
+    line-height: 1.7;
+  }
+  .prose > * + * {
+    margin-top: 1em;
+  }
+  .prose > h3,
+  .prose > h4 {
+    margin-top: 2em;
+  }
   /* DK-style blue-dot bullets */
   .prose ul {
     @apply list-none pl-0;

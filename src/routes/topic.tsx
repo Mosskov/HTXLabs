@@ -14,7 +14,9 @@ export function TopicRoute() {
       <Link to="/" className="text-sm text-accent hover:underline">
         {strings.nav.backToHome}
       </Link>
-      <h1 className="text-3xl text-navy mt-2 mb-1">{t.frontmatter.title}</h1>
+      <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold mt-2 mb-1">
+        {t.frontmatter.title}
+      </h1>
       {t.frontmatter.subtitle && <p className="text-slate-600 mb-8">{t.frontmatter.subtitle}</p>}
       <ul className="grid grid-cols-1 gap-4 list-none pl-0">
         {t.experiments.map((e) => (
@@ -22,6 +24,7 @@ export function TopicRoute() {
             key={e.slug}
             to={`/emner/${t.frontmatter.id}/${e.slug}`}
             title={e.frontmatter.title}
+            eyebrow={strings.eyebrow.lab}
           >
             <ul className="text-sm text-slate-600 list-none pl-0">
               {e.frontmatter.learningObjectives.slice(0, 2).map((obj) => (

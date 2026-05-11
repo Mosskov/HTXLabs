@@ -30,7 +30,7 @@ export default {
       },
       maxWidth: {
         prose: '70ch',
-        lab: '960px',
+        lab: '768px',
       },
     },
   },

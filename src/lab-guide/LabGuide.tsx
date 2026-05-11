@@ -81,7 +81,10 @@ function LabGuideInner({
   return (
     <article className="space-y-8">
       <header>
-        <h1 className="text-3xl text-navy mb-2">{experiment.title}</h1>
+        <p className="text-xs font-semibold tracking-widest text-accent mb-2">
+          {strings.eyebrow.lab}
+        </p>
+        <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold">{experiment.title}</h1>
       </header>
 
       {showGateDebug && <GateDebug />}
@@ -102,14 +105,14 @@ function LabGuideInner({
       )}
 
       <section data-print-include="true">
-        <h2 className="lab-heading text-2xl mb-4">{strings.guide.heading}</h2>
-        <div className="sticky top-0 z-10 bg-white pt-2 pb-3 -mx-4 px-4 border-b border-slate-200 no-print">
+        <h2 className="lab-heading text-xl mb-4">{strings.guide.heading}</h2>
+        <div className="sticky top-0 z-10 bg-slate-50 pt-2 pb-3 -mx-4 px-4 no-print">
           <PhaseStepper phases={phases} />
         </div>
         {currentPhase?.intro && (
           <div className="instruction-box mb-6 whitespace-pre-line">{currentPhase.intro}</div>
         )}
-        <div className="prose max-w-none">
+        <div className="prose max-w-none px-4">
           {phases.map((p) => (
             <section key={p.id} hidden={p.id !== state.currentPhaseId}>
               {phaseBodies[p.id]}

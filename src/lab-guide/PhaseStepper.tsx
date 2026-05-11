@@ -9,7 +9,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
   const { state, setCurrentPhase, gateCtx, simulation } = useRunner();
 
   return (
-    <ol className="flex items-start gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
+    <ol className="flex items-start justify-center gap-1 sm:gap-2 mb-6" aria-label="Faseoversigt">
       {phases.map((phase, idx) => {
         const isCurrent = phase.id === state.currentPhaseId;
         const isVisited = state.visitedPhaseIds.has(phase.id);
@@ -41,7 +41,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
                   current: isCurrent ? strings.phaseStepper.currentSuffix : '',
                 })}
                 className={`
-                  shrink-0 w-9 h-9 rounded-full border-2 flex items-center justify-center text-sm font-medium
+                  shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-medium
                   transition-colors
                   ${
                     isCurrent
@@ -57,7 +57,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
                 {isCompleted ? '✓' : idx + 1}
               </button>
               <span
-                className={`mt-2 text-xs sm:text-sm ${
+                className={`mt-2 text-xs ${
                   isCurrent ? 'text-accent font-medium' : 'text-slate-500'
                 }`}
               >
@@ -65,7 +65,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
               </span>
             </li>
             {idx < phases.length - 1 && (
-              <div className="flex-1 flex items-center h-9" aria-hidden>
+              <div className="w-10 flex items-center h-7" aria-hidden>
                 <div className={`w-full h-px ${nextEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`} />
               </div>
             )}

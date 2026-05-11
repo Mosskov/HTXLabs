@@ -6,6 +6,11 @@
 // `placeholder` / `tooShortMessage`); the entries here are framework defaults.
 export const strings = {
   brand: 'HTX Labs',
+  /** Small uppercase label rendered above the page title on lab + simulation pages. */
+  eyebrow: {
+    lab: 'LAB',
+    simulation: 'SIMULATION',
+  },
   nav: {
     home: 'Forsiden',
     topics: 'Emner',

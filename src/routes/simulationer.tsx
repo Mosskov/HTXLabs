@@ -15,7 +15,9 @@ export function SimulationerIndex() {
   const ids = Object.keys(simulationRegistry).sort();
   return (
     <section>
-      <h1 className="lab-heading">{strings.simulationer.title}</h1>
+      <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold mb-2">
+        {strings.simulationer.title}
+      </h1>
       <p className="text-slate-600 mb-4">{strings.simulationer.indexIntro}</p>
       {ids.length === 0 ? (
         <p>{strings.simulationer.noSimulations}</p>
@@ -119,10 +121,13 @@ function SimulationerHarness({
   return (
     <section>
       <header className="mb-4">
-        <h1 className="lab-heading">
+        <p className="text-xs font-semibold tracking-widest text-accent mb-2">
+          {strings.eyebrow.simulation}
+        </p>
+        <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold">
           {format(strings.simulationer.titleWithSim, { title: simTitleDa(meta) })}
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 mt-1">
           <code>{simId}</code>
         </p>
       </header>
