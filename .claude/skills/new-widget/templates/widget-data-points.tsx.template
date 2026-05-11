@@ -10,10 +10,10 @@ interface Props {
  * __NAME__ — data-collection table widget.
  *
  * Gate-compatible via { type: 'data-points', min: N }. The data-points gate
- * reads state.dataPointCount, which is incremented by simulations firing
- * ProgressEvent('data-collected'). A pure-widget data table that does NOT have
- * an associated simulation will need a runner API (e.g. incrementDataPoints)
- * before its rows can drive the gate.
+ * reads state.dataPointCount[phaseId] (phase-scoped), which is incremented by
+ * simulations firing ProgressEvent('data-collected'). A pure-widget data table
+ * that does NOT have an associated simulation will need a runner API (e.g.
+ * incrementDataPoints) before its rows can drive the gate.
  */
 export function __NAME__({ id }: Props) {
   const { state, setDataTable } = useRunner();

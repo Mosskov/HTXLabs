@@ -7,7 +7,7 @@ description: Scaffold a new LabGuide MDX widget — component file + Vitest stub
 
 Scaffold a LabGuide MDX widget under `src/lab-guide/widgets/`.
 
-This skill is **pure structure**: it stamps out the contract (imports, `useRunner`, `registerWidgetState`, prop interface, default export) but leaves the actual logic and Danish copy as `TODO`. Do not invent physics content or Danish strings.
+This skill is **pure structure**: it stamps out the contract (imports, `useRunner`, `useRegisteredWidgetState`, prop interface, default export) but leaves the actual logic and Danish copy as `TODO`. Do not invent physics content or Danish strings.
 
 ## Inputs
 
@@ -30,21 +30,28 @@ After you have the name, ask **one** AskUserQuestion with two questions:
 
 ## Files to create
 
+### Danish-strings convention (applies to all kinds except `none`)
+
+Every student-facing string in a widget must (a) have its default in `src/lab-guide/strings.da.ts` and (b) accept an override prop. Pattern: `{prop ?? strings.widgets.<name>.<key>}` (SPEC §17, see `src/lab-guide/CLAUDE.md`). The templates leave the actual Danish copy as TODO — this skill is pure structure; the author fills in the strings.
+
 ### 1. `src/lab-guide/widgets/<Name>.tsx`
 
 Use the template in `templates/widget-<kind>.tsx.template` from this skill folder as the starting point. Substitute `__NAME__` with the widget name.
 
 For all kinds **except `none`**, the component must:
-- Import `useEffect` from `react` and `useRunner` from `../RunnerContext`.
+- Import `useRunner` from `../RunnerContext` and `useRegisteredWidgetState` from `../useRegisteredWidgetState`.
 - Read its persisted value (if any) from `state.widgetValues[id]`.
-- Call `registerWidgetState(id, { kind: '<kind>', ...})` inside a `useEffect`, returning `registerWidgetState(id, null)` on cleanup.
+- Call `useRegisteredWidgetState(id, { kind: '<kind>', ...} | null, [deps])` — the hook handles the "no unmount cleanup" rule (its doc-comment explains why). Pass `null` to clear (e.g. a Quiz's pre-check state).
 - Accept an `id: string` prop minimum.
 
 For `correct` / `data-points` widgets (or any opt-in keyword widget that uses submit-then-check), the user will need a "check" action. **Do not** assume a `registerFooterButton` runner API exists — it doesn't yet (SPEC §13, not implemented). Render an inline `<button>` inside the widget body with a `// TODO(SPEC §13): migrate to phase-footer button registration when runner API lands` comment above it.
 
 For free-text widgets, use `ProtectedTextarea` from `./ProtectedInput` — never raw `<textarea>`. Single-line goes through `ProtectedInput`.
 
-Reference the existing widgets `Reflection.tsx` and `ConclusionStatement.tsx` for the `filled` shape; they are the canonical examples.
+Canonical references (already in the tree):
+- `correct` → `src/lab-guide/widgets/Quiz.tsx`
+- `checked` → `src/lab-guide/widgets/Checklist.tsx`
+- `filled` (and `keywords`) → `src/lab-guide/widgets/FreeTextResponse.tsx`
 
 ### 2. `tests/unit/lab-guide/widgets/<Name>.test.tsx`
 
@@ -65,9 +72,8 @@ describe('<Name>', () => {
 
   it.todo('registers widget state with kind <kind> on mount');
   it.todo('persists value via setWidgetValue');
-  // TODO: full DOM tests need @testing-library/react + jsdom installed.
-  //   npm i -D @testing-library/react @testing-library/jest-dom jsdom
-  // Then add `test: { environment: 'jsdom', setupFiles: [...] }` to vite.config.ts.
+  // For a fleshed-out DOM test using @testing-library/react + userEvent +
+  // RunnerProvider, see tests/unit/lab-guide/widgets/Quiz.test.tsx.
 });
 ```
 

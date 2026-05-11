@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+// Canonical example: src/lab-guide/widgets/Checklist.tsx
 import { useRunner } from '../RunnerContext';
+import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 
 interface Props {
   id: string;
@@ -11,7 +12,7 @@ interface Props {
  * Gate-compatible via { type: 'all-checked', widgetIds: ['<id>'] }.
  */
 export function __NAME__({ id }: Props) {
-  const { state, setWidgetValue, registerWidgetState } = useRunner();
+  const { state, setWidgetValue } = useRunner();
   // The widget value is a record of itemId -> boolean.
   const ticks = (state.widgetValues[id] as Record<string, boolean> | undefined) ?? {};
 
@@ -19,11 +20,7 @@ export function __NAME__({ id }: Props) {
   const items: { id: string; label: string }[] = [];
   const allChecked = items.length > 0 && items.every((it) => ticks[it.id]);
 
-  // No unmount cleanup: the registered state must outlive a phase change so the
-  // gate stays satisfied when the student navigates away and back.
-  useEffect(() => {
-    registerWidgetState(id, { kind: 'checked', allChecked });
-  }, [id, allChecked, registerWidgetState]);
+  useRegisteredWidgetState(id, { kind: 'checked', allChecked }, [allChecked]);
 
   function toggle(itemId: string) {
     setWidgetValue(id, { ...ticks, [itemId]: !ticks[itemId] });

@@ -1,9 +1,18 @@
-import { useEffect, useState } from 'react';
+// Canonical example: src/lab-guide/widgets/Quiz.tsx
+import { useState } from 'react';
 import { useRunner } from '../RunnerContext';
+import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
+// TODO: add a `strings.widgets.<name>` entry to ../strings.da.ts and import it
+// here. Every student-facing string must default from strings.da.ts and accept
+// an override prop (SPEC §17 / src/lab-guide/CLAUDE.md).
 
 interface Props {
   id: string;
   // TODO: declare authoring API (e.g. answer, options, tolerance).
+  /** Override the default "Tjek" button label. */
+  checkLabel?: string;
+  // TODO: add override props for any other student-facing strings
+  //   (e.g. correctMessage, incorrectMessage).
 }
 
 /**
@@ -12,24 +21,21 @@ interface Props {
  *
  * The student types/picks an answer, then clicks "Tjek" to validate.
  * On a correct check, registers { kind: 'correct', correct: true }.
+ *
+ * Note: this template keeps the checked-state in local React state for
+ * simplicity. Quiz.tsx persists the "checked-for" sentinel via
+ * setWidgetValue(`${id}:checked`, value) instead, so a reload preserves the
+ * checked state — switch to that pattern if your widget needs it.
  */
-export function __NAME__({ id }: Props) {
-  const { state, setWidgetValue, registerWidgetState, bumpAttempts } = useRunner();
+export function __NAME__({ id, checkLabel }: Props) {
+  const { state, setWidgetValue, bumpAttempts } = useRunner();
   const value = state.widgetValues[id];
   const [checked, setChecked] = useState(false);
   const [correct, setCorrect] = useState(false);
 
-  // No unmount cleanup: the registered state must outlive a phase change so the
-  // gate stays satisfied when the student navigates away and back. The pre-check
-  // `null` registration below is intentional — that's the unchecked state, not
-  // unmount cleanup.
-  useEffect(() => {
-    if (!checked) {
-      registerWidgetState(id, null);
-      return;
-    }
-    registerWidgetState(id, { kind: 'correct', correct });
-  }, [id, checked, correct, registerWidgetState]);
+  // The pre-check `null` registration is intentional — that's the unchecked
+  // state, distinct from unmount cleanup (which the hook does not do).
+  useRegisteredWidgetState(id, checked ? { kind: 'correct', correct } : null, [checked, correct]);
 
   function onCheck() {
     bumpAttempts(id);
@@ -47,12 +53,13 @@ export function __NAME__({ id }: Props) {
         onClick={onCheck}
         className="mt-2 px-3 py-1.5 rounded-md bg-accent text-white text-sm"
       >
-        Tjek
+        {/* TODO: {checkLabel ?? strings.widgets.<name>.checkLabel} */}
+        {checkLabel ?? 'Tjek'}
       </button>
 
       {checked && (
         <p className={`mt-1 text-sm ${correct ? 'text-emerald-700' : 'text-amber-700'}`}>
-          {/* TODO: feedback text */}
+          {/* TODO: feedback text via override prop + strings.da.ts default */}
         </p>
       )}
     </div>
