@@ -10,7 +10,7 @@ Consolidated from two earlier audit files (`audit-2026-05-10.md` bug/gap punch l
 | -------- | ----- |
 | S1       | 2     |
 | S2       | 11    |
-| S3       | 14    |
+| S3       | 12    |
 
 Decision pending before reference lab: 1 (B-3 / R-G2).
 
@@ -96,11 +96,11 @@ Magic string appears in [src/lib/simulations.ts:16](src/lib/simulations.ts), [sr
 ### C-6 [S3] `routes/home.tsx:24` dead ternary
 `t.experiments.length === 1 ? 'forsøg' : 'forsøg'`. Both branches identical (Danish "forsøg" is uncountable). Drop the ternary, or write the real plural if a different label was intended.
 
-### C-7 [S3] `routes/playground.tsx` hardcoded Danish
-Many strings ("Playground", "Generic harness…", "Indlæser…", "Måler størrelse…", "Parametre", "Pause", "Reset", "Event log", "Clear log", "Ingen events endnu.", "Ukendt simulation:"). Lower priority — dev tool. Awareness only.
+### ~~C-7~~ [S3, resolved 2026-05-11] `routes/playground.tsx` hardcoded Danish
+All 13 strings lifted into `strings.playground` namespace ([src/lab-guide/strings.da.ts](src/lab-guide/strings.da.ts)). Parameterised entries (`unknownSim`, `titleWithSim`, `eventLog`) use the existing `format()` helper.
 
-### R-B5 [S3] `routes/experiment.tsx:53-56` imperative `phaseBodies` build
-Replace the imperative `for` loop with `Object.fromEntries(Object.entries(loaded.phaseBodies).map(([id, Body]) => [id, <Body />]))`. Or — since this builds a new object every render — memoize on `loaded.phaseBodies` identity.
+### ~~R-B5~~ [S3, resolved 2026-05-11] `routes/experiment.tsx` imperative `phaseBodies` build
+Replaced the imperative loop with a `useMemo` over `Object.fromEntries`, keyed on `loaded.phaseBodies` identity. Hoisted above the early-return; closure handles `loaded === null` and the error variant by returning `{}`. `<Body key={id} />` keeps Biome happy.
 
 ### R-B6 [S3] `App.tsx` header + nav inline
 [src/App.tsx:12-26](src/App.tsx) — 14 lines of layout chrome inside the Router. Fine today; if a third top-level page joins, extract `<SiteLayout>{children}</SiteLayout>`. Deferred until that third page exists.

@@ -1,4 +1,5 @@
 // Dev-only sim harness: pick a sim id, drive its props, watch ProgressEvents.
+import { format, strings } from '@/lab-guide/strings.da';
 import { loadSimulation, simulationRegistry } from '@/lib/simulations';
 import {
   type ParamSchemaEntry,
@@ -13,12 +14,10 @@ export function PlaygroundIndex() {
   const ids = Object.keys(simulationRegistry).sort();
   return (
     <section>
-      <h1 className="lab-heading">Playground</h1>
-      <p className="text-slate-600 mb-4">
-        Generic harness for at afprøve simulationer uden for en lab-side.
-      </p>
+      <h1 className="lab-heading">{strings.playground.title}</h1>
+      <p className="text-slate-600 mb-4">{strings.playground.indexIntro}</p>
       {ids.length === 0 ? (
-        <p>Ingen simulationer registreret.</p>
+        <p>{strings.playground.noSimulations}</p>
       ) : (
         <ul className="list-disc pl-6">
           {ids.map((id) => (
@@ -53,10 +52,12 @@ export function PlaygroundRoute() {
   }, [simId]);
 
   if (module === undefined) {
-    return <p className="text-slate-600">Indlæser…</p>;
+    return <p className="text-slate-600">{strings.playground.loading}</p>;
   }
   if (module === null) {
-    return <p className="text-slate-600">Ukendt simulation: {simId}</p>;
+    return (
+      <p className="text-slate-600">{format(strings.playground.unknownSim, { id: simId ?? '' })}</p>
+    );
   }
 
   return <PlaygroundHarness module={module} simId={simId ?? ''} />;
@@ -115,7 +116,9 @@ function PlaygroundHarness({
   return (
     <section>
       <header className="mb-4">
-        <h1 className="lab-heading">Playground: {simTitleDa(meta)}</h1>
+        <h1 className="lab-heading">
+          {format(strings.playground.titleWithSim, { title: simTitleDa(meta) })}
+        </h1>
         <p className="text-sm text-slate-500">
           <code>{simId}</code>
         </p>
@@ -137,13 +140,13 @@ function PlaygroundHarness({
               onParamChange={setParams}
             />
           ) : (
-            <span className="text-slate-400 text-sm">Måler størrelse…</span>
+            <span className="text-slate-400 text-sm">{strings.playground.measuringSize}</span>
           )}
         </div>
 
         <aside className="border border-slate-200 rounded bg-white p-4 space-y-4">
           <div>
-            <h2 className="font-semibold text-navy mb-2">Parametre</h2>
+            <h2 className="font-semibold text-navy mb-2">{strings.playground.params}</h2>
             <div className="space-y-3">
               {Object.entries(meta.paramSchema).map(([key, entry]) => (
                 <ParamControl
@@ -164,14 +167,14 @@ function PlaygroundHarness({
                 checked={paused}
                 onChange={(e) => setPaused(e.target.checked)}
               />
-              Pause
+              {strings.playground.pause}
             </label>
             <button
               type="button"
               onClick={handleReset}
               className="text-sm rounded bg-slate-100 hover:bg-slate-200 px-3 py-1.5"
             >
-              Reset
+              {strings.playground.reset}
             </button>
           </div>
         </aside>
@@ -179,18 +182,20 @@ function PlaygroundHarness({
 
       <div className="border border-slate-200 rounded bg-white">
         <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-          <h2 className="font-semibold text-navy">Event log ({events.length})</h2>
+          <h2 className="font-semibold text-navy">
+            {format(strings.playground.eventLog, { n: events.length })}
+          </h2>
           <button
             type="button"
             onClick={() => setEvents([])}
             className="text-sm text-slate-600 hover:text-accent"
           >
-            Clear log
+            {strings.playground.clearLog}
           </button>
         </div>
         <div className="max-h-64 overflow-y-auto p-4 font-mono text-xs space-y-1">
           {events.length === 0 ? (
-            <p className="text-slate-400">Ingen events endnu.</p>
+            <p className="text-slate-400">{strings.playground.noEvents}</p>
           ) : (
             events.map(({ id, event }) => (
               <div key={id} className="text-slate-700">

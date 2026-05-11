@@ -79,6 +79,25 @@ export const strings = {
     labInvalidTitle: 'Forsøget kunne ikke indlæses',
     labInvalidHelp: 'Ret frontmatter i forsøgets index.ts og genindlæs siden.',
   },
+  /** Dev-only sim harness chrome (routes/playground.tsx). Not student-facing. */
+  playground: {
+    title: 'Playground',
+    indexIntro: 'Generic harness for at afprøve simulationer uden for en lab-side.',
+    noSimulations: 'Ingen simulationer registreret.',
+    loading: 'Indlæser…',
+    /** Vars: {id} = sim id from URL */
+    unknownSim: 'Ukendt simulation: {id}',
+    measuringSize: 'Måler størrelse…',
+    /** Vars: {title} = sim display title */
+    titleWithSim: 'Playground: {title}',
+    params: 'Parametre',
+    pause: 'Pause',
+    reset: 'Reset',
+    /** Vars: {n} = event count */
+    eventLog: 'Event log ({n})',
+    clearLog: 'Clear log',
+    noEvents: 'Ingen events endnu.',
+  },
 } as const;
 
 /** Substitute {name} placeholders. Unknown keys render as the literal `{name}`. */

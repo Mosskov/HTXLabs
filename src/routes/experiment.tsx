@@ -7,7 +7,7 @@ import { loadSimulation } from '@/lib/simulations';
 import { parseModeParam } from '@/lib/url';
 import type { SimulationModule } from '@/sim-contract';
 import { MDXProvider } from '@mdx-js/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 export function ExperimentRoute() {
@@ -32,6 +32,17 @@ export function ExperimentRoute() {
     };
   }, [simulationId]);
 
+  const phaseBodySource = loaded && !('error' in loaded) ? loaded.phaseBodies : null;
+  const phaseBodies = useMemo<Record<string, React.ReactNode>>(
+    () =>
+      phaseBodySource
+        ? Object.fromEntries(
+            Object.entries(phaseBodySource).map(([id, Body]) => [id, <Body key={id} />]),
+          )
+        : {},
+    [phaseBodySource],
+  );
+
   if (!loaded) return <p>{strings.errors.notFound}</p>;
   if ('error' in loaded) {
     return (
@@ -43,10 +54,6 @@ export function ExperimentRoute() {
     );
   }
 
-  const phaseBodies: Record<string, React.ReactNode> = {};
-  for (const [id, Body] of Object.entries(loaded.phaseBodies)) {
-    phaseBodies[id] = <Body />;
-  }
   const Theory = loaded.Theory;
 
   return (
