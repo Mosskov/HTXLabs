@@ -134,6 +134,28 @@ describe('validateAuthorableGates', () => {
       );
     });
 
+    it('admits sim-driven kinds when the lab wires a non-__none simulationId', () => {
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('maal', { type: 'data-points', min: 5 }),
+          makePhase('konkluder', { type: 'predicate', name: 'wide-range' }),
+          makePhase('rapporter', { type: 'milestone', requires: 'review-completed' }),
+        ],
+      });
+      fm.simulationId = 'reference-sim';
+      expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
+    });
+
+    it('still rejects sim-driven kinds on theory-only labs (__none)', () => {
+      const fm = makeFrontmatter({
+        guided: [makePhase('maal', { type: 'data-points', min: 5 })],
+      });
+      // simulationId already '__none' by default — guard fires.
+      expect(() => validateAuthorableGates(fm, ctx)).toThrow(
+        /uses gate kind "data-points"/,
+      );
+    });
+
     it('skips the check when the lab is tagged "test" (framework testbed escape hatch)', () => {
       const fm = makeFrontmatter({
         guided: [

@@ -71,6 +71,10 @@ export const strings = {
       caption: 'Målinger:',
       addRow: '+ Tilføj række',
       deleteRowAriaLabel: 'Slet række',
+      /** Sim-mode footer text. Vars: {n} = count of recorded measurements. */
+      simModeCaption: '{n} målinger registreret af simulationen.',
+      /** Sim-mode footer text when no measurements have been recorded yet. */
+      simEmpty: 'Ingen målinger endnu — registrér målinger i simulationen.',
     },
   },
   gates: {

@@ -1,5 +1,5 @@
 import { GATE_KINDS, SIM_DRIVEN_GATE_KINDS } from '@/lab-guide/gates';
-import type { SimulationMeta } from '@/sim-contract';
+import { NO_SIMULATION, type SimulationMeta } from '@/sim-contract';
 import type { ComponentType } from 'react';
 import {
   CANONICAL_PHASE_IDS,
@@ -10,13 +10,12 @@ import {
 } from './schema';
 
 /**
- * Gate kinds whose backing widget wiring is implemented for any author to use.
- * Sim-driven kinds (`SIM_DRIVEN_GATE_KINDS`) require a sim that explicitly
- * fires the matching `ProgressEvent`s or exports a `gates` map, so authoring
- * them in a regular lab is rejected at module-load with a descriptive error —
- * see `validateAuthorableGates`. The `test` tag opts a lab out of this guard
- * so the framework testbed (sim-gate-test) can exercise those kinds
- * end-to-end against a known-good testbed sim.
+ * Gate kinds available to any author by default — i.e. on theory-only labs
+ * (`simulationId === NO_SIMULATION`). Sim-driven kinds (`SIM_DRIVEN_GATE_KINDS`)
+ * require a wired simulation; `validateAuthorableGates` admits them as soon as
+ * the lab declares a non-`__none` `simulationId`. The `test` tag still
+ * short-circuits validation entirely so the framework testbed can exercise
+ * sim-driven kinds against an ad-hoc sim regardless of wiring conventions.
  */
 const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set(
   GATE_KINDS.filter((k) => !(SIM_DRIVEN_GATE_KINDS as readonly Gate['type'][]).includes(k)),
@@ -37,11 +36,19 @@ export function validateAuthorableGates(
   ctx: { topic: string; slug: string },
 ): void {
   if (fm.tags?.includes('test')) return;
-  const supported = Array.from(AUTHORABLE_GATE_KINDS).join(', ');
+  // Sim-driven gate kinds are available once the lab wires a real sim — their
+  // handlers are fully implemented and `validateSimGateRefs` cross-checks
+  // milestone ids. Theory-only labs stay restricted so a stray `data-points`
+  // gate can't create a permanent lock.
+  const hasSim = fm.simulationId !== NO_SIMULATION;
+  const allowedKinds: ReadonlySet<Gate['type']> = hasSim
+    ? new Set<Gate['type']>(GATE_KINDS)
+    : AUTHORABLE_GATE_KINDS;
+  const supported = Array.from(allowedKinds).join(', ');
   for (const [modeName, modeBlock] of modeEntries(fm)) {
     if (!modeBlock) continue;
     for (const phase of modeBlock.phases) {
-      if (!AUTHORABLE_GATE_KINDS.has(phase.gate.type)) {
+      if (!allowedKinds.has(phase.gate.type)) {
         throw new Error(
           `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" uses gate kind "${phase.gate.type}", which requires sim wiring not yet implemented in this build. Supported kinds: ${supported}.`,
         );

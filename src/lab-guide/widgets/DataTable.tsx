@@ -1,11 +1,16 @@
-// Author-callable measurement table: N columns (label/symbol/unit), numeric-only
-// cells, "Add row" button, per-row clear. Registers {kind:'filled'} once at
-// least `minRows` rows have every column parsed as a valid Danish number.
-import { parseDK } from '@/lib/numbers';
+// Author-callable measurement table. Two modes selected via the `source` prop:
+//   - 'manual' (default): N numeric cells per row + Add/Delete; registers
+//     {kind:'filled'} once `minRows` rows have every column parsed as a valid
+//     Danish number, so an `all-filled` gate can fire.
+//   - 'sim': read-only mirror of an array published by the active simulation
+//     via `onState`. Path into sim state is given by `simDataPath`. No gate
+//     registration — sim-mode tables pair with a phase-level `data-points`
+//     (or `predicate`) gate, not `all-filled`.
+import { formatDK, parseDK } from '@/lib/numbers';
 import { type KeyboardEvent, useId } from 'react';
 import { useRunner } from '../RunnerContext';
 import type { DataRow } from '../runner';
-import { strings } from '../strings.da';
+import { format, strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import { ProtectedInput } from './ProtectedInput';
 
@@ -16,34 +21,37 @@ export interface DataTableColumn {
   symbol?: string;
   /** Optional unit, rendered in parens after the symbol, e.g. "kg". */
   unit?: string;
-  /** Storage key; defaults to a slug of `label`. Must be unique per table. */
+  /** Storage key; defaults to a slug of `label`. Must be unique per table.
+   *  In sim mode this is the field name on each measurement object the sim
+   *  publishes (e.g. `'x'` and `'y'`). */
   key?: string;
 }
 
 interface Props {
   id: string;
   columns: DataTableColumn[];
-  /** Initial visible row count. Default 6. The table never shrinks below this. */
+  /** Initial visible row count. Default 6. In manual mode the table never
+   *  shrinks below this. In sim mode it's the placeholder row count shown
+   *  before the sim has any measurements. */
   rows?: number;
-  /** Minimum number of fully-filled rows for the gate to satisfy. */
-  minRows: number;
+  /** Manual mode only — minimum number of fully-filled rows for the gate to
+   *  satisfy. Required when `source === 'manual'`. */
+  minRows?: number;
   /** Caption rendered above the table. */
   caption?: string;
-  /** Label on the "Add row" button. */
+  /** Label on the "Add row" button (manual mode only). */
   addRowLabel?: string;
-  /** ARIA label on the per-row delete (×) button. */
+  /** ARIA label on the per-row delete (×) button (manual mode only). */
   deleteRowAriaLabel?: string;
   /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
   allowPaste?: boolean;
+  /** Recording source. Defaults to `'manual'`. */
+  source?: 'manual' | 'sim';
+  /** Sim mode only — dotted path into the sim's published state (via
+   *  `onState`) that holds the measurement array. Each element is an object
+   *  whose keys line up with the column keys. Required when `source === 'sim'`. */
+  simDataPath?: string;
 }
-
-// TODO: refine allowed-input formatting. Current filter accepts digits, comma,
-// period, minus, plus Ctrl/Cmd shortcuts and navigation keys. Open questions:
-// - Scientific notation (e/E + exponent)?
-// - Reject multiple decimal separators / multiple minus signs at the source
-//   instead of letting parseDK return NaN?
-// - Per-column constraints (e.g. positive-only, integer-only) via column prop?
-// - Auto-normalise '.' → ',' on blur to enforce Danish convention?
 
 // Keys allowed even though they aren't numeric input — navigation, editing,
 // IME, and Ctrl/Cmd shortcuts (so Ctrl+A / Ctrl+C / Ctrl+Z still work).
@@ -73,8 +81,13 @@ function defaultKey(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
-function resolveKeys(columns: DataTableColumn[]): string[] {
-  return columns.map((c) => c.key ?? defaultKey(c.label));
+interface ResolvedColumn {
+  col: DataTableColumn;
+  key: string;
+}
+
+function resolveColumns(columns: DataTableColumn[]): ResolvedColumn[] {
+  return columns.map((col) => ({ col, key: col.key ?? defaultKey(col.label) }));
 }
 
 /** Pad/truncate persisted rows to the visible row count for stable indexing. */
@@ -85,7 +98,7 @@ function materialize(persisted: DataRow[], visibleRowCount: number): DataRow[] {
   return out;
 }
 
-function isRowFilled(row: DataRow, keys: string[]): boolean {
+function isRowFilled(row: DataRow, keys: ReadonlyArray<string>): boolean {
   return keys.every((k) => {
     const raw = row[k];
     if (typeof raw !== 'string' || raw.trim() === '') return false;
@@ -98,7 +111,38 @@ function isCellInvalid(value: string): boolean {
   return !Number.isFinite(parseDK(value));
 }
 
-export function DataTable({
+function ColumnHeaders({ columns }: { columns: ReadonlyArray<ResolvedColumn> }) {
+  return (
+    <thead className="bg-slate-50">
+      <tr>
+        {columns.map(({ col, key }) => (
+          <th
+            key={key}
+            scope="col"
+            className="px-3 py-2 text-center font-normal border-b border-slate-300"
+          >
+            <div className="text-slate-700">{col.label}</div>
+            {(col.symbol || col.unit) && (
+              <div className="text-slate-600 text-xs">
+                {col.symbol && <em className="text-navy">{col.symbol}</em>}
+                {col.symbol && col.unit && ' '}
+                {col.unit && <span>({col.unit})</span>}
+              </div>
+            )}
+          </th>
+        ))}
+        <th aria-hidden="true" className="w-8 border-b border-slate-300" />
+      </tr>
+    </thead>
+  );
+}
+
+export function DataTable(props: Props) {
+  const source = props.source ?? 'manual';
+  return source === 'sim' ? <SimTable {...props} /> : <ManualTable {...props} />;
+}
+
+function ManualTable({
   id,
   columns,
   rows: initialRows = 6,
@@ -111,8 +155,13 @@ export function DataTable({
   const { state, setDataTable } = useRunner();
   const captionId = useId();
 
-  const keys = resolveKeys(columns);
-  const persisted = (state.dataTables[id] ?? []) as DataRow[];
+  if (typeof minRows !== 'number') {
+    throw new Error(`DataTable id="${id}" in manual mode requires a numeric \`minRows\` prop.`);
+  }
+
+  const resolvedColumns = resolveColumns(columns);
+  const keys = resolvedColumns.map((c) => c.key);
+  const persisted = state.dataTables[id] ?? [];
   const visibleRowCount = Math.max(initialRows, persisted.length);
   const visibleRows = materialize(persisted, visibleRowCount);
 
@@ -126,20 +175,20 @@ export function DataTable({
   }
 
   function onCellChange(rowIndex: number, key: string, value: string) {
-    const next = materialize(visibleRows, visibleRowCount).map((r) => ({ ...r }));
+    const next = visibleRows.map((r) => ({ ...r }));
     next[rowIndex] = { ...next[rowIndex], [key]: value };
     commit(next);
   }
 
   function onAddRow() {
-    commit([...materialize(visibleRows, visibleRowCount), {}]);
+    commit([...visibleRows, {}]);
   }
 
   // Removes the row entirely. Locked when the table is at the initial-rows
   // floor so the visible row count can't dip below `initialRows`.
   function onDeleteRow(rowIndex: number) {
     if (visibleRowCount <= initialRows) return;
-    const next = materialize(visibleRows, visibleRowCount).filter((_, i) => i !== rowIndex);
+    const next = visibleRows.filter((_, i) => i !== rowIndex);
     commit(next);
   }
 
@@ -151,33 +200,12 @@ export function DataTable({
         {caption ?? strings.widgets.dataTable.caption}
       </figcaption>
       <table className="w-full border border-slate-300 text-sm">
-        <thead className="bg-slate-50">
-          <tr>
-            {columns.map((col, ci) => (
-              <th
-                key={keys[ci]}
-                scope="col"
-                className="px-3 py-2 text-center font-normal border-b border-slate-300"
-              >
-                <div className="text-slate-700">{col.label}</div>
-                {(col.symbol || col.unit) && (
-                  <div className="text-slate-600 text-xs">
-                    {col.symbol && <em className="text-navy">{col.symbol}</em>}
-                    {col.symbol && col.unit && ' '}
-                    {col.unit && <span>({col.unit})</span>}
-                  </div>
-                )}
-              </th>
-            ))}
-            <th aria-hidden="true" className="w-8 border-b border-slate-300" />
-          </tr>
-        </thead>
+        <ColumnHeaders columns={resolvedColumns} />
         <tbody>
           {visibleRows.map((row, ri) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: row identity is positional — there is no stable id, and rows never reorder
+            // biome-ignore lint/suspicious/noArrayIndexKey: row identity is positional — append-only growth and end-trim on delete, so positional keying is safe
             <tr key={ri} className="border-b border-slate-200 last:border-b-0">
-              {columns.map((col, ci) => {
-                const key = keys[ci];
+              {resolvedColumns.map(({ col, key }) => {
                 const value = row[key] ?? '';
                 const invalid = isCellInvalid(value);
                 return (
@@ -220,6 +248,68 @@ export function DataTable({
       >
         {addRowLabel ?? strings.widgets.dataTable.addRow}
       </button>
+    </figure>
+  );
+}
+
+function SimTable({ id, columns, rows: initialRows = 6, caption, simDataPath }: Props) {
+  const { simulationStateRef } = useRunner();
+  const captionId = useId();
+
+  if (!simDataPath) {
+    throw new Error(`DataTable id="${id}" in sim mode requires a \`simDataPath\` prop.`);
+  }
+
+  const resolvedColumns = resolveColumns(columns);
+  const simState = simulationStateRef.current as Record<string, unknown> | null;
+  const rawRows = (simState?.[simDataPath] as Array<Record<string, unknown>> | undefined) ?? [];
+  const visibleRowCount = Math.max(initialRows, rawRows.length);
+
+  function renderCell(value: unknown): string {
+    if (typeof value === 'number' && Number.isFinite(value)) return formatDK(value, 2);
+    if (typeof value === 'string') return value;
+    return '';
+  }
+
+  return (
+    <figure className="my-4" aria-labelledby={captionId}>
+      <figcaption id={captionId} className="text-sm font-medium text-slate-800 mb-2">
+        {caption ?? strings.widgets.dataTable.caption}
+      </figcaption>
+      <table
+        className="w-full border border-slate-300 text-sm"
+        aria-describedby={`${captionId}-count`}
+      >
+        <ColumnHeaders columns={resolvedColumns} />
+        <tbody>
+          {Array.from({ length: visibleRowCount }).map((_, ri) => {
+            const row = rawRows[ri];
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: row identity is positional — append-only growth and end-trim on delete, so positional keying is safe
+              <tr key={ri} className="border-b border-slate-200 last:border-b-0">
+                {resolvedColumns.map(({ col, key }) => {
+                  const text = row ? renderCell(row[key]) : '';
+                  return (
+                    <td
+                      key={key}
+                      className="px-3 py-2 text-center text-slate-800 tabular-nums"
+                      aria-label={`${col.label} række ${ri + 1}`}
+                    >
+                      {text || <span className="text-slate-300">—</span>}
+                    </td>
+                  );
+                })}
+                <td aria-hidden="true" className="w-8" />
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p id={`${captionId}-count`} className="mt-2 text-xs text-slate-600">
+        {rawRows.length === 0
+          ? strings.widgets.dataTable.simEmpty
+          : format(strings.widgets.dataTable.simModeCaption, { n: rawRows.length })}
+      </p>
     </figure>
   );
 }

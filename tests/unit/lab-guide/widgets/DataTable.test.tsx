@@ -5,6 +5,7 @@ import { DataTable } from '@/lab-guide/widgets/DataTable';
 import type { Gate, Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect as useReactEffect } from 'react';
 import { describe, expect, it } from 'vitest';
 
 const phase: Phase = {
@@ -139,6 +140,114 @@ describe('DataTable', () => {
     for (const btn of deleteButtons) {
       expect(btn).toBeDisabled();
     }
+  });
+
+  describe('sim mode', () => {
+    const xyCols = [
+      { label: 'X', symbol: 'X', key: 'x' },
+      { label: 'Y', symbol: 'Y', key: 'y' },
+    ];
+
+    // Pushes the supplied state into the runner's simulationStateRef on each
+    // change. Mounted inside the same provider so it shares the ref with the
+    // DataTable.
+    function SimPusher({ state }: { state: unknown }) {
+      const { setSimulationState } = useRunner();
+      // biome-ignore lint/correctness/useExhaustiveDependencies: state identity drives the publish
+      useReactEffect(() => {
+        setSimulationState(state);
+      }, [state]);
+      return null;
+    }
+
+    function SimHarness({
+      experimentId,
+      simState,
+      children,
+    }: {
+      experimentId: string;
+      simState?: unknown;
+      children: React.ReactNode;
+    }) {
+      const phaseSim: Phase = { id: 'p', title: 'P', gate: { type: 'data-points', min: 3 } };
+      return (
+        <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[phaseSim]}>
+          {children}
+          {simState !== undefined && <SimPusher state={simState} />}
+        </RunnerProvider>
+      );
+    }
+
+    it('renders read-only — no inputs, no Add row, no Delete buttons', () => {
+      render(
+        <SimHarness experimentId="dt/sim-readonly">
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+        </SimHarness>,
+      );
+      expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+      expect(screen.queryByRole('button', { name: /tilføj række/i })).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('button', { name: /slet række/i })).toHaveLength(0);
+    });
+
+    it('renders the empty footer when no measurements have been published', () => {
+      render(
+        <SimHarness experimentId="dt/sim-empty">
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+        </SimHarness>,
+      );
+      expect(screen.getByText(/Ingen målinger endnu/i)).toBeInTheDocument();
+    });
+
+    it('mirrors published sim measurements into the table cells', () => {
+      render(
+        <SimHarness
+          experimentId="dt/sim-mirror"
+          simState={{
+            measurements: [
+              { x: 1.2, y: 3.4 },
+              { x: 5.6, y: 7.8 },
+            ],
+          }}
+        >
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+        </SimHarness>,
+      );
+
+      expect(screen.getByText('1,20')).toBeInTheDocument();
+      expect(screen.getByText('3,40')).toBeInTheDocument();
+      expect(screen.getByText('5,60')).toBeInTheDocument();
+      expect(screen.getByText('7,80')).toBeInTheDocument();
+      expect(screen.getByText(/2 målinger registreret/i)).toBeInTheDocument();
+    });
+
+    it('does not register widget state, so an all-filled gate on its id stays unsatisfied', () => {
+      const filledGate: Gate = { type: 'all-filled', widgetIds: ['m'] };
+      function FilledProbe() {
+        const { state, gateCtx } = useRunner();
+        const passed = isGateSatisfied(filledGate, state, undefined, gateCtx, 'p');
+        return <div data-testid="filled-gate">{passed ? 'pass' : 'fail'}</div>;
+      }
+
+      render(
+        <SimHarness
+          experimentId="dt/sim-no-register"
+          simState={{
+            measurements: [
+              { x: 1, y: 1 },
+              { x: 5, y: 5 },
+            ],
+          }}
+        >
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+          <FilledProbe />
+        </SimHarness>,
+      );
+
+      // The widget never registers {kind:'filled'} in sim mode, so an
+      // all-filled gate keyed to this widget stays failed even when the sim
+      // has published rows.
+      expect(screen.getByTestId('filled-gate')).toHaveTextContent('fail');
+    });
   });
 
   it('rehydrates persisted rows from localStorage on remount', () => {

@@ -43,6 +43,11 @@ interface RunnerApi {
   onSimulationProgress: (e: ProgressEvent) => void;
   setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
+  /** Latest snapshot of the sim's published state (via `onState`). Exposed so
+   * widgets like the sim-mode `DataTable` can mirror sim-owned data without
+   * adding a new ProgressEvent kind. Subscribe to `tick` (via gate evaluation
+   * or `registerWidgetState`) to re-render on change. */
+  simulationStateRef: { readonly current: unknown };
   gateCtx: GateCtx;
   resetLab: () => void;
 }
@@ -195,6 +200,7 @@ export function RunnerProvider({
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,
+    simulationStateRef,
     gateCtx,
     resetLab,
   };

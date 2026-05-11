@@ -1,19 +1,16 @@
-{/* TODO (når reference-sim findes): erstat always-gaten med en data-points-gate
-    og indsæt en sim-drevet datatabel. Indtil da: studenten noterer målinger
-    manuelt på papir/regneark og klikker Næste. */}
+Udfør målingerne i simulationen: indstil **X** med skyderen, og tryk **+ Tilføj måling** for hvert punkt. Den beregnede **Y** registreres automatisk. Tag mindst 5 målinger, og variér X i passende intervaller.
 
-Udfør målingerne én efter én. Varier X i passende intervaller og noter den tilhørende værdi af Y for hver indstilling. Tag mindst 5–7 målepunkter, så du har nok data til at se en eventuel sammenhæng.
-
-Notér dine (X, Y)-par i tabellen nedenfor. Du skal have mindst 5 fyldte rækker, før du kan gå videre til analysen.
+Tabellen nedenfor opdateres af simulationen efterhånden som du registrerer punkter.
 
 <DataTable
   id="malinger"
+  source="sim"
+  simDataPath="measurements"
   columns={[
-    { label: 'masse', symbol: 'm', unit: 'kg' },
-    { label: 'kraft', symbol: 'F', unit: 'N' },
+    { label: 'X', symbol: 'X', key: 'x' },
+    { label: 'Y', symbol: 'Y', key: 'y' },
   ]}
   rows={6}
-  minRows={5}
 />
 
 <ResetButton />
