@@ -220,7 +220,7 @@ describe('DataTable', () => {
       expect(screen.getByText(/2 målinger registreret/i)).toBeInTheDocument();
     });
 
-    it('does not register widget state, so an all-filled gate on its id stays unsatisfied', () => {
+    it('registers a count facet but `filled` stays false without minRows, so all-filled gate fails', () => {
       const filledGate: Gate = { type: 'all-filled', widgetIds: ['m'] };
       function FilledProbe() {
         const { state, gateCtx } = useRunner();
@@ -243,10 +243,77 @@ describe('DataTable', () => {
         </SimHarness>,
       );
 
-      // The widget never registers {kind:'filled'} in sim mode, so an
-      // all-filled gate keyed to this widget stays failed even when the sim
-      // has published rows.
+      // Sim mode now registers `{kind:'filled', filled, count}` so a
+      // `data-points` gate with `widgetId` can read the row count — but
+      // without `minRows` the `filled` boolean stays false, so a stray
+      // `all-filled` gate keyed to this widget still fails.
       expect(screen.getByTestId('filled-gate')).toHaveTextContent('fail');
+    });
+
+    it('satisfies a data-points gate with widgetId once enough sim rows are published', () => {
+      const dpGate: Gate = { type: 'data-points', min: 3, widgetId: 'm' };
+      function DpProbe() {
+        const { state, gateCtx } = useRunner();
+        const passed = isGateSatisfied(dpGate, state, undefined, gateCtx, 'p');
+        return <div data-testid="dp-gate">{passed ? 'pass' : 'fail'}</div>;
+      }
+
+      const { rerender } = render(
+        <SimHarness
+          experimentId="dt/sim-data-points-2"
+          simState={{ measurements: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }}
+        >
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+          <DpProbe />
+        </SimHarness>,
+      );
+      expect(screen.getByTestId('dp-gate')).toHaveTextContent('fail');
+
+      rerender(
+        <SimHarness
+          experimentId="dt/sim-data-points-2"
+          simState={{
+            measurements: [
+              { x: 1, y: 1 },
+              { x: 2, y: 2 },
+              { x: 3, y: 3 },
+            ],
+          }}
+        >
+          <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
+          <DpProbe />
+        </SimHarness>,
+      );
+      expect(screen.getByTestId('dp-gate')).toHaveTextContent('pass');
+    });
+  });
+
+  describe('manual mode + data-points gate (single-knob flip)', () => {
+    it('satisfies a data-points gate with widgetId once enough rows are filled, even without minRows', async () => {
+      const user = userEvent.setup();
+      const dpGate: Gate = { type: 'data-points', min: 2, widgetId: 'm' };
+      function DpProbe() {
+        const { state, gateCtx } = useRunner();
+        const passed = isGateSatisfied(dpGate, state, undefined, gateCtx, 'p');
+        return <div data-testid="dp-gate">{passed ? 'pass' : 'fail'}</div>;
+      }
+      const phaseDp: Phase = { id: 'p', title: 'P', gate: dpGate };
+      render(
+        <RunnerProvider experimentId="dt/manual-dp" experimentVersion={1} phases={[phaseDp]}>
+          <DataTable id="m" columns={columns} rows={3} />
+          <DpProbe />
+        </RunnerProvider>,
+      );
+
+      expect(screen.getByTestId('dp-gate')).toHaveTextContent('fail');
+
+      await user.type(screen.getByLabelText('masse række 1'), '0,1');
+      await user.type(screen.getByLabelText('kraft række 1'), '1,0');
+      expect(screen.getByTestId('dp-gate')).toHaveTextContent('fail');
+
+      await user.type(screen.getByLabelText('masse række 2'), '0,2');
+      await user.type(screen.getByLabelText('kraft række 2'), '2,0');
+      expect(screen.getByTestId('dp-gate')).toHaveTextContent('pass');
     });
   });
 

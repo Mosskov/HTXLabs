@@ -1,11 +1,14 @@
 // Author-callable measurement table. Two modes selected via the `source` prop:
-//   - 'manual' (default): N numeric cells per row + Add/Delete; registers
-//     {kind:'filled'} once `minRows` rows have every column parsed as a valid
-//     Danish number, so an `all-filled` gate can fire.
+//   - 'manual' (default): N numeric cells per row + Add/Delete.
 //   - 'sim': read-only mirror of an array published by the active simulation
-//     via `onState`. Path into sim state is given by `simDataPath`. No gate
-//     registration — sim-mode tables pair with a phase-level `data-points`
-//     (or `predicate`) gate, not `all-filled`.
+//     via `onState`. Path into sim state is given by `simDataPath`.
+//
+// Both modes register `{kind:'filled', filled, count}`. `filled` drives
+// `all-filled` gates (needs an explicit `minRows`); `count` drives
+// `data-points` gates whose spec carries a `widgetId`. The teacher can flip
+// `source="sim"` ↔ `source="manual"` in MDX without touching the gate spec
+// in `index.ts` — the `data-points` gate reads the same `count` facet from
+// either mode.
 import { formatDK, parseDK } from '@/lib/numbers';
 import { type KeyboardEvent, useId } from 'react';
 import { useRunner } from '../RunnerContext';
@@ -34,8 +37,10 @@ interface Props {
    *  shrinks below this. In sim mode it's the placeholder row count shown
    *  before the sim has any measurements. */
   rows?: number;
-  /** Manual mode only — minimum number of fully-filled rows for the gate to
-   *  satisfy. Required when `source === 'manual'`. */
+  /** Threshold for the widget's `filled` facet (drives `all-filled` gates).
+   *  Optional in both modes. When omitted, the widget still reports its row
+   *  count via the `count` facet — sufficient for `data-points` gates whose
+   *  `widgetId` references this widget. */
   minRows?: number;
   /** Caption rendered above the table. */
   caption?: string;
@@ -155,10 +160,6 @@ function ManualTable({
   const { state, setDataTable } = useRunner();
   const captionId = useId();
 
-  if (typeof minRows !== 'number') {
-    throw new Error(`DataTable id="${id}" in manual mode requires a numeric \`minRows\` prop.`);
-  }
-
   const resolvedColumns = resolveColumns(columns);
   const keys = resolvedColumns.map((c) => c.key);
   const persisted = state.dataTables[id] ?? [];
@@ -166,9 +167,16 @@ function ManualTable({
   const visibleRows = materialize(persisted, visibleRowCount);
 
   const filledRowCount = visibleRows.reduce((n, r) => (isRowFilled(r, keys) ? n + 1 : n), 0);
-  const satisfied = filledRowCount >= minRows;
+  // `filled` drives `all-filled` gates (needs an explicit minRows threshold);
+  // `count` drives `data-points` gates with `widgetId` (always reports the
+  // row count regardless of minRows). Both facets ride a single registration
+  // since the widget registry is id-keyed.
+  const filled = typeof minRows === 'number' && filledRowCount >= minRows;
 
-  useRegisteredWidgetState(id, { kind: 'filled', filled: satisfied }, [satisfied]);
+  useRegisteredWidgetState(id, { kind: 'filled', filled, count: filledRowCount }, [
+    filled,
+    filledRowCount,
+  ]);
 
   function commit(next: DataRow[]) {
     setDataTable(id, next);
@@ -252,7 +260,7 @@ function ManualTable({
   );
 }
 
-function SimTable({ id, columns, rows: initialRows = 6, caption, simDataPath }: Props) {
+function SimTable({ id, columns, rows: initialRows = 6, minRows, caption, simDataPath }: Props) {
   const { simulationStateRef } = useRunner();
   const captionId = useId();
 
@@ -264,6 +272,14 @@ function SimTable({ id, columns, rows: initialRows = 6, caption, simDataPath }: 
   const simState = simulationStateRef.current as Record<string, unknown> | null;
   const rawRows = (simState?.[simDataPath] as Array<Record<string, unknown>> | undefined) ?? [];
   const visibleRowCount = Math.max(initialRows, rawRows.length);
+  // Publish a count facet so `data-points` gates with `widgetId` can read the
+  // sim's row count without a contract extension. `filled` follows the
+  // optional `minRows` for backwards compat with `all-filled` gates.
+  const filled = typeof minRows === 'number' && rawRows.length >= minRows;
+  useRegisteredWidgetState(id, { kind: 'filled', filled, count: rawRows.length }, [
+    filled,
+    rawRows.length,
+  ]);
 
   function renderCell(value: unknown): string {
     if (typeof value === 'number' && Number.isFinite(value)) return formatDK(value, 2);

@@ -13,7 +13,12 @@ export interface GateCtx {
 export type WidgetState =
   | { kind: 'correct'; correct: boolean }
   | { kind: 'checked'; allChecked: boolean }
-  | { kind: 'filled'; filled: boolean }
+  /** `filled` is the `all-filled` gate's read facet (boolean satisfaction).
+   *  `count` is an optional sibling facet — currently only the DataTable
+   *  publishes it, and only the `data-points` gate consults it (when the
+   *  gate spec carries a `widgetId`). Lets a single registration drive
+   *  both gate kinds without double-keying the widget registry. */
+  | { kind: 'filled'; filled: boolean; count?: number }
   | { kind: 'keywords'; foundCount: number; total: number };
 
 /** Gate kinds whose evaluation depends on the simulation rather than a widget.
@@ -54,14 +59,22 @@ const GATE_HANDLERS: GateHandlerMap = {
       state.firedMilestones[phaseId]?.has(gate.requires) ?? false,
     message: () => strings.gates.milestone,
   },
-  // Phase-scoped counter, fed by simulation ProgressEvent('data-collected').
-  // Each phase has its own bucket so a student must collect fresh points in
-  // the gated phase. A data-table widget that wants to contribute should also
-  // fire that event — the widget-state path is gone because it disagreed with
-  // the counter when the widget was unmounted.
+  // Two paths:
+  //   - `widgetId` set → read the widget's `count` facet (DataTable in either
+  //     sim or manual mode publishes one). Lets a teacher flip the widget's
+  //     `source` prop without rewriting the gate.
+  //   - No `widgetId` → phase-scoped sim counter, fed by ProgressEvent
+  //     ('data-collected'). Each phase has its own bucket so free-play
+  //     collection on an earlier phase can't pre-tick a later gate.
   'data-points': {
-    check: (gate, state, _module, _ctx, phaseId) =>
-      (state.dataPointCount[phaseId] ?? 0) >= gate.min,
+    check: (gate, state, _module, ctx, phaseId) => {
+      if (gate.widgetId) {
+        const w = ctx.widgets[gate.widgetId];
+        const count = w?.kind === 'filled' ? (w.count ?? 0) : 0;
+        return count >= gate.min;
+      }
+      return (state.dataPointCount[phaseId] ?? 0) >= gate.min;
+    },
     message: (gate) => format(strings.gates.dataPoints, { min: gate.min }),
   },
   'all-correct': {

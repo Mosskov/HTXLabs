@@ -134,6 +134,37 @@ describe('data-points gate', () => {
     const state = makeState({ dataPointCount: { 'other-phase': 10 } });
     expect(isGateSatisfied(dataPointsGate, state, undefined, makeCtx(), PHASE)).toBe(false);
   });
+
+  describe('with widgetId — reads the named widget count instead of the phase bucket', () => {
+    const widgetGate: Gate = { type: 'data-points', min: 3, widgetId: 'malinger' };
+
+    it('returns true when the widget reports count >= min', () => {
+      const ctx = makeCtx({ malinger: { kind: 'filled', filled: false, count: 3 } });
+      expect(isGateSatisfied(widgetGate, makeState(), undefined, ctx, PHASE)).toBe(true);
+    });
+
+    it('returns false when the widget reports count < min', () => {
+      const ctx = makeCtx({ malinger: { kind: 'filled', filled: false, count: 2 } });
+      expect(isGateSatisfied(widgetGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+    });
+
+    it('returns false when the widget is not registered', () => {
+      expect(isGateSatisfied(widgetGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
+    });
+
+    it('returns false when the widget is registered but missing the count facet', () => {
+      const ctx = makeCtx({ malinger: { kind: 'filled', filled: true } });
+      expect(isGateSatisfied(widgetGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+    });
+
+    it('ignores the phase bucket — the widget count alone decides', () => {
+      // Even with 100 points in the phase bucket, the gate is locked if the
+      // named widget doesn't report enough.
+      const state = makeState({ dataPointCount: { [PHASE]: 100 } });
+      const ctx = makeCtx({ malinger: { kind: 'filled', filled: false, count: 1 } });
+      expect(isGateSatisfied(widgetGate, state, undefined, ctx, PHASE)).toBe(false);
+    });
+  });
 });
 
 describe('milestone gate', () => {

@@ -13,6 +13,11 @@ export const Gate = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('data-points'),
     min: z.number().int(),
+    /** Optional widget id whose registered count satisfies the gate. When set,
+     * the handler reads the widget's `count` facet instead of the per-phase
+     * sim counter — lets a `<DataTable>` author flip between sim and manual
+     * modes without touching this gate spec. */
+    widgetId: z.string().optional(),
   }),
   z.object({ type: z.literal('all-correct'), widgetIds: z.array(z.string()) }),
   z.object({ type: z.literal('all-checked'), widgetIds: z.array(z.string()) }),

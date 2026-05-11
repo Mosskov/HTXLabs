@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 3,
+  version: 4,
   title: 'Reference-lab — generisk eksempel',
   simulationId: 'reference-sim',
   learningObjectives: [
@@ -42,7 +42,7 @@ export const frontmatter: ExperimentFrontmatter = {
           id: 'maal',
           title: 'Mål',
           intro: 'Registrér mindst 5 målepunkter i simulationen.',
-          gate: { type: 'data-points', min: 5 },
+          gate: { type: 'data-points', min: 5, widgetId: 'malinger' },
         },
         {
           id: 'analyser',
