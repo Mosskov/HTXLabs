@@ -1,0 +1,11 @@
+Reflektér over hvad dine målinger viser. Hvordan ændrer Y sig, når X varieres? Og hvor sikker er konklusionen — er der spredning i målingerne, og hvor stor er den?
+
+<FreeTextResponse id="diskussion"
+  prompt="Beskriv kort hvad du ser i data, og vurder måleusikkerheden. Brug mindst 20 ord."
+  minWords={20}
+  keywordGroups={[
+    { id: 'relation', any: ['stiger', 'falder', 'øges', 'aftager', 'vokser'] },
+    { id: 'usikkerhed', any: ['usikkerhed', 'fejl', 'spredning', 'måleafvigelse', 'unøjagtighed'] },
+  ]} />
+
+<ResetButton />
