@@ -12,7 +12,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 1,
+  version: 2,
   title: 'Reference-lab — generisk eksempel',
   simulationId: '__none',
   learningObjectives: [
@@ -40,7 +40,7 @@ export const frontmatter: ExperimentFrontmatter = {
           id: 'maal',
           title: 'Mål',
           intro: 'Udfør målingerne og noter dine (X, Y)-værdier.',
-          gate: { type: 'always' },
+          gate: { type: 'all-filled', widgetIds: ['malinger'] },
         },
         {
           id: 'analyser',

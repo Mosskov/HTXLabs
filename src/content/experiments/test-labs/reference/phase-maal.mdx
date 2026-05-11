@@ -4,6 +4,16 @@
 
 Udfør målingerne én efter én. Varier X i passende intervaller og noter den tilhørende værdi af Y for hver indstilling. Tag mindst 5–7 målepunkter, så du har nok data til at se en eventuel sammenhæng.
 
-Notér dine (X, Y)-par på papir eller i et regneark. Når du har et tilstrækkeligt datasæt, kan du gå videre til analysen.
+Notér dine (X, Y)-par i tabellen nedenfor. Du skal have mindst 5 fyldte rækker, før du kan gå videre til analysen.
+
+<DataTable
+  id="malinger"
+  columns={[
+    { label: 'masse', symbol: 'm', unit: 'kg' },
+    { label: 'kraft', symbol: 'F', unit: 'N' },
+  ]}
+  rows={6}
+  minRows={5}
+/>
 
 <ResetButton />

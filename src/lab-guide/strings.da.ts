@@ -67,6 +67,11 @@ export const strings = {
       label: 'Nulstil eksperiment',
       confirm: 'Nulstil dette eksperiment? Dine besvarelser i denne lab slettes.',
     },
+    dataTable: {
+      caption: 'Målinger:',
+      addRow: '+ Tilføj række',
+      deleteRowAriaLabel: 'Slet række',
+    },
   },
   gates: {
     milestone: 'Du skal gennemføre forsøget mindst én gang for at fortsætte.',

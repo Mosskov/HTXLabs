@@ -4,6 +4,7 @@
 // …) are intentionally not re-exported — consumers import them directly.
 
 export { Checklist } from './Checklist';
+export { DataTable } from './DataTable';
 export { FreeTextResponse } from './FreeTextResponse';
 export { KeyEquation } from './KeyEquation';
 export { Quiz } from './Quiz';
