@@ -56,7 +56,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
               <button
                 type="button"
                 onClick={onSwitchInquiryForm}
-                className="text-sm text-accent hover:underline"
+                className="text-sm text-slate-600 hover:underline"
               >
                 {strings.guide.switchInquiryForm}
               </button>
@@ -65,7 +65,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
             <button
               type="button"
               onClick={() => prevPhase && setCurrentPhase(prevPhase.id)}
-              className="text-sm text-accent hover:underline"
+              className="text-sm text-slate-600 hover:underline"
             >
               {strings.guide.previousPhase}
             </button>
@@ -85,11 +85,11 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
             }}
             disabled={!gateOk}
             className={`
-              px-4 py-2 rounded-md text-sm font-medium transition-colors
+              px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-colors
               ${
                 gateOk
-                  ? 'bg-accent text-white hover:bg-accent-700'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'
+                  : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
               }
             `}
           >
