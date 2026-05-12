@@ -22,10 +22,39 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
         const reachable = canAdvanceTo(phase.id, phases, state, simulation, gateCtx);
         const clickable = reachable;
 
-        // Connector to the NEXT phase: accent iff the next phase has been
-        // visited. One div per gap, not two halves per phase.
+        // Connector to the NEXT phase: fills when THIS phase is completed AND
+        // the next phase is either completed (chain of done) or currently
+        // reachable (live forward edge). A locked + uncompleted right side
+        // keeps the rail grey so it doesn't suggest a jump that isn't there.
         const nextPhase = phases[idx + 1];
-        const nextEdgeCrossed = !!nextPhase && state.visitedPhaseIds.has(nextPhase.id);
+        const nextCompleted =
+          !!nextPhase &&
+          state.visitedPhaseIds.has(nextPhase.id) &&
+          isGateSatisfied(nextPhase.gate, state, simulation, gateCtx, nextPhase.id);
+        const nextReachable =
+          !!nextPhase && canAdvanceTo(nextPhase.id, phases, state, simulation, gateCtx);
+        const railFilled = isCompleted && (nextCompleted || nextReachable);
+
+        // Fill = "done"; ring = "you are here". Current+uncompleted is hollow
+        // with just the ring so it doesn't look identical to current+completed.
+        const ringClasses = isCurrent
+          ? 'ring-2 ring-accent/25 ring-offset-2 ring-offset-slate-50'
+          : '';
+        const fillClasses = isCompleted
+          ? 'bg-accent-100 border-accent-400 text-accent cursor-pointer hover:bg-accent-200'
+          : reachable
+            ? 'bg-white border-accent-400 text-accent cursor-pointer hover:bg-accent-50'
+            : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed';
+        const circleClasses = `${fillClasses} ${ringClasses}`;
+
+        // Two independent axes: color = done-ness, weight = you-are-here.
+        const labelColor = isCompleted
+          ? 'text-slate-700'
+          : reachable
+            ? 'text-slate-500'
+            : 'text-slate-400';
+        const labelWeight = isCurrent ? 'font-semibold' : isCompleted ? 'font-medium' : '';
+        const labelClasses = `${labelColor} ${labelWeight}`.trim();
 
         return (
           <Fragment key={phase.id}>
@@ -43,30 +72,16 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
                 className={`
                   shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-medium
                   transition-colors
-                  ${
-                    isCurrent
-                      ? 'bg-accent border-accent text-white'
-                      : isCompleted
-                        ? 'bg-accent border-accent text-white cursor-pointer hover:bg-accent-700'
-                        : reachable
-                          ? 'bg-white border-accent text-accent cursor-pointer hover:bg-accent-50'
-                          : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
-                  }
+                  ${circleClasses}
                 `}
               >
                 {isCompleted ? '✓' : idx + 1}
               </button>
-              <span
-                className={`mt-2 text-xs ${
-                  isCurrent ? 'text-accent font-medium' : 'text-slate-500'
-                }`}
-              >
-                {phase.title}
-              </span>
+              <span className={`mt-2 text-xs ${labelClasses}`}>{phase.title}</span>
             </li>
             {idx < phases.length - 1 && (
               <div className="w-10 flex items-center h-7" aria-hidden>
-                <div className={`w-full h-px ${nextEdgeCrossed ? 'bg-accent' : 'bg-slate-300'}`} />
+                <div className={`w-full h-0.5 ${railFilled ? 'bg-accent-400' : 'bg-slate-200'}`} />
               </div>
             )}
           </Fragment>
