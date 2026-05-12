@@ -109,10 +109,29 @@ function LabGuideInner({
         <div className="sticky top-0 z-10 bg-slate-50 pt-2 pb-3 -mx-4 px-4 no-print">
           <PhaseStepper phases={phases} />
         </div>
-        {currentPhase?.intro && (
-          <div className="instruction-box mx-4 mb-6 whitespace-pre-line">{currentPhase.intro}</div>
+        {currentPhase && (currentPhase.steps || currentPhase.intro) && (
+          <div className="instruction-box mx-4 mb-6 text-sm">
+            {currentPhase.steps ? (
+              <>
+                <p className="font-semibold text-slate-900 mb-2">
+                  Fase {phases.indexOf(currentPhase) + 1} – {currentPhase.title}:
+                </p>
+                {currentPhase.steps.length === 1 ? (
+                  <p>{currentPhase.steps[0]}</p>
+                ) : (
+                  <ol className="list-[lower-alpha] pl-6 space-y-1">
+                    {currentPhase.steps.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ol>
+                )}
+              </>
+            ) : (
+              <span className="whitespace-pre-line">{currentPhase.intro}</span>
+            )}
+          </div>
         )}
-        <div className="prose max-w-none px-4">
+        <div className="prose max-w-none px-4 text-sm">
           {phases.map((p) => (
             <section key={p.id} hidden={p.id !== state.currentPhaseId}>
               {phaseBodies[p.id]}

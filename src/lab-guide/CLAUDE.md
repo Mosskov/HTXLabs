@@ -6,6 +6,10 @@ Loaded on demand when files under `src/lab-guide/` are read.
 
 A lab page has three stacked sections: **TheoryPanel** (collapsible, **default collapsed**) → **SimulationPanel** (collapsible, default expanded, mounted once for the lab — visibility toggles, state preserved across phases) → **Laboratorieguide** (the gated 7-phase flow; the PhaseStepper is wrapped in a `sticky top-0` bar in `LabGuide.tsx` so phase progress stays visible while the student scrolls). Phase navigation uses URL hash; mode/labMode are query params.
 
+### Phase box semantics — three text layers
+
+Each phase has three distinct text surfaces, and only one of them owns the *task*: the **instruction-box** at the top (light-blue card, fed by `phase.steps` — see SPEC §8). Authoring `steps: string[]` makes `LabGuide.tsx` auto-render a `Fase N – {title}:` header above a `<ol type="lower-alpha">`; a single-item `steps` renders header + plain line (no letter). Use the legacy `intro: string` only for one sentence with no header — schema rejects both at once. The MDX **prose** around widgets is for motivation, scaffolding questions, or operational guidance — **never** restate a step there. **Widget labels** (the `prompt` prop on `<FreeTextResponse>`, `<Quiz>`, etc.) own the concrete input prompt.
+
 ## State, persistence, gates
 
 - Runner state (`src/lab-guide/runner.ts`) is persisted to `localStorage['htxlabs:state:${experimentId}']` on every change.

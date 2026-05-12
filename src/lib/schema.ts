@@ -55,12 +55,18 @@ export const CANONICAL_PHASE_IDS = [
 ] as const;
 export type CanonicalPhaseId = (typeof CANONICAL_PHASE_IDS)[number];
 
-export const Phase = z.object({
-  id: z.string(),
-  title: z.string(),
-  intro: z.string().optional(),
-  gate: Gate.default({ type: 'always' }),
-});
+export const Phase = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    intro: z.string().optional(),
+    steps: z.array(z.string().min(1)).optional(),
+    gate: Gate.default({ type: 'always' }),
+  })
+  .refine((p) => !(p.intro && p.steps), {
+    message:
+      'A phase has either `intro` (single sentence, no header) or `steps` (lettered checklist with auto-header), not both.',
+  });
 export type Phase = z.infer<typeof Phase>;
 
 export const ExperimentFrontmatter = z.object({

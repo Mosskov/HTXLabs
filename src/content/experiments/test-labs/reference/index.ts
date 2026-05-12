@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 4,
+  version: 5,
   title: 'Reference-lab — generisk eksempel',
   simulationId: 'reference-sim',
   learningObjectives: [
@@ -29,37 +29,43 @@ export const frontmatter: ExperimentFrontmatter = {
         {
           id: 'planlaeg',
           title: 'Planlæg',
-          intro: 'Formuler din hypotese om sammenhængen mellem X og Y.',
+          steps: [
+            'Læs teorien og overvej hvilken sammenhæng du forventer mellem X og Y.',
+            'Formulér en kort hypotese om hvordan Y afhænger af X.',
+          ],
           gate: { type: 'all-filled', widgetIds: ['hypotese'] },
         },
         {
           id: 'opstil',
           title: 'Opstil',
-          intro: 'Forbered måleopstillingen og kryds materialerne af, når du har dem klar.',
+          steps: ['Gør måleopstillingen klar.', 'Kryds materialerne af, når du har dem klar.'],
           gate: { type: 'all-checked', widgetIds: ['materialer'] },
         },
         {
           id: 'maal',
           title: 'Mål',
-          intro: 'Registrér mindst 5 målepunkter i simulationen.',
+          steps: ['Registrér mindst 5 målepunkter i simulationen.'],
           gate: { type: 'data-points', min: 5, widgetId: 'malinger' },
         },
         {
           id: 'analyser',
           title: 'Analysér',
-          intro: 'Plot dine data og analysér sammenhængen.',
+          steps: [
+            'Plot dine målepunkter og se på sammenhængen.',
+            'Besvar analysespørgsmålene korrekt.',
+          ],
           gate: { type: 'all-correct', widgetIds: ['analyse-quiz'] },
         },
         {
           id: 'diskuter',
           title: 'Diskutér',
-          intro: 'Diskutér resultatet — hvad ser du, og hvor sikker er målingen?',
+          steps: ['Diskutér resultatet — hvad ser du, og hvor sikker er målingen?'],
           gate: { type: 'keyword-count', widgetId: 'diskussion', min: 'all' },
         },
         {
           id: 'konkluder',
           title: 'Konkludér',
-          intro: 'Saml din konklusion — du skal have varieret X bredt før du kan gå videre.',
+          steps: ['Saml din konklusion — du skal have varieret X bredt før du kan gå videre.'],
           gate: {
             type: 'predicate',
             name: 'wide-range',
@@ -70,7 +76,7 @@ export const frontmatter: ExperimentFrontmatter = {
         {
           id: 'rapporter',
           title: 'Rapportér',
-          intro: 'Gennemse dit arbejde, og markér rapporten som gennemset i simulationen.',
+          steps: ['Gennemse dit arbejde.', 'Markér rapporten som gennemset i simulationen.'],
           gate: { type: 'milestone', requires: 'review-completed' },
         },
       ],

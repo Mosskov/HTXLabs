@@ -43,7 +43,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   const gateOk = isGateSatisfied(currentPhase.gate, state, simulation, gateCtx, currentPhase.id);
 
   return (
-    <div className="mt-8 border-t border-slate-200 pt-4 no-print">
+    <div className="mt-8 no-print">
       {!gateOk && (
         <output className="mb-3 block text-sm text-slate-600">
           {gateMessage(currentPhase.gate)}
@@ -97,7 +97,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
           </button>
         </div>
       </div>
-      <div className="mt-6 border-t border-slate-200 pt-4">
+      <div className="mt-8 border-t border-slate-200 pt-4">
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}

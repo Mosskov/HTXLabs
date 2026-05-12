@@ -157,7 +157,12 @@ const Gate = z.discriminatedUnion('type', [
 const Phase = z.object({
   id: z.string(),
   title: z.string(),
-  intro: z.string().optional(),       // text shown in the light-blue instruction box at the top of the phase
+  // Box content: pick ONE. `steps` is the default (renders with auto "Fase N – Title:" header
+  // + semantic `<ol type="lower-alpha">`; a single-item array renders as a plain line with
+  // header but no `a.` prefix). `intro` is the rare opt-out for a single sentence with no
+  // header. Schema refuses both at once.
+  intro: z.string().optional(),
+  steps: z.array(z.string().min(1)).optional(),
   gate: Gate.default({ type: 'always' }),
 });
 
@@ -349,8 +354,9 @@ export default function ExperimentRoute({ params }) {
 2. **Simulation panel** (`<SimulationPanel>`) — collapsible card with "Skjul simulation" header. The simulation is **mounted once** for the whole lab and stays mounted across phase changes; only its visibility toggles. Per-lab `simulationOverrides` from frontmatter are passed in.
 3. **Laboratorieguide section** — heading "Laboratorieguide", then:
    - **Phase stepper** (`<PhaseStepper>`) — numbered circles 1–5 connected by lines. Completed = ✓ in filled blue circle. Current = number in filled blue circle. Future = number in grey circle. Locked phases show no extra icon (just grey) and clicks are no-ops with a tooltip explaining what's missing.
-   - **Instruction box** — light-blue rounded card at the top of each phase's body, showing the phase's `intro` text (1–3 numbered steps, authored in frontmatter).
+   - **Instruction box** — light-blue rounded card at the top of each phase's body. Authored as `steps: string[]` in frontmatter; the framework auto-renders a `Fase N – {title}:` header above a semantic `<ol type="lower-alpha">` (a/b/c…). A single-item `steps` renders the header + a plain line (no `a.` prefix). The legacy `intro: string` field is the rare opt-out for one sentence with no header; pick one or the other, not both.
    - **Phase content** — full-width MDX rendered with widgets in scope.
+   - **Three text layers — distinct roles.** To prevent triple-stating the same task: the **instruction-box** owns the *what to do* (terse imperative checklist). The **MDX prose** around widgets owns the *why / how to think* (motivation, scaffolding questions, operational guidance) and must never restate a step. The **widget label/prompt** owns the *concrete input prompt* (what to type or select). If three pieces of text say the same thing in close succession, two of them are wrong.
    - **Phase footer** (`<PhaseFooter>`) — three regions:
      - Left: "← Forrige fase" link (always available except phase 1, where it's replaced by "← Skift undersøgelsesform").
      - Middle: phase-specific batch-check buttons (e.g. "Tjek variable", "Tjek hypotese") that the widgets register.
