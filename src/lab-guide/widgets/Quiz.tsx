@@ -88,7 +88,7 @@ export function Quiz({ id, prompt, options, checkLabel, correctMessage, incorrec
 
       <div id={feedbackId} aria-live="polite" className="contents">
         {checkedNow && (
-          <p className={`mt-1 text-sm ${correct ? 'text-emerald-700' : 'text-amber-700'}`}>
+          <p className={`mt-1 text-sm ${correct ? 'text-green-700' : 'text-amber-700'}`}>
             {correct
               ? (correctMessage ?? strings.widgets.quiz.correct)
               : (incorrectMessage ?? strings.widgets.quiz.incorrect)}

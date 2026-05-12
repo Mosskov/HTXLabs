@@ -54,7 +54,7 @@
     @apply bg-instruction-bg border border-blue-200 rounded-lg p-4 text-slate-700;
   }
   .callout-equation {
-    @apply bg-callout-bg border border-callout-border rounded-lg py-6 px-4 flex justify-center;
+    @apply bg-instruction-bg border border-blue-200 rounded-lg py-6 px-4 flex justify-center;
   }
   .lab-card {
     @apply bg-white border border-slate-200 rounded-lg shadow-sm;
