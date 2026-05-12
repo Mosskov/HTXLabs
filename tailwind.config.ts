@@ -15,13 +15,8 @@ export default {
         },
         // Navy headings
         navy: '#0f172a',
-        // Light-blue instruction-box background
+        // Light-blue instruction-box background (shared with .callout-equation)
         'instruction-bg': '#eff6ff',
-        // Lavender callout for KeyEquation
-        callout: {
-          bg: '#eef2ff',
-          border: '#c7d2fe',
-        },
       },
       fontFamily: {
         sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
