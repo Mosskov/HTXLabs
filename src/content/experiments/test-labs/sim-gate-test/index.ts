@@ -12,7 +12,7 @@ export const frontmatter: ExperimentFrontmatter = {
   simulationId: 'testbed',
   learningObjectives: ['Bekræft at sim-drevne gate-typer evalueres korrekt'],
   keyConcepts: ['frameworktest', 'gates'],
-  difficulty: 'intro',
+  difficulty: 'c-level',
   modes: {
     guided: {
       phases: [

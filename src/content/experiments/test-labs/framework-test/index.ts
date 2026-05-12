@@ -14,7 +14,7 @@ export const frontmatter: ExperimentFrontmatter = {
   simulationId: '__none',
   learningObjectives: ['Bekræft at lab-pipeline fungerer'],
   keyConcepts: ['frameworktest'],
-  difficulty: 'intro',
+  difficulty: 'c-level',
   modes: {
     guided: {
       phases: [

@@ -5,9 +5,15 @@ import { strings } from './strings.da';
  * Collapsible host for the simulation. Per spec §17, the simulation is mounted
  * ONCE for the lifetime of the lab page — only its visibility toggles when the
  * student clicks "Skjul simulation". State survives.
+ *
+ * `initialOpen` defaults to true (LabGuide context — sim is the active tool).
+ * Landing page passes `false` to keep the screenshot's calm preview state.
  */
-export function SimulationPanel({ children }: { children: ReactNode }) {
-  const [hidden, setHidden] = useState(false);
+export function SimulationPanel({
+  children,
+  initialOpen = true,
+}: { children: ReactNode; initialOpen?: boolean }) {
+  const [hidden, setHidden] = useState(!initialOpen);
 
   return (
     <section className="mb-8 no-print">

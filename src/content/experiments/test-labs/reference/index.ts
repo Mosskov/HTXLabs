@@ -22,7 +22,7 @@ export const frontmatter: ExperimentFrontmatter = {
     'Se hvordan både forfatter-styrede og simulations-drevne gates anvendes',
   ],
   keyConcepts: ['lab-struktur', 'gates', 'widgets'],
-  difficulty: 'core',
+  difficulty: 'b-level',
   modes: {
     guided: {
       phases: [

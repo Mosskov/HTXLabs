@@ -21,7 +21,7 @@ function makeFrontmatter(overrides: {
     simulationOverrides: undefined,
     learningObjectives: ['x'],
     keyConcepts: [],
-    difficulty: 'core',
+    difficulty: 'b-level',
     modes: {
       guided: { phases: overrides.guided ?? [makePhase('p1', { type: 'always' })] },
       ...(overrides.semiGuided ? { 'semi-guided': { phases: overrides.semiGuided } } : {}),

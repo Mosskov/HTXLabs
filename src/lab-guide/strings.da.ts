@@ -9,6 +9,7 @@ export const strings = {
   /** Small uppercase label rendered above the page title on lab + simulation pages. */
   eyebrow: {
     lab: 'LAB',
+    experiment: 'FORSØG',
     simulation: 'SIMULATION',
   },
   nav: {
@@ -55,6 +56,34 @@ export const strings = {
     guided: 'Guidet',
     'semi-guided': 'Semi-guidet',
     open: 'Åben',
+  },
+  /** Lab landing page (mode picker). */
+  landing: {
+    heading: 'Laboratorieguide',
+    subheading: 'Vælg den undersøgelsesform, der passer til jeres time.',
+    /** Vars: {minutes} */
+    durationChip: '~{minutes} min',
+    levelChip: {
+      'c-level': 'C-niveau',
+      'b-level': 'B-niveau',
+      'a-level': 'A-niveau',
+    },
+    modeCards: {
+      guided: {
+        title: 'Guidet',
+        description: 'Trin-for-trin vejledning og instruktioner ved hver fase.',
+      },
+      'semi-guided': {
+        title: 'Semi-guidet',
+        description: 'Korte overblik med hints, som du kan åbne efter behov.',
+      },
+      open: {
+        title: 'Åben undersøgelse',
+        description: 'Kun værktøjerne – du bestemmer selv fremgangsmåden.',
+      },
+    },
+    continueLabel: 'Fortsæt',
+    unavailableHint: 'Ikke tilgængelig for dette forsøg',
   },
   labModes: {
     virtual: 'Virtuel',

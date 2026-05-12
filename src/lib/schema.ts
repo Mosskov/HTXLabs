@@ -82,7 +82,12 @@ export const ExperimentFrontmatter = z.object({
 
   learningObjectives: z.array(z.string()).min(1),
   keyConcepts: z.array(z.string()).default([]),
-  difficulty: z.enum(['intro', 'core', 'advanced']).default('core'),
+  /** HTX gymnasieniveau: A = højeste, C = laveste. Default to C so labs
+   * authored without an explicit value land on the broadest audience. */
+  difficulty: z.enum(['c-level', 'b-level', 'a-level']).default('c-level'),
+  /** Optional rough estimate of how long the lab takes end-to-end (minutes).
+   * Surfaced as a small chip on the lab landing page; chip hides when absent. */
+  estimatedMinutes: z.number().int().positive().optional(),
 
   modes: z.object({
     guided: z.object({ phases: z.array(Phase).min(1) }),

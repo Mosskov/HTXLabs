@@ -180,7 +180,8 @@ const ExperimentFrontmatter = z.object({
 
   learningObjectives: z.array(z.string()).min(1),
   keyConcepts: z.array(z.string()),
-  difficulty: z.enum(['intro','core','advanced']).default('core'),
+  difficulty: z.enum(['c-level','b-level','a-level']).default('c-level'),  // HTX gymnasieniveau (A = højeste, C = laveste)
+  estimatedMinutes: z.number().int().positive().optional(),                 // surfaced as a chip on the lab landing page
 
   // Inquiry modes — each mode declares its own phase list. Guided is required for MVP.
   modes: z.object({

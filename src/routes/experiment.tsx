@@ -1,5 +1,7 @@
-// Experiment route: loads an experiment + its sim, mounts a LabGuide.
+// Experiment route: loads an experiment + its sim, then mounts either the lab landing (no `?mode=`) or the LabGuide for the selected mode.
 import { LabGuide } from '@/lab-guide/LabGuide';
+import { LabLanding } from '@/lab-guide/LabLanding';
+import type { Mode } from '@/lab-guide/runner';
 import { strings } from '@/lab-guide/strings.da';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';
 import { loadExperiment } from '@/lib/content';
@@ -7,13 +9,27 @@ import { loadSimulation } from '@/lib/simulations';
 import { parseModeParam } from '@/lib/url';
 import type { SimulationModule } from '@/sim-contract';
 import { MDXProvider } from '@mdx-js/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 export function ExperimentRoute() {
   const { topic, experiment } = useParams();
-  const [searchParams] = useSearchParams();
-  const mode = parseModeParam(searchParams.get('mode'));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawMode = searchParams.get('mode');
+  const hasMode = rawMode !== null;
+  const mode = parseModeParam(rawMode);
+  const handleSelectMode = useCallback(
+    (m: Mode) => {
+      // Same-page swap: setting the param re-renders into LabGuide without a
+      // full navigation, so theory/sim panels remount cleanly on first entry.
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('mode', m);
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
   const loaded = topic && experiment ? loadExperiment(topic, experiment) : null;
   const [simulation, setSimulation] = useState<SimulationModule | undefined>(undefined);
   // Don't try to load a sim if the lab failed validation — `loaded` may be the
@@ -58,15 +74,26 @@ export function ExperimentRoute() {
 
   return (
     <MDXProvider components={mdxComponents}>
-      <LabGuide
-        experiment={loaded.frontmatter}
-        topic={loaded.topic}
-        slug={loaded.slug}
-        mode={mode}
-        theory={<Theory />}
-        phaseBodies={phaseBodies}
-        simulation={simulation}
-      />
+      {hasMode ? (
+        <LabGuide
+          experiment={loaded.frontmatter}
+          topic={loaded.topic}
+          slug={loaded.slug}
+          mode={mode}
+          theory={<Theory />}
+          phaseBodies={phaseBodies}
+          simulation={simulation}
+        />
+      ) : (
+        <LabLanding
+          experiment={loaded.frontmatter}
+          topic={loaded.topic}
+          slug={loaded.slug}
+          theory={<Theory />}
+          simulation={simulation}
+          onSelectMode={handleSelectMode}
+        />
+      )}
     </MDXProvider>
   );
 }
