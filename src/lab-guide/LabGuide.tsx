@@ -110,7 +110,7 @@ function LabGuideInner({
           <PhaseStepper phases={phases} />
         </div>
         {currentPhase?.intro && (
-          <div className="instruction-box mb-6 whitespace-pre-line">{currentPhase.intro}</div>
+          <div className="instruction-box mx-4 mb-6 whitespace-pre-line">{currentPhase.intro}</div>
         )}
         <div className="prose max-w-none px-4">
           {phases.map((p) => (

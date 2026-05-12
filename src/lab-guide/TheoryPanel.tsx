@@ -10,7 +10,7 @@ export function TheoryPanel({ children }: { children: ReactNode }) {
       <button
         type="button"
         onClick={() => setHidden((h) => !h)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left text-lg font-medium text-navy border border-slate-200 hover:bg-slate-50 rounded-md no-print"
+        className="w-full flex items-center gap-2 px-4 py-3 text-left text-base font-medium text-navy border border-slate-200 hover:bg-slate-50 rounded-md no-print"
         aria-expanded={!hidden}
       >
         <span aria-hidden className="text-slate-500">
