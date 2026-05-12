@@ -32,6 +32,12 @@ export const strings = {
     heading: 'Laboratorieguide',
     nextPhase: 'Næste fase →',
     previousPhase: '← Forrige fase',
+    resetWork: 'Nulstil arbejde',
+    resetWorkConfirmTitle: 'Nulstil arbejde?',
+    resetWorkConfirmBody:
+      'Er du sikker på, at du vil slette alt dit arbejde i dette lab?\nDette kan ikke fortrydes.',
+    resetWorkConfirmCancel: 'Annuller',
+    resetWorkConfirmAction: 'Nulstil',
     finishGuide: 'Afslut guide',
     guideFinished: 'Forsøg afsluttet — godt arbejde!',
     switchInquiryForm: '← Skift undersøgelsesform',
