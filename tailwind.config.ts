@@ -25,7 +25,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
         serif: ['Georgia', 'Cambria', 'serif'],
       },
       maxWidth: {
