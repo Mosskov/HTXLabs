@@ -45,7 +45,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
   return (
     <div className="mt-8 border-t border-slate-200 pt-4 no-print">
       {!gateOk && (
-        <output className="mb-3 block text-sm text-amber-700">
+        <output className="mb-3 block text-sm text-slate-600">
           {gateMessage(currentPhase.gate)}
         </output>
       )}
