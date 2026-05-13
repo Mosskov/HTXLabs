@@ -59,8 +59,7 @@ export const strings = {
   },
   /** Lab landing page (mode picker). */
   landing: {
-    heading: 'Laboratorieguide',
-    subheading: 'Vælg den undersøgelsesform, der passer til jeres time.',
+    heading: 'Vælg undersøgelsesform',
     /** Vars: {minutes} */
     durationChip: '~{minutes} min',
     levelChip: {
@@ -83,6 +82,7 @@ export const strings = {
       },
     },
     continueLabel: 'Fortsæt',
+    startLabel: 'Start',
     unavailableHint: 'Ikke tilgængelig for dette forsøg',
   },
   labModes: {

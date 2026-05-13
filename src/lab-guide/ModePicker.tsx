@@ -27,8 +27,7 @@ export function ModePicker({ experiment, experimentId, onSelect }: ModePickerPro
 
   return (
     <section className="mt-4">
-      <h2 className="lab-heading text-xl mb-1">{strings.landing.heading}</h2>
-      <p className="text-sm text-slate-600 mb-4">{strings.landing.subheading}</p>
+      <h2 className="lab-heading text-xl mb-4">{strings.landing.heading}</h2>
       <ul className="grid gap-3 sm:grid-cols-3">
         {MODE_ORDER.map((mode) => {
           const declared = !!experiment.modes[mode];
@@ -42,19 +41,22 @@ export function ModePicker({ experiment, experimentId, onSelect }: ModePickerPro
                 disabled={!declared}
                 aria-label={card.title}
                 className={[
-                  'w-full h-full text-left rounded-md border px-4 py-3 transition',
+                  'w-full h-full text-left rounded-md border-2 px-4 py-3 transition-colors',
                   declared
-                    ? 'border-slate-200 bg-white hover:border-accent-400 hover:bg-accent-50 cursor-pointer'
-                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed',
+                    ? 'border-accent-400 bg-white hover:bg-accent-50 cursor-pointer'
+                    : 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed',
                 ].join(' ')}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className={`font-semibold ${declared ? 'text-accent' : 'text-slate-400'}`}>
+                  <span
+                    className={`font-semibold ${declared ? 'text-slate-700' : 'text-slate-400'}`}
+                  >
                     {card.title}
                   </span>
-                  {isContinue && (
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-accent bg-accent-100 px-2 py-0.5 rounded">
-                      {strings.landing.continueLabel}
+                  {declared && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 bg-accent-50 px-2 py-0.5 rounded">
+                      {isContinue ? strings.landing.continueLabel : strings.landing.startLabel}
+                      <span aria-hidden>→</span>
                     </span>
                   )}
                 </div>

@@ -46,7 +46,7 @@ export function LabLanding({
           <p className="mt-2 text-base text-slate-600">{experiment.learningObjectives[0]}</p>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center text-xs font-medium text-accent bg-accent-100 border border-accent-200 px-2 py-0.5 rounded">
+          <span className="inline-flex items-center text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
             {strings.landing.levelChip[experiment.difficulty]}
           </span>
           {experiment.estimatedMinutes !== undefined && (
