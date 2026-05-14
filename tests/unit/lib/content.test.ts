@@ -142,7 +142,7 @@ describe('validateAuthorableGates', () => {
           makePhase('rapporter', { type: 'milestone', requires: 'review-completed' }),
         ],
       });
-      fm.simulationId = 'reference-sim';
+      fm.simulationId = 'template-sim';
       expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
     });
 

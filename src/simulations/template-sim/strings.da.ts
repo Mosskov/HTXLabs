@@ -1,4 +1,4 @@
-// Per-sim Danish chrome for reference-sim. Sims own their own strings —
+// Per-sim Danish chrome for template-sim. Sims own their own strings —
 // the framework's lab-guide/strings.da.ts is reserved for lab-shell + widgets.
 export const strings = {
   /** Slider label. Vars: {n} = current X formatted. */

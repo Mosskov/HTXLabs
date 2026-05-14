@@ -9,7 +9,15 @@ import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+
+// LabGuide renders a <Link> for the topic back-link, so tests must mount it
+// under a Router. Helper keeps each render call terse.
+function renderLab(ui: ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 /** Renders one row per phase showing whether its gate currently passes. The
  *  probe lives inside the LabGuide tree, so it sees the same RunnerProvider
@@ -127,10 +135,11 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
     };
     localStorage.setItem('htxlabs:state:test-topic/test-slug', JSON.stringify(seeded));
 
-    render(
+    renderLab(
       <LabGuide
         experiment={experiment}
         topic="test-topic"
+        topicTitle="Test topic"
         slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
@@ -146,10 +155,11 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
   it('non-current phase gates revert to fail when widgetValues are missing', () => {
     // Empty save — first-time visitor. Every widget mounts but registers
     // its derived "not satisfied" state.
-    render(
+    renderLab(
       <LabGuide
         experiment={experiment}
         topic="test-topic"
+        topicTitle="Test topic"
         slug="test-slug"
         theory={<AllPhasesProbe phases={phases} />}
         phaseBodies={phaseBodies}
@@ -165,10 +175,11 @@ describe('LabGuide — non-current phase gates evaluate from widgetValues at mou
 
 describe('LabGuide — open mode bypasses gates (B2)', () => {
   it('all gates pass with mode="open" even when widgetValues are empty', () => {
-    render(
+    renderLab(
       <LabGuide
         experiment={experiment}
         topic="test-topic"
+        topicTitle="Test topic"
         slug="test-slug"
         mode="open"
         theory={<AllPhasesProbe phases={phases} />}
@@ -201,10 +212,11 @@ describe('LabGuide — open mode bypasses gates (B2)', () => {
     };
     localStorage.setItem('htxlabs:state:test-topic/test-slug', JSON.stringify(seeded));
 
-    render(
+    renderLab(
       <LabGuide
         experiment={experiment}
         topic="test-topic"
+        topicTitle="Test topic"
         slug="test-slug"
         mode="open"
         theory={<AllPhasesProbe phases={phases} />}
@@ -301,7 +313,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
       gate: { type: 'milestone', requires: 'm1' },
     };
 
-    render(
+    renderLab(
       <LabGuide
         experiment={makeExperiment(phase)}
         topic="test-topic"
@@ -329,7 +341,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
       gate: { type: 'data-points', min: 2 },
     };
 
-    render(
+    renderLab(
       <LabGuide
         experiment={makeExperiment(phase)}
         topic="test-topic"
@@ -357,7 +369,7 @@ describe('LabGuide — sim-driven gate failure paths', () => {
       gate: { type: 'predicate', name: 'flag-on' },
     };
 
-    render(
+    renderLab(
       <LabGuide
         experiment={makeExperiment(phase)}
         topic="test-topic"

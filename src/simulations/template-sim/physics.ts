@@ -1,6 +1,6 @@
-// reference-sim — pure helpers. Y = slope·X + intercept (deliberately abstract;
+// template-sim — pure helpers. Y = slope·X + intercept (deliberately abstract;
 // no real physics). `coverWideRange` is the predicate used by the konkluder
-// gate in the reference lab.
+// gate in the template lab.
 //
 // Rule: no React, no DOM, no imports from '@/lab-guide' or '@/sim-runtime'.
 // Pure inputs → outputs only.

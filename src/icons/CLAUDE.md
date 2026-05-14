@@ -56,7 +56,7 @@ Raw `.svg` files live under `src/icons/sources/`, named to match their `.tsx` co
    - JSX-ify attribute names: `stroke-width` → `strokeWidth`, `stroke-linecap` → `strokeLinecap`, `stroke-linejoin` → `strokeLinejoin`, `stroke-opacity` → `strokeOpacity`, `stroke-dasharray` → `strokeDasharray`, `fill-opacity` → `fillOpacity`, `class` → `className`.
    - **Namespace the CSS classes** (e.g. `.l` → `.bk-l`, `.f` → `.bk-f`) so they don't collide with other inline-SVG `<style>` blocks rendered on the same page. Books use `bk-*`; pendulum uses `pd-*`; pick a new short prefix for a new icon family.
 4. `npm run lint` — Biome catches missing `<title>` elements and JSX formatting drift.
-5. Verify visually with `npm run dev` and a screenshot of `/emner/test-labs/reference`.
+5. Verify visually with `npm run dev` and a screenshot of `/emner/testlabs/template`.
 
 ## Adding a new icon
 

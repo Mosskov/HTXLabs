@@ -19,4 +19,4 @@ Each phase has an instruction-box, an MDX prose body, and one or more widgets wi
 - **MDX prose** (the paragraphs around widgets in `phase-<id>.mdx`) — owns *motivation / why this matters / scaffolding questions / operational guidance*. Never restate a step here. If you can't think of motivation worth writing, drop the prose paragraph.
 - **Widget label** (the `prompt`, `label`, or item labels on widgets) — owns the *concrete input prompt* (what the student should type or select right now).
 
-The canonical example is `test-labs/reference/` — read it before authoring a new lab.
+The canonical example is `testlabs/template/` — read it before authoring a new lab.

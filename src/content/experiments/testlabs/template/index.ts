@@ -1,7 +1,7 @@
-// Generic reference lab: 7 canonical phases. Demonstrates 4 authorable gate
+// Template lab: 7 canonical phases. Demonstrates 4 authorable gate
 // kinds (all-filled, all-checked, all-correct, keyword-count) and all 3
 // sim-driven kinds (data-points, predicate, milestone) by pairing with
-// `reference-sim`. The canonical example /new-lab points teachers at.
+// `template-sim`. The canonical example /new-lab points teachers at.
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
 import PhaseAnalyser from './phase-analyser.mdx';
@@ -15,12 +15,9 @@ import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
   version: 5,
-  title: 'Reference-lab — generisk eksempel',
-  simulationId: 'reference-sim',
-  learningObjectives: [
-    'Forstå hvordan en generisk lab er opbygget i frameworket',
-    'Se hvordan både forfatter-styrede og simulations-drevne gates anvendes',
-  ],
+  title: 'Template',
+  simulationId: 'template-sim',
+  learningObjectives: ['Forstå hvordan en generisk lab er opbygget i frameworket'],
   keyConcepts: ['lab-struktur', 'gates', 'widgets'],
   difficulty: 'c-level',
   estimatedMinutes: 30,
@@ -85,7 +82,7 @@ export const frontmatter: ExperimentFrontmatter = {
   },
   labModes: { virtual: { enabled: true } },
   allowPaste: false,
-  tags: ['reference'],
+  tags: ['template'],
 };
 
 export { Theory };

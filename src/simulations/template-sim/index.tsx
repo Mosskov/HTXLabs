@@ -1,4 +1,4 @@
-// reference-sim — abstract Y = slope·X + intercept. Emits all three sim-driven
+// template-sim — abstract Y = slope·X + intercept. Emits all three sim-driven
 // event kinds (milestone, data-collected, onState-for-predicate) so authors
 // have a single canonical example to copy from.
 import { formatDK } from '@/lib/numbers';
@@ -8,7 +8,7 @@ import { meta } from './meta';
 import { type Measurement, computeY, coverWideRange } from './physics';
 import { strings } from './strings.da';
 
-interface ReferenceSimState {
+interface TemplateSimState {
   measurements: Measurement[];
   xRange: { min: number; max: number } | null;
 }
@@ -17,7 +17,7 @@ function format(template: string, vars: Record<string, string | number>): string
   return template.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 
-export default function ReferenceSim({
+export default function TemplateSim({
   paused = false,
   initialParams,
   onProgress,
@@ -40,7 +40,7 @@ export default function ReferenceSim({
   useEffect(() => {
     const xs = measurements.map((m) => m.x);
     const xRange = xs.length ? { min: Math.min(...xs), max: Math.max(...xs) } : null;
-    onState?.({ measurements, xRange } satisfies ReferenceSimState);
+    onState?.({ measurements, xRange } satisfies TemplateSimState);
   }, [measurements, onState]);
 
   function record() {
@@ -119,7 +119,7 @@ export { meta };
 
 export const gates = {
   'wide-range': (state: unknown) => {
-    const s = state as ReferenceSimState | null;
+    const s = state as TemplateSimState | null;
     return s ? coverWideRange(s.measurements) : false;
   },
 };

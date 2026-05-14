@@ -2,6 +2,7 @@
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { ComponentType, ReactNode } from 'react';
+import { LabBreadcrumb } from './LabBreadcrumb';
 import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';
@@ -17,6 +18,9 @@ interface LabGuideProps {
   /** Folder slug for the topic this lab belongs to — paired with `slug` to
    * form the persistence key. Path-derived in routes; tests pass it directly. */
   topic: string;
+  /** Display title for the topic (e.g. "Mekanik") — used by the eyebrow
+   * back-link. Resolved from topic frontmatter in the route layer. */
+  topicTitle: string;
   /** Folder slug for the experiment — uniquely identifies the lab within its
    * topic. Used as the localStorage key suffix; do not derive from frontmatter
    * (`simulationId` collides for theory-only labs that share `NO_SIMULATION`). */
@@ -60,6 +64,10 @@ export function LabGuide(props: LabGuideProps) {
 
 function LabGuideInner({
   experiment,
+  topic,
+  topicTitle,
+  slug,
+  mode = 'guided',
   theory,
   phaseBodies,
   simulation,
@@ -81,10 +89,13 @@ function LabGuideInner({
   return (
     <article className="space-y-8">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-accent mb-2">
-          {strings.eyebrow.lab}
-        </p>
-        <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold">{experiment.title}</h1>
+        <LabBreadcrumb
+          topicSlug={topic}
+          topicTitle={topicTitle}
+          labSlug={slug}
+          labTitle={experiment.title}
+          mode={mode}
+        />
       </header>
 
       {showGateDebug && <GateDebug />}

@@ -9,7 +9,6 @@ export const strings = {
   /** Small uppercase label rendered above the page title on lab + simulation pages. */
   eyebrow: {
     lab: 'LAB',
-    experiment: 'FORSØG',
     simulation: 'SIMULATION',
   },
   nav: {
@@ -17,6 +16,8 @@ export const strings = {
     topics: 'Emner',
     /** Back-link from a topic page to the home/landing page. */
     backToHome: '← Forsiden',
+    /** Back-link from a lab page to its parent topic. Var: {topic} */
+    backToTopic: '← {topic}',
   },
   home: {
     intro: 'Interaktive fysikforsøg til HTX-elever. Vælg et emne for at komme i gang.',

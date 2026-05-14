@@ -5,12 +5,14 @@ import type { ComponentType, ReactNode } from 'react';
 import { ModePicker } from './ModePicker';
 import { SimulationPanel } from './SimulationPanel';
 import { TheoryPanel } from './TheoryPanel';
+import { TopicBackLink } from './TopicBackLink';
 import type { Mode } from './runner';
 import { format, strings } from './strings.da';
 
 interface LabLandingProps {
   experiment: ExperimentFrontmatter;
   topic: string;
+  topicTitle: string;
   slug: string;
   theory: ReactNode;
   simulation?: SimulationModule;
@@ -22,6 +24,7 @@ const noop = () => {};
 export function LabLanding({
   experiment,
   topic,
+  topicTitle,
   slug,
   theory,
   simulation,
@@ -38,9 +41,7 @@ export function LabLanding({
   return (
     <article className="space-y-8">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-accent mb-2">
-          {strings.eyebrow.experiment}
-        </p>
+        <TopicBackLink topicSlug={topic} topicTitle={topicTitle} />
         <h1 className="lab-heading text-3xl sm:text-4xl text-navy font-bold">{experiment.title}</h1>
         {experiment.learningObjectives[0] && (
           <p className="mt-2 text-base text-slate-600">{experiment.learningObjectives[0]}</p>

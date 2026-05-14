@@ -1,11 +1,11 @@
 // @vitest-environment node
-import { meta } from '@/simulations/reference-sim/meta';
-import { computeY, coverWideRange } from '@/simulations/reference-sim/physics';
+import { meta } from '@/simulations/template-sim/meta';
+import { computeY, coverWideRange } from '@/simulations/template-sim/physics';
 import { describe, expect, it } from 'vitest';
 
-describe('reference-sim physics', () => {
+describe('template-sim physics', () => {
   it('meta has a matching id', () => {
-    expect(meta.id).toBe('reference-sim');
+    expect(meta.id).toBe('template-sim');
   });
 
   describe('computeY', () => {

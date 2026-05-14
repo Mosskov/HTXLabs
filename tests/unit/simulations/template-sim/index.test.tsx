@@ -1,4 +1,4 @@
-import ReferenceSim, { gates } from '@/simulations/reference-sim';
+import TemplateSim, { gates } from '@/simulations/template-sim';
 import type { ProgressEvent } from '@/sim-contract';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -7,11 +7,11 @@ import { describe, expect, it, vi } from 'vitest';
 function setup() {
   const onProgress = vi.fn<(e: ProgressEvent) => void>();
   const onState = vi.fn<(s: unknown) => void>();
-  render(<ReferenceSim width={400} height={300} onProgress={onProgress} onState={onState} />);
+  render(<TemplateSim width={400} height={300} onProgress={onProgress} onState={onState} />);
   return { onProgress, onState };
 }
 
-describe('reference-sim component', () => {
+describe('template-sim component', () => {
   it('emits data-collected and the first-measurement milestone on the first add', async () => {
     const user = userEvent.setup();
     const { onProgress } = setup();
@@ -64,7 +64,7 @@ describe('reference-sim component', () => {
   });
 });
 
-describe('reference-sim gates.wide-range predicate', () => {
+describe('template-sim gates.wide-range predicate', () => {
   it('false when no published state', () => {
     expect(gates['wide-range'](null)).toBe(false);
   });

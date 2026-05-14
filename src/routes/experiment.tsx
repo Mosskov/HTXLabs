@@ -4,7 +4,7 @@ import { LabLanding } from '@/lab-guide/LabLanding';
 import type { Mode } from '@/lab-guide/runner';
 import { strings } from '@/lab-guide/strings.da';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';
-import { loadExperiment } from '@/lib/content';
+import { loadExperiment, loadTopic } from '@/lib/content';
 import { loadSimulation } from '@/lib/simulations';
 import { parseModeParam } from '@/lib/url';
 import type { SimulationModule } from '@/sim-contract';
@@ -71,6 +71,7 @@ export function ExperimentRoute() {
   }
 
   const Theory = loaded.Theory;
+  const topicTitle = loadTopic(loaded.topic)?.frontmatter.title ?? loaded.topic;
 
   return (
     <MDXProvider components={mdxComponents}>
@@ -78,6 +79,7 @@ export function ExperimentRoute() {
         <LabGuide
           experiment={loaded.frontmatter}
           topic={loaded.topic}
+          topicTitle={topicTitle}
           slug={loaded.slug}
           mode={mode}
           theory={<Theory />}
@@ -88,6 +90,7 @@ export function ExperimentRoute() {
         <LabLanding
           experiment={loaded.frontmatter}
           topic={loaded.topic}
+          topicTitle={topicTitle}
           slug={loaded.slug}
           theory={<Theory />}
           simulation={simulation}

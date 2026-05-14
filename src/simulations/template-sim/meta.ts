@@ -1,12 +1,12 @@
-// reference-sim metadata. Symbolic X/Y; no real units. The canonical example
+// template-sim metadata. Symbolic X/Y; no real units. The canonical example
 // /new-simulation points authors at when they want to see all three sim-driven
 // event kinds wired together.
 import type { SimulationMeta } from '@/sim-contract';
 
 export const meta: SimulationMeta = {
-  id: 'reference-sim',
-  title: 'Reference simulation',
-  locale: { da: { title: 'Reference-simulation (X, Y)' } },
+  id: 'template-sim',
+  title: 'Template simulation',
+  locale: { da: { title: 'Template-simulation (X, Y)' } },
   mode: 'interactive',
   defaultParams: {
     slope: 1.5,
