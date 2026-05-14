@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <style>
+    .l{stroke:#6e9484}.f{fill:#d6e5dd}
+    @media (prefers-color-scheme:dark){.l{stroke:#a3c6b5}.f{fill:#2c3833}}
+  </style>
+  <path class="f l" d="M12 6.5C9.5 5 6.5 4.5 4 5v13c2.5-.5 5.5 0 8 1.5Z" stroke-width="1.5" stroke-linejoin="round"/>
+  <path class="f l" d="M12 6.5C14.5 5 17.5 4.5 20 5v13c-2.5-.5-5.5 0-8 1.5Z" stroke-width="1.5" stroke-linejoin="round"/>
+  <path class="l" d="M12 6.5V19.5" fill="none" stroke-width="1.5" stroke-linecap="round"/>
+  <path class="l" d="M6.5 9.5h3M6.5 12.5h3M14.5 9.5h3M14.5 12.5h3" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>
+</svg>

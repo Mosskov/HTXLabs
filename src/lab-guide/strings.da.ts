@@ -42,10 +42,8 @@ export const strings = {
     finishGuide: 'Afslut guide',
     guideFinished: 'Forsøg afsluttet — godt arbejde!',
     switchInquiryForm: '← Skift undersøgelsesform',
-    hideSimulation: 'Skjul simulation',
-    showSimulation: 'Vis simulation',
-    hideTheory: 'Skjul formål og teori',
-    showTheory: 'Vis formål og teori',
+    theoryLabel: 'Formål og teori',
+    simulationLabel: 'Simulation',
   },
   phaseStepper: {
     /** Vars: {n} = 1-based phase number, {title} = phase title, {current} = currentSuffix or '' */

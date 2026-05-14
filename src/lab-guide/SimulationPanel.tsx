@@ -1,10 +1,12 @@
+import { SimulationClosed } from '@/icons/SimulationClosed';
+import { SimulationOpen } from '@/icons/SimulationOpen';
 import { type ReactNode, useState } from 'react';
 import { strings } from './strings.da';
 
 /**
  * Collapsible host for the simulation. Per spec §17, the simulation is mounted
  * ONCE for the lifetime of the lab page — only its visibility toggles when the
- * student clicks "Skjul simulation". State survives.
+ * student clicks the header. State survives.
  *
  * `initialOpen` defaults to true (LabGuide context — sim is the active tool).
  * Landing page passes `false` to keep the screenshot's calm preview state.
@@ -20,13 +22,11 @@ export function SimulationPanel({
       <button
         type="button"
         onClick={() => setHidden((h) => !h)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left text-base font-medium text-navy border border-slate-200 hover:bg-slate-50 rounded-md"
+        className="w-full h-12 flex items-center gap-2 px-4 text-left text-base font-medium text-navy rounded-md border-2 border-accent-400 bg-white hover:bg-accent-50 transition-colors"
         aria-expanded={!hidden}
       >
-        <span aria-hidden className="text-slate-500">
-          {hidden ? '▶' : '▼'}
-        </span>
-        <span>{hidden ? strings.guide.showSimulation : strings.guide.hideSimulation}</span>
+        {hidden ? <SimulationClosed className="w-8 h-8" /> : <SimulationOpen className="w-8 h-8" />}
+        <span>{strings.guide.simulationLabel}</span>
       </button>
       <div className={hidden ? 'hidden' : 'mt-4 px-4'}>{children}</div>
     </section>
