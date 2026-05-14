@@ -38,6 +38,13 @@ interface LabGuideProps {
   /** Invoked from the first phase's "Skift undersøgelsesform" affordance —
    * route strips `?mode=` to bounce back to the lab landing / mode picker. */
   onSwitchInquiryForm?: () => void;
+  /** Theory disclosure state — hoisted to ExperimentRoute so the open/closed
+   * choice survives the landing↔guide subtree swap. */
+  theoryOpen: boolean;
+  onToggleTheory: () => void;
+  /** Simulation disclosure state — same rationale as theoryOpen. */
+  simOpen: boolean;
+  onToggleSim: () => void;
 }
 
 export function LabGuide(props: LabGuideProps) {
@@ -76,6 +83,10 @@ function LabGuideInner({
   simulation,
   phases,
   onSwitchInquiryForm,
+  theoryOpen,
+  onToggleTheory,
+  simOpen,
+  onToggleSim,
 }: LabGuideProps & { phases: Phase[] }) {
   const { state, onSimulationProgress, setSimulationState, resetKey } = useRunner();
   const Sim: ComponentType<import('@/sim-contract').SimulationProps> | undefined =
@@ -104,10 +115,12 @@ function LabGuideInner({
 
       {showGateDebug && <GateDebug />}
 
-      <TheoryPanel>{theory}</TheoryPanel>
+      <TheoryPanel open={theoryOpen} onToggle={onToggleTheory}>
+        {theory}
+      </TheoryPanel>
 
       {Sim && meta && (
-        <SimulationPanel>
+        <SimulationPanel open={simOpen} onToggle={onToggleSim}>
           <Sim
             key={resetKey}
             width={520}

@@ -1,12 +1,13 @@
 // Lab landing page rendered before the student picks an inquiry mode: header + meta chips + theory/sim disclosures + ModePicker.
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
-import type { ComponentType, ReactNode } from 'react';
+import { type ComponentType, type ReactNode, useState } from 'react';
 import { ModePicker } from './ModePicker';
+import { ResetWorkButton } from './ResetWorkButton';
 import { SimulationPanel } from './SimulationPanel';
 import { TheoryPanel } from './TheoryPanel';
 import { TopicBackLink } from './TopicBackLink';
-import type { Mode } from './runner';
+import { type Mode, load, wipe } from './runner';
 import { format, strings } from './strings.da';
 
 interface LabLandingProps {
@@ -17,6 +18,10 @@ interface LabLandingProps {
   theory: ReactNode;
   simulation?: SimulationModule;
   onSelectMode: (mode: Mode) => void;
+  theoryOpen: boolean;
+  onToggleTheory: () => void;
+  simOpen: boolean;
+  onToggleSim: () => void;
 }
 
 const noop = () => {};
@@ -29,6 +34,10 @@ export function LabLanding({
   theory,
   simulation,
   onSelectMode,
+  theoryOpen,
+  onToggleTheory,
+  simOpen,
+  onToggleSim,
 }: LabLandingProps) {
   const Sim: ComponentType<import('@/sim-contract').SimulationProps> | undefined =
     simulation?.default;
@@ -37,6 +46,12 @@ export function LabLanding({
     ...(meta?.defaultParams ?? {}),
     ...(experiment.simulationOverrides?.defaultParams ?? {}),
   };
+
+  const experimentId = `${topic}/${slug}`;
+  // Bumped after a wipe to force ModePicker to re-read load() (it reads
+  // localStorage at render time; a key change is the cleanest re-mount signal).
+  const [resetTick, setResetTick] = useState(0);
+  const hasSavedState = load(experimentId) !== null;
 
   return (
     <article className="space-y-8">
@@ -58,10 +73,12 @@ export function LabLanding({
         </div>
       </header>
 
-      <TheoryPanel>{theory}</TheoryPanel>
+      <TheoryPanel open={theoryOpen} onToggle={onToggleTheory}>
+        {theory}
+      </TheoryPanel>
 
       {Sim && meta && (
-        <SimulationPanel initialOpen={false}>
+        <SimulationPanel open={simOpen} onToggle={onToggleSim}>
           <Sim
             width={520}
             height={420}
@@ -73,10 +90,20 @@ export function LabLanding({
       )}
 
       <ModePicker
+        key={resetTick}
         experiment={experiment}
-        experimentId={`${topic}/${slug}`}
+        experimentId={experimentId}
         onSelect={onSelectMode}
       />
+
+      {hasSavedState && (
+        <ResetWorkButton
+          onConfirm={() => {
+            wipe(experimentId);
+            setResetTick((t) => t + 1);
+          }}
+        />
+      )}
     </article>
   );
 }

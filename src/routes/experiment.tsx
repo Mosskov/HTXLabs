@@ -39,6 +39,19 @@ export function ExperimentRoute() {
       return next;
     });
   }, [setSearchParams]);
+
+  // Theory disclosure default is closed in both contexts — a single bool is enough.
+  const [theoryOpen, setTheoryOpen] = useState(false);
+  const onToggleTheory = useCallback(() => setTheoryOpen((v) => !v), []);
+
+  // Sim disclosure default differs by context (closed on landing, open in guide).
+  // Tri-state: `null` means "untouched, use context default"; once the student
+  // toggles, the explicit choice survives the landing↔guide swap.
+  const [simOverride, setSimOverride] = useState<boolean | null>(null);
+  const simOpen = simOverride ?? hasMode;
+  const onToggleSim = useCallback(() => {
+    setSimOverride((prev) => !(prev ?? hasMode));
+  }, [hasMode]);
   const loaded = topic && experiment ? loadExperiment(topic, experiment) : null;
   const [simulation, setSimulation] = useState<SimulationModule | undefined>(undefined);
   // Don't try to load a sim if the lab failed validation — `loaded` may be the
@@ -95,6 +108,10 @@ export function ExperimentRoute() {
           phaseBodies={phaseBodies}
           simulation={simulation}
           onSwitchInquiryForm={handleSwitchInquiryForm}
+          theoryOpen={theoryOpen}
+          onToggleTheory={onToggleTheory}
+          simOpen={simOpen}
+          onToggleSim={onToggleSim}
         />
       ) : (
         <LabLanding
@@ -105,6 +122,10 @@ export function ExperimentRoute() {
           theory={<Theory />}
           simulation={simulation}
           onSelectMode={handleSelectMode}
+          theoryOpen={theoryOpen}
+          onToggleTheory={onToggleTheory}
+          simOpen={simOpen}
+          onToggleSim={onToggleSim}
         />
       )}
     </MDXProvider>
