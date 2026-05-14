@@ -52,6 +52,17 @@ export function ExperimentRoute() {
   const onToggleSim = useCallback(() => {
     setSimOverride((prev) => !(prev ?? hasMode));
   }, [hasMode]);
+  // "Nulstil lab" view reset: drop ?mode= to land on the mode picker and
+  // collapse both disclosures so the lab reads as a fresh visit.
+  const handleResetView = useCallback(() => {
+    setTheoryOpen(false);
+    setSimOverride(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('mode');
+      return next;
+    });
+  }, [setSearchParams]);
   const loaded = topic && experiment ? loadExperiment(topic, experiment) : null;
   const [simulation, setSimulation] = useState<SimulationModule | undefined>(undefined);
   // Don't try to load a sim if the lab failed validation — `loaded` may be the
@@ -108,6 +119,7 @@ export function ExperimentRoute() {
           phaseBodies={phaseBodies}
           simulation={simulation}
           onSwitchInquiryForm={handleSwitchInquiryForm}
+          onResetView={handleResetView}
           theoryOpen={theoryOpen}
           onToggleTheory={onToggleTheory}
           simOpen={simOpen}
@@ -122,6 +134,7 @@ export function ExperimentRoute() {
           theory={<Theory />}
           simulation={simulation}
           onSelectMode={handleSelectMode}
+          onResetView={handleResetView}
           theoryOpen={theoryOpen}
           onToggleTheory={onToggleTheory}
           simOpen={simOpen}

@@ -12,9 +12,12 @@ interface Props {
   /** Slot for phase-specific batch-check buttons (Tjek variable, Tjek hypotese, Vis facit). */
   middleActions?: ReactNode;
   onSwitchInquiryForm?: () => void;
+  /** Route-level view reset (drop ?mode= + collapse disclosures) invoked
+   *  after `resetLab()` so the post-reset landing reads as a fresh visit. */
+  onResetView?: () => void;
 }
 
-export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Props) {
+export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onResetView }: Props) {
   const { state, setCurrentPhase, gateCtx, simulation, resetLab } = useRunner();
   const { push: pushToast } = useContext(ToastContext);
   const currentIdx = phases.findIndex((p) => p.id === state.currentPhaseId);
@@ -87,7 +90,12 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm }: Prop
           </button>
         </div>
       </div>
-      <ResetWorkButton onConfirm={resetLab} />
+      <ResetWorkButton
+        onConfirm={() => {
+          resetLab();
+          onResetView?.();
+        }}
+      />
     </div>
   );
 }

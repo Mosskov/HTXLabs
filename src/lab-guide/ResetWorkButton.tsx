@@ -1,4 +1,4 @@
-// "Nulstil arbejde" button + native <dialog> confirm — shared between PhaseFooter (in-guide) and LabLanding so the wipe affordance reads identically in both places.
+// "Nulstil lab" button + native <dialog> confirm — shared between PhaseFooter (in-guide) and LabLanding so the wipe affordance reads identically in both places.
 import { useEffect, useRef, useState } from 'react';
 import { strings } from './strings.da';
 

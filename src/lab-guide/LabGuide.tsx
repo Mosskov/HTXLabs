@@ -38,6 +38,9 @@ interface LabGuideProps {
   /** Invoked from the first phase's "Skift undersøgelsesform" affordance —
    * route strips `?mode=` to bounce back to the lab landing / mode picker. */
   onSwitchInquiryForm?: () => void;
+  /** Invoked from "Nulstil lab" confirm — drops `?mode=` AND collapses theory
+   * + sim disclosures so the post-reset landing reads as a fresh visit. */
+  onResetView?: () => void;
   /** Theory disclosure state — hoisted to ExperimentRoute so the open/closed
    * choice survives the landing↔guide subtree swap. */
   theoryOpen: boolean;
@@ -83,6 +86,7 @@ function LabGuideInner({
   simulation,
   phases,
   onSwitchInquiryForm,
+  onResetView,
   theoryOpen,
   onToggleTheory,
   simOpen,
@@ -167,7 +171,11 @@ function LabGuideInner({
             </section>
           ))}
         </div>
-        <PhaseFooter phases={phases} onSwitchInquiryForm={onSwitchInquiryForm} />
+        <PhaseFooter
+          phases={phases}
+          onSwitchInquiryForm={onSwitchInquiryForm}
+          onResetView={onResetView}
+        />
       </section>
     </article>
   );

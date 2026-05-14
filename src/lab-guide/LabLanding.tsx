@@ -18,6 +18,9 @@ interface LabLandingProps {
   theory: ReactNode;
   simulation?: SimulationModule;
   onSelectMode: (mode: Mode) => void;
+  /** Route-level view reset — collapses theory + sim disclosures after a wipe
+   *  so a "Nulstil lab" press from the landing reads as a fresh visit. */
+  onResetView?: () => void;
   theoryOpen: boolean;
   onToggleTheory: () => void;
   simOpen: boolean;
@@ -34,6 +37,7 @@ export function LabLanding({
   theory,
   simulation,
   onSelectMode,
+  onResetView,
   theoryOpen,
   onToggleTheory,
   simOpen,
@@ -103,6 +107,7 @@ export function LabLanding({
           onConfirm={() => {
             wipe(experimentId);
             setResetTick((t) => t + 1);
+            onResetView?.();
           }}
         />
       )}
