@@ -1,6 +1,6 @@
 # HTX Labs
 
-Static educational website for Danish HTX physics students. See [SPEC.md](./SPEC.md) for the full design.
+Static educational website for Danish HTX physics students. See [SPEC.md](./SPEC.md) for the full design. For current focus and working conventions, see [docs/STATUS.md](./docs/STATUS.md).
 
 ## Stack
 
