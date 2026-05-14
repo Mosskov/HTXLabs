@@ -1,7 +1,7 @@
 // Three-card mode selector shown on the lab landing page before the student picks an inquiry mode.
 import type { ExperimentFrontmatter } from '@/lib/schema';
-import { type Mode, load } from './runner';
-import { strings } from './strings.da';
+import { type Mode, type RunnerState, load, wipe } from './runner';
+import { format, strings } from './strings.da';
 
 const MODE_ORDER: Mode[] = ['guided', 'semi-guided', 'open'];
 
@@ -13,17 +13,46 @@ interface ModePickerProps {
   onSelect: (mode: Mode) => void;
 }
 
+/** Saved progress is "meaningful" — and so worth a confirm dialog before wiping —
+ * when the student is past the first phase of the saved mode, or has stored
+ * any widget values (typing in phase 1 inputs without advancing still counts). */
+function hasMeaningfulProgress(saved: RunnerState, experiment: ExperimentFrontmatter): boolean {
+  const savedPhases = experiment.modes[saved.mode]?.phases;
+  const firstPhase = savedPhases?.[0];
+  if (!firstPhase) return false;
+  const pastFirstPhase = saved.currentPhaseId !== firstPhase.id || saved.visitedPhaseIds.size > 1;
+  const hasWidgetValues = Object.keys(saved.widgetValues).length > 0;
+  return pastFirstPhase || hasWidgetValues;
+}
+
 export function ModePicker({ experiment, experimentId, onSelect }: ModePickerProps) {
   const saved = load(experimentId);
-  // "Fortsæt" only when there's saved progress past the first phase of the saved mode.
-  const continueMode: Mode | null = (() => {
-    if (!saved) return null;
-    const savedPhases = experiment.modes[saved.mode]?.phases;
-    const firstPhase = savedPhases?.[0];
-    if (!firstPhase) return null;
-    if (saved.currentPhaseId === firstPhase.id && saved.visitedPhaseIds.size <= 1) return null;
-    return saved.mode;
-  })();
+  // "Fortsæt" surfaces whenever the saved state is meaningful — same threshold
+  // used for the wipe-warning, so the label can't lie about what the student
+  // is about to discard by clicking a different mode.
+  const continueMode: Mode | null =
+    saved && hasMeaningfulProgress(saved, experiment) ? saved.mode : null;
+
+  function handleSelect(mode: Mode) {
+    // Same mode as the saved one (or no saved state): nothing to discard.
+    if (!saved || saved.mode === mode) {
+      onSelect(mode);
+      return;
+    }
+    if (hasMeaningfulProgress(saved, experiment)) {
+      const ok = window.confirm(
+        format(strings.landing.confirmModeSwitch, {
+          current: strings.modes[saved.mode],
+          next: strings.modes[mode],
+        }),
+      );
+      if (!ok) return;
+    }
+    // Different mode + (confirmed or trivial state): wipe before re-entering
+    // so the new mode starts from emptyState rather than inheriting the old.
+    wipe(experimentId);
+    onSelect(mode);
+  }
 
   return (
     <section className="mt-4">
@@ -37,7 +66,7 @@ export function ModePicker({ experiment, experimentId, onSelect }: ModePickerPro
             <li key={mode}>
               <button
                 type="button"
-                onClick={() => declared && onSelect(mode)}
+                onClick={() => declared && handleSelect(mode)}
                 disabled={!declared}
                 aria-label={card.title}
                 className={[

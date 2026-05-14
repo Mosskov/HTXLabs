@@ -83,6 +83,10 @@ export const strings = {
     continueLabel: 'Fortsæt',
     startLabel: 'Start',
     unavailableHint: 'Ikke tilgængelig for dette forsøg',
+    /** Confirm when switching to a different mode while saved progress exists
+     * in the current one. Vars: {current} = saved mode name, {next} = clicked mode name. */
+    confirmModeSwitch:
+      'Du har gemt fremgang i {current}. Hvis du starter {next}, nulstilles fremgangen. Vil du fortsætte?',
   },
   labModes: {
     virtual: 'Virtuel',
