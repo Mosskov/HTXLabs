@@ -8,14 +8,14 @@ _Last synced: 2026-05-14._
 
 ### In flight
 - **dynamometer-g lab.** First real lab using the framework. Visuals settled; framework groundwork complete; next step is authoring the MDX content (theory + 7 phase bodies) starting from the template lab.
-- **Lab landing page polish.** Six chrome/UX passes have landed. Two open product decisions remain: sim-disclosure persistence, and the scope of "continue where you left off."
 - **Template lab.** Canonical 7-phase generic example at `testlabs/template`. Pairs with `template-sim` and the DataTable single-knob flip. Used as the starting point when authoring new labs.
 
 ### Queued
 - **Framework skills roadmap.** `/new-widget` and `/new-simulation` exist. Next: `/review-lab`, `/new-lab`, `/bump-experiment-version`.
-- **Student UX backlog.** Three fixes landed; queued: disabled-Next tooltip, triple-stated tasks, within-phase progress indicator, autosave indicator, stepper "done vs future" styling.
+- **Student UX backlog.** Four fixes landed; queued: disabled-Next tooltip, within-phase progress indicator, autosave indicator, keyword highlighting in instruction-box.
 - **Widget enhancements.** Per-widget "is satisfied" indicator on `FreeTextResponse`, hint-surfacing flexibility (timing/triggers for `tooShortMessage`), per-group hints on keyword-mode `FreeTextResponse`, `textMatch` exact mode, per-lab visual variation.
-- **Sim-state persistence.** Predicate gates revert on reload because sim state isn't persisted. Revisit when a real lab needs it.
+- **Phase-3 + sim work (next session).** Phase-scope sim-published measurements to phase 3 only; add per-row clear in sim-mode `DataTable` (confirm intent); drop the `Målinger: N` chrome from `template-sim`. Discussed 2026-05-14; not yet committed scope.
+- **Landing sim-disclosure (undecided).** On first visit to phase 1 the open sim panel buries the laboratorieguide. Two candidate fixes — default the sim closed, or surface the guide on the landing page — not yet chosen.
 - **DataTable undo in sim mode.** No undo for auto-captured rows. Agreed fix is a `data-removed` `ProgressEvent` variant when prioritized.
 - **Breadcrumb mode drift.** LabGuide breadcrumb shows the URL mode label even on silent fallback to guided. Revisit when a real lab declares multiple modes.
 
