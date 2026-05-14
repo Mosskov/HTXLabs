@@ -48,10 +48,11 @@ export function LabLanding({
   };
 
   const experimentId = `${topic}/${slug}`;
-  // Bumped after a wipe to force ModePicker to re-read load() (it reads
-  // localStorage at render time; a key change is the cleanest re-mount signal).
+  // Bumped after a wipe to force a re-render so the fresh load() result flows
+  // back down to ModePicker (which has no localStorage read of its own).
   const [resetTick, setResetTick] = useState(0);
-  const hasSavedState = load(experimentId) !== null;
+  const saved = load(experimentId);
+  const hasSavedState = saved !== null;
 
   return (
     <article className="space-y-8">
@@ -93,6 +94,7 @@ export function LabLanding({
         key={resetTick}
         experiment={experiment}
         experimentId={experimentId}
+        saved={saved}
         onSelect={onSelectMode}
       />
 

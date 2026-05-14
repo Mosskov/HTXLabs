@@ -1,5 +1,6 @@
 // Covers the mode-switch confirm/wipe semantics added 2026-05-14 — different-mode clicks confirm when saved state is meaningful and wipe before delegating.
 import { ModePicker } from '@/lab-guide/ModePicker';
+import { load } from '@/lab-guide/runner';
 import { strings } from '@/lab-guide/strings.da';
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
@@ -74,7 +75,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm');
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: strings.landing.modeCards.guided.title }));
 
     expect(onSelect).toHaveBeenCalledWith('guided');
@@ -92,7 +100,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(
       screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
     );
@@ -112,7 +127,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     vi.spyOn(window, 'confirm').mockReturnValue(false);
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(
       screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
     );
@@ -131,7 +153,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm');
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(
       screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
     );
@@ -152,7 +181,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(
       screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
     );
@@ -169,7 +205,14 @@ describe('ModePicker — mode-switch semantics', () => {
       widgetValues: { ft1: 'partial' },
     });
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={vi.fn()} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={vi.fn()}
+      />,
+    );
     const guided = screen.getByRole('button', { name: strings.landing.modeCards.guided.title });
     expect(guided.textContent).toContain(strings.landing.continueLabel);
     const open = screen.getByRole('button', { name: strings.landing.modeCards.open.title });
@@ -183,7 +226,14 @@ describe('ModePicker — mode-switch semantics', () => {
       visitedPhaseIds: ['planlaeg'],
     });
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={vi.fn()} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={vi.fn()}
+      />,
+    );
     const guided = screen.getByRole('button', { name: strings.landing.modeCards.guided.title });
     expect(guided.textContent).toContain(strings.landing.startLabel);
   });
@@ -193,7 +243,14 @@ describe('ModePicker — mode-switch semantics', () => {
     const onSelect = vi.fn();
     const confirmSpy = vi.spyOn(window, 'confirm');
 
-    render(<ModePicker experiment={experiment} experimentId="t/x" onSelect={onSelect} />);
+    render(
+      <ModePicker
+        experiment={experiment}
+        experimentId="t/x"
+        saved={load('t/x')}
+        onSelect={onSelect}
+      />,
+    );
     await user.click(
       screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
     );

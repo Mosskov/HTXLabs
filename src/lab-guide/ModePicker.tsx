@@ -1,15 +1,18 @@
 // Three-card mode selector shown on the lab landing page before the student picks an inquiry mode.
 import type { ExperimentFrontmatter } from '@/lib/schema';
-import { type Mode, type RunnerState, load, wipe } from './runner';
+import { type Mode, type RunnerState, wipe } from './runner';
 import { format, strings } from './strings.da';
 
 const MODE_ORDER: Mode[] = ['guided', 'semi-guided', 'open'];
 
 interface ModePickerProps {
   experiment: ExperimentFrontmatter;
-  /** Persistence key — same `${topic}/${slug}` shape used by RunnerProvider so the
-   * "Fortsæt" affordance reads the actual saved state. */
+  /** Persistence key — same `${topic}/${slug}` shape used by RunnerProvider.
+   * Used only for `wipe()` on mode switch; the read happens in the parent. */
   experimentId: string;
+  /** Parsed saved state for this experiment, or null. Owned by the parent so
+   * `localStorage` is read once per landing-page render. */
+  saved: RunnerState | null;
   onSelect: (mode: Mode) => void;
 }
 
@@ -25,8 +28,7 @@ function hasMeaningfulProgress(saved: RunnerState, experiment: ExperimentFrontma
   return pastFirstPhase || hasWidgetValues;
 }
 
-export function ModePicker({ experiment, experimentId, onSelect }: ModePickerProps) {
-  const saved = load(experimentId);
+export function ModePicker({ experiment, experimentId, saved, onSelect }: ModePickerProps) {
   // "Fortsæt" surfaces whenever the saved state is meaningful — same threshold
   // used for the wipe-warning, so the label can't lie about what the student
   // is about to discard by clicking a different mode.
