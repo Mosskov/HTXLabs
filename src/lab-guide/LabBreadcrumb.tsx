@@ -21,7 +21,7 @@ export function LabBreadcrumb({
   return (
     <h1 className="text-xs font-semibold tracking-widest uppercase mb-2">
       <Link to={`/emner/${topicSlug}`} className="text-accent hover:underline">
-        {topicTitle}
+        ← {topicTitle}
       </Link>
       <span className="text-slate-500"> - </span>
       <Link to={`/emner/${topicSlug}/${labSlug}`} className="text-accent hover:underline">
