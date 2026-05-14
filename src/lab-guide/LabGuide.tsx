@@ -35,6 +35,9 @@ interface LabGuideProps {
   phaseBodies: Record<string, ReactNode>;
   /** Resolved simulation module, or undefined for labs with no simulation. */
   simulation?: SimulationModule;
+  /** Invoked from the first phase's "Skift undersøgelsesform" affordance —
+   * route strips `?mode=` to bounce back to the lab landing / mode picker. */
+  onSwitchInquiryForm?: () => void;
 }
 
 export function LabGuide(props: LabGuideProps) {
@@ -72,6 +75,7 @@ function LabGuideInner({
   phaseBodies,
   simulation,
   phases,
+  onSwitchInquiryForm,
 }: LabGuideProps & { phases: Phase[] }) {
   const { state, onSimulationProgress, setSimulationState, resetKey } = useRunner();
   const Sim: ComponentType<import('@/sim-contract').SimulationProps> | undefined =
@@ -149,7 +153,7 @@ function LabGuideInner({
             </section>
           ))}
         </div>
-        <PhaseFooter phases={phases} />
+        <PhaseFooter phases={phases} onSwitchInquiryForm={onSwitchInquiryForm} />
       </section>
     </article>
   );

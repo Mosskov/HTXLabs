@@ -30,6 +30,15 @@ export function ExperimentRoute() {
     },
     [setSearchParams],
   );
+  const handleSwitchInquiryForm = useCallback(() => {
+    // Drop `mode` to re-render into LabLanding; runner state in localStorage
+    // is preserved, so ModePicker can offer "FORTSÆT →" on the saved mode.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('mode');
+      return next;
+    });
+  }, [setSearchParams]);
   const loaded = topic && experiment ? loadExperiment(topic, experiment) : null;
   const [simulation, setSimulation] = useState<SimulationModule | undefined>(undefined);
   // Don't try to load a sim if the lab failed validation — `loaded` may be the
@@ -85,6 +94,7 @@ export function ExperimentRoute() {
           theory={<Theory />}
           phaseBodies={phaseBodies}
           simulation={simulation}
+          onSwitchInquiryForm={handleSwitchInquiryForm}
         />
       ) : (
         <LabLanding
