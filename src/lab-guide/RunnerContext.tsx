@@ -94,7 +94,10 @@ export function RunnerProvider({
   // Live widget state map — kept in a ref so widget renders don't trigger
   // a runner re-render cascade. Gate evaluation reads from here.
   const widgetStateRef = useRef<Record<string, WidgetState>>({});
-  const simulationStateRef = useRef<unknown>(null);
+  // Seed from persisted state so sim-mirror consumers (sim-mode DataTable)
+  // render the restored rows on the first paint, not after the sim's first
+  // post-mount `onState` publish.
+  const simulationStateRef = useRef<unknown>(state.simulationState);
   // Tick to force gate-evaluating subscribers to re-render after widget changes.
   const [tick, setTick] = useState(0);
   const [resetKey, setResetKey] = useState(0);
@@ -155,9 +158,20 @@ export function RunnerProvider({
     }
   }, []);
 
+  // Trailing-edge debounce for persisting the sim's published state. The ref
+  // update + tick bump above are the fast path for predicate gates and the
+  // sim-mode DataTable mirror; the reducer dispatch only needs to happen
+  // often enough for reload-survival. 200ms keeps localStorage writes bounded
+  // even if a future sim publishes on every animation frame.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setSimulationState = useCallback((s: unknown) => {
     simulationStateRef.current = s;
     setTick((t) => t + 1);
+    if (persistTimerRef.current !== null) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      dispatch({ type: 'SET_SIMULATION_STATE', state: s });
+    }, 200);
   }, []);
 
   const registerWidgetState = useCallback((id: string, ws: WidgetState | null) => {
@@ -170,6 +184,12 @@ export function RunnerProvider({
   }, []);
 
   const resetLab = useCallback(() => {
+    // Cancel any pending sim-state persist so a late trailing-edge dispatch
+    // can't resurrect the wiped state with a stale snapshot.
+    if (persistTimerRef.current !== null) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
     wipe(experimentId);
     dispatch({
       type: 'RESET',

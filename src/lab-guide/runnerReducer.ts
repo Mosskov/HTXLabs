@@ -12,6 +12,7 @@ export type RunnerAction =
   | { type: 'BUMP_ATTEMPTS'; id: string }
   | { type: 'FIRE_MILESTONE'; id: string }
   | { type: 'INCREMENT_DATA_POINTS'; count: number }
+  | { type: 'SET_SIMULATION_STATE'; state: unknown }
   | { type: 'RESET'; nextState: RunnerState };
 
 export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerState {
@@ -65,6 +66,12 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
         dataPointCount: { ...state.dataPointCount, [phaseId]: prev + action.count },
       };
     }
+    case 'SET_SIMULATION_STATE':
+      // Idempotent: skip the dispatch round-trip when nothing changed (the
+      // debounced trailing edge can fire with the same payload as the last
+      // commit on a quiet sim).
+      if (state.simulationState === action.state) return state;
+      return { ...state, simulationState: action.state };
     case 'RESET':
       return action.nextState;
   }

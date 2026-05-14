@@ -11,6 +11,7 @@ import { strings } from './strings.da';
 interface TemplateSimState {
   measurements: Measurement[];
   xRange: { min: number; max: number } | null;
+  reviewed: boolean;
 }
 
 function format(template: string, vars: Record<string, string | number>): string {
@@ -20,6 +21,7 @@ function format(template: string, vars: Record<string, string | number>): string
 export default function TemplateSim({
   paused = false,
   initialParams,
+  initialState,
   onProgress,
   onState,
 }: SimulationProps) {
@@ -30,18 +32,21 @@ export default function TemplateSim({
   const slope = Number(params.slope);
   const intercept = Number(params.intercept);
 
+  // Seed persisted state from the runner's last snapshot. `x` (slider) is
+  // deliberately not persisted — it's an input control, not progress.
+  const seed = initialState as Partial<TemplateSimState> | null | undefined;
   const [x, setX] = useState(5);
-  const [measurements, setMeasurements] = useState<Measurement[]>([]);
-  const [reviewed, setReviewed] = useState(false);
+  const [measurements, setMeasurements] = useState<Measurement[]>(seed?.measurements ?? []);
+  const [reviewed, setReviewed] = useState<boolean>(seed?.reviewed ?? false);
 
   const y = computeY(x, slope, intercept);
 
-  // Publish state for predicate gates + DataTable sim-mode mirror.
+  // Publish state for predicate gates + DataTable sim-mode mirror + persistence.
   useEffect(() => {
     const xs = measurements.map((m) => m.x);
     const xRange = xs.length ? { min: Math.min(...xs), max: Math.max(...xs) } : null;
-    onState?.({ measurements, xRange } satisfies TemplateSimState);
-  }, [measurements, onState]);
+    onState?.({ measurements, xRange, reviewed } satisfies TemplateSimState);
+  }, [measurements, reviewed, onState]);
 
   function record() {
     const isFirst = measurements.length === 0;

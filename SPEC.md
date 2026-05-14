@@ -483,6 +483,8 @@ export interface SimulationProps {
   initialParams?: Record<string, number>;
   paused?: boolean;
   onProgress?: (e: ProgressEvent) => void;
+  onState?: (state: unknown) => void;       // publish snapshot — predicate gates + persistence
+  initialState?: unknown;                   // last persisted snapshot, replayed on remount
 }
 
 export type ProgressEvent =
@@ -518,6 +520,19 @@ export interface SimulationModule {
 - `display` — read-only renderer driven entirely by `initialParams` from the lab guide; the lab guide owns the parameter controls. Static-lookup sims like `dynamometer-g`, where the apparatus just shows `m·g` for whatever mass the lab supplies.
 
 If a third mode starts to feel necessary, raise it before adding — extending the union has cross-cutting consequences for the lab guide's rendering responsibilities.
+
+#### Sim-state persistence (opt-in)
+
+The runner persists whatever the sim publishes via `onState` (debounced to 200ms) and replays it as `initialState` on remount. Sims that want reload-survival for their local `useState`s read `initialState` and seed accordingly:
+
+```ts
+const seed = initialState as Partial<MySimState> | null | undefined;
+const [rows, setRows] = useState(seed?.rows ?? []);
+```
+
+The payload must be JSON-safe (it round-trips through `JSON.stringify`). Sims that ignore `initialState` behave as before — fresh state on every mount. Author choice per field: in `template-sim`, `measurements` and `reviewed` persist (progress); `x` (the slider) does not (input control). The physical-lab metaphor decides: "would the student expect to find this where they left it after closing the tab?"
+
+`isStateCompatible` mismatch and the explicit "Nulstil dit arbejde" button both clear `simulationState` along with the rest of `RunnerState`.
 
 ### Per-simulation testing
 - **Pure physics** in `physics.ts` is unit-tested with Vitest. No DOM.

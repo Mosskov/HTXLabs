@@ -126,6 +126,7 @@ function LabGuideInner({
             width={520}
             height={420}
             initialParams={initialParams}
+            initialState={state.simulationState}
             onProgress={onSimulationProgress}
             onState={setSimulationState}
           />

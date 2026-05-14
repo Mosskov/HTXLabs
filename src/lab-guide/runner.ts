@@ -32,6 +32,11 @@ export interface RunnerState {
   dataTables: Record<string, DataRow[]>;
   /** Attempt counts for widgets that limit retries. */
   attemptCounts: Record<string, number>;
+  /** Last snapshot the active sim published via `onState`. Replayed back to
+   *  the sim on remount as `initialState` so sim-owned UI (sim-mode DataTable
+   *  mirror, "already done X" buttons) survives reload. `null` when no sim
+   *  has published yet. */
+  simulationState: unknown;
 }
 
 interface SerializedRunnerState {
@@ -46,6 +51,7 @@ interface SerializedRunnerState {
   widgetValues: Record<string, unknown>;
   dataTables: Record<string, DataRow[]>;
   attemptCounts: Record<string, number>;
+  simulationState: unknown;
 }
 
 const storageKey = (experimentId: string) => `htxlabs:state:${experimentId}`;
@@ -70,6 +76,7 @@ export function emptyState(
     widgetValues: {},
     dataTables: {},
     attemptCounts: {},
+    simulationState: null,
   };
 }
 
@@ -98,6 +105,7 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     widgetValues: raw.widgetValues ?? {},
     dataTables: raw.dataTables ?? {},
     attemptCounts: raw.attemptCounts ?? {},
+    simulationState: raw.simulationState ?? null,
   };
 }
 

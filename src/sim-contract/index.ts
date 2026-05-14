@@ -22,6 +22,12 @@ export interface SimulationProps {
    * to evaluate. Optional: only sims with predicate-backed gates need to call
    * it. Frequency is up to the sim — once per relevant change is enough. */
   onState?: (state: unknown) => void;
+  /** Last persisted snapshot from `onState`, replayed on remount so sims that
+   * want reload-survival can seed their local `useState`s from it. `null` on
+   * first mount (no prior state). Sims that don't need persistence ignore
+   * this prop. The payload shape is whatever the sim publishes via `onState`
+   * — round-tripped through `JSON.stringify`, so it must be JSON-safe. */
+  initialState?: unknown;
 }
 
 export type ProgressEvent =

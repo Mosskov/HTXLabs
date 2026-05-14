@@ -24,6 +24,7 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     widgetValues: {},
     dataTables: {},
     attemptCounts: {},
+    simulationState: null,
     ...overrides,
   };
 }

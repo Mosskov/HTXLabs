@@ -16,6 +16,7 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     widgetValues: {},
     dataTables: {},
     attemptCounts: {},
+    simulationState: null,
     ...overrides,
   };
 }
@@ -152,6 +153,30 @@ describe('runnerReducer', () => {
       const next = runnerReducer(s, { type: 'INCREMENT_DATA_POINTS', count: 1 });
       expect(next.dataPointCount.planlaeg).toBe(3);
       expect(next.dataPointCount.maal).toBe(1);
+    });
+  });
+
+  describe('SET_SIMULATION_STATE', () => {
+    it('stores the published payload as simulationState', () => {
+      const payload = { measurements: [{ x: 1, y: 2 }], reviewed: true };
+      const next = runnerReducer(makeState(), {
+        type: 'SET_SIMULATION_STATE',
+        state: payload,
+      });
+      expect(next.simulationState).toBe(payload);
+    });
+
+    it('returns the same state ref when the payload is referentially equal (idempotent)', () => {
+      const payload = { measurements: [] };
+      const s = makeState({ simulationState: payload });
+      const next = runnerReducer(s, { type: 'SET_SIMULATION_STATE', state: payload });
+      expect(next).toBe(s);
+    });
+
+    it('clears via null when the sim resets', () => {
+      const s = makeState({ simulationState: { measurements: [{ x: 1, y: 2 }] } });
+      const next = runnerReducer(s, { type: 'SET_SIMULATION_STATE', state: null });
+      expect(next.simulationState).toBeNull();
     });
   });
 
