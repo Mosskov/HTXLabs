@@ -2,12 +2,13 @@
 
 A snapshot of current focus and working conventions, for colleagues, IT, and any contributor opening the repo. Updated by hand when something material changes. For the durable design, see [SPEC.md](../SPEC.md). For parked ideas not on the immediate path, see [BACKLOG.md](./BACKLOG.md).
 
-_Last synced: 2026-05-15 (rubric engine Phase 1 landed)._
+_Last synced: 2026-05-15 (rubric engine Phase 1 + review polish)._
 
 ## Current focus
 
 ### Recently landed
 - **Rubric engine — Phase 1 (2026-05-15, commit `e8ebce8`).** Pure scoring engine for free-form student responses (hypotheses, conclusions, …) at [`src/lib/rubric/`](../src/lib/rubric/). Three check kinds (semantic / regex / literal), evidence (`any`) vs vetoes (`none`), orthogonal misconception regexes, never-throw contract. Semantic checks use a local Node service ([`scripts/embed-server.mjs`](../scripts/embed-server.mjs), `npm run dev:embed`) wrapping `Xenova/multilingual-e5-small` via `@huggingface/transformers` (devDep — bundle hygiene enforced; never imported from `src/`). Dev-only diagnostic UI at [`src/lab-guide/dev/RubricTester.tsx`](../src/lab-guide/dev/RubricTester.tsx) mounted by a testlab at `/emner/testlabs/rubric-test`. **Phase 1 is dev-only** — no widget/gate integration yet. See [SPEC.md §17.A](../SPEC.md).
+- **Same-day review polish (2026-05-15, commit `68fef2a`).** Three review-driven fixes on Phase 1 + the sim-state persistence work. Literal checks/vetoes now match on whole-word boundaries via Unicode-aware lookarounds (a term `"afhængig"` no longer false-positives inside `"uafhængig"`; inflected forms must be listed explicitly or use `regex`). `CheckResult.pattern` + criterion-veto `pattern` surfaced so `RubricTester` names the failing pattern on bad-regex skips. `RunnerContext` flushes its 200 ms sim-state debounce on unmount and on `pagehide` so quick reloads no longer drop the latest snapshot.
 
 ### In flight
 - **Template lab — per-phase polish pass.** Multi-session pass to bring `testlabs/template` up to "copyable teaching example" quality. One session per phase (planlaeg → opstil → maal → analyser → diskuter → konkluder → rapporter), each covering (a) framework audit of that phase's gate kind + widgets + sim hooks, (b) develop anything missing or broken (including building the Graph widget during analyser, closing relevant Widget/Student-UX/Phase-3 backlog items), (c) content polish on the MDX. Symbolic framing kept throughout ("størrelse X og Y" — authors fill in physics).
