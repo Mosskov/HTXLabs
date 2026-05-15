@@ -1,6 +1,6 @@
 {
   "id": "template-hypothesis",
-  "version": 1,
+  "version": 2,
   "title": "Hypotese — sammenhæng mellem X og Y",
   "criteria": [
     {
@@ -10,7 +10,7 @@
       "any": [
         {
           "kind": "semantic",
-          "threshold": 0.6,
+          "threshold": 0.85,
           "anchors": [
             "X er den uafhængige variabel",
             "jeg varierer X i forsøget",
@@ -22,6 +22,14 @@
           "kind": "literal",
           "terms": ["uafhængig", "varierer"]
         }
+      ],
+      "misconceptions": [
+        {
+          "kind": "regex",
+          "pattern": "(pendul|lod|svinger)",
+          "flags": "iu",
+          "hint": "Beskriv din konkrete X for dette forsøg — ikke et eksempel fra et andet forsøg."
+        }
       ]
     },
     {
@@ -31,7 +39,7 @@
       "any": [
         {
           "kind": "semantic",
-          "threshold": 0.6,
+          "threshold": 0.85,
           "anchors": [
             "Y er den afhængige variabel",
             "jeg måler Y for hver indstilling af X",
@@ -41,26 +49,27 @@
         },
         {
           "kind": "literal",
-          "terms": ["afhængig"]
+          "terms": ["afhængig", "afhængige"]
         }
       ]
     },
     {
       "id": "relation",
       "label": "Forudsagt sammenhæng",
-      "hint": "Beskriv hvordan Y ændrer sig når X varieres (op, ned, eller konstant).",
+      "hint": "Beskriv hvordan Y ændrer sig når X varieres (op, ned, konstant eller uafhængig).",
       "any": [
         {
-          "kind": "semantic",
-          "threshold": 0.6,
-          "anchors": [
-            "Y stiger når X øges",
-            "når X bliver større, vokser Y",
-            "Y falder når X stiger",
-            "hvis X øges, ændrer Y sig proportionalt",
-            "jo større X, desto større Y",
-            "Y vokser proportionalt med X"
-          ]
+          "kind": "regex",
+          "pattern": "(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre|uafhængig)",
+          "flags": "iu"
+        }
+      ],
+      "misconceptions": [
+        {
+          "kind": "regex",
+          "pattern": "(pendul|lod|svinger)",
+          "flags": "iu",
+          "hint": "Beskriv en sammenhæng mellem dette forsøgs X og Y — ikke et eksempel fra et andet forsøg."
         }
       ]
     },
@@ -71,7 +80,7 @@
       "any": [
         {
           "kind": "semantic",
-          "threshold": 0.6,
+          "threshold": 0.85,
           "anchors": [
             "sammenhængen er lineær",
             "Y vokser med konstant takt",
