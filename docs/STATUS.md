@@ -2,22 +2,26 @@
 
 A snapshot of current focus and working conventions, for colleagues, IT, and any contributor opening the repo. Updated by hand when something material changes. For the durable design, see [SPEC.md](../SPEC.md). For parked ideas not on the immediate path, see [BACKLOG.md](./BACKLOG.md).
 
-_Last synced: 2026-05-14._
+_Last synced: 2026-05-15 (rubric engine Phase 1 landed)._
 
 ## Current focus
 
+### Recently landed
+- **Rubric engine — Phase 1 (2026-05-15, commit `e8ebce8`).** Pure scoring engine for free-form student responses (hypotheses, conclusions, …) at [`src/lib/rubric/`](../src/lib/rubric/). Three check kinds (semantic / regex / literal), evidence (`any`) vs vetoes (`none`), orthogonal misconception regexes, never-throw contract. Semantic checks use a local Node service ([`scripts/embed-server.mjs`](../scripts/embed-server.mjs), `npm run dev:embed`) wrapping `Xenova/multilingual-e5-small` via `@huggingface/transformers` (devDep — bundle hygiene enforced; never imported from `src/`). Dev-only diagnostic UI at [`src/lab-guide/dev/RubricTester.tsx`](../src/lab-guide/dev/RubricTester.tsx) mounted by a testlab at `/emner/testlabs/rubric-test`. **Phase 1 is dev-only** — no widget/gate integration yet. See [SPEC.md §17.A](../SPEC.md).
+
 ### In flight
-- **dynamometer-g lab.** First real lab using the framework. Visuals settled; framework groundwork complete; next step is authoring the MDX content (theory + 7 phase bodies) starting from the template lab.
-- **Template lab.** Canonical 7-phase generic example at `testlabs/template`. Pairs with `template-sim` and the DataTable single-knob flip. Used as the starting point when authoring new labs.
+- **Template lab — per-phase polish pass.** Multi-session pass to bring `testlabs/template` up to "copyable teaching example" quality. One session per phase (planlaeg → opstil → maal → analyser → diskuter → konkluder → rapporter), each covering (a) framework audit of that phase's gate kind + widgets + sim hooks, (b) develop anything missing or broken (including building the Graph widget during analyser, closing relevant Widget/Student-UX/Phase-3 backlog items), (c) content polish on the MDX. Symbolic framing kept throughout ("størrelse X og Y" — authors fill in physics).
+- **dynamometer-g lab.** First real lab using the framework. Visuals settled; framework groundwork complete; gated on the template per-phase pass landing before MDX authoring begins.
 
 ### Queued
 - **Framework skills roadmap.** `/new-widget` and `/new-simulation` exist. Next: `/review-lab`, `/new-lab`, `/bump-experiment-version`.
-- **Student UX backlog.** Four fixes landed; queued: disabled-Next tooltip, within-phase progress indicator, autosave indicator, keyword highlighting in instruction-box.
-- **Widget enhancements.** Per-widget "is satisfied" indicator on `FreeTextResponse`, hint-surfacing flexibility (timing/triggers for `tooShortMessage`), per-group hints on keyword-mode `FreeTextResponse`, `textMatch` exact mode, per-lab visual variation.
-- **Phase-3 + sim work (next session).** Phase-scope sim-published measurements to phase 3 only; add per-row clear in sim-mode `DataTable` (confirm intent); drop the `Målinger: N` chrome from `template-sim`. Discussed 2026-05-14; not yet committed scope.
+- **Student UX backlog.** Four fixes landed; queued: disabled-Next tooltip, within-phase progress indicator, autosave indicator, keyword highlighting in instruction-box. Keyword highlighting expected to be picked up during the `diskuter` phase session.
+- **Widget enhancements.** Per-widget "is satisfied" indicator on `FreeTextResponse`, hint-surfacing flexibility (timing/triggers for `tooShortMessage`), per-group hints on keyword-mode `FreeTextResponse`, `textMatch` exact mode, per-lab visual variation. Several of these will be drained by the per-phase template pass (e.g. satisfied indicator during `planlaeg`, exact-mode `textMatch` during `diskuter`).
+- **Phase-3 + sim work.** Phase-scope sim-published measurements to phase 3 only; add per-row clear in sim-mode `DataTable` (confirm intent); drop the `Målinger: N` chrome from `template-sim`. Expected to be picked up during the `maal` phase session.
 - **Landing sim-disclosure (undecided).** On first visit to phase 1 the open sim panel buries the laboratorieguide. Two candidate fixes — default the sim closed, or surface the guide on the landing page — not yet chosen.
 - **DataTable undo in sim mode.** No undo for auto-captured rows. Agreed fix is a `data-removed` `ProgressEvent` variant when prioritized.
 - **Breadcrumb mode drift.** LabGuide breadcrumb shows the URL mode label even on silent fallback to guided. Revisit when a real lab declares multiple modes.
+- **Rubric engine — Phase 2.** Widget integration (extend `FreeTextResponse` or add a new `<RubricResponse>` widget), new gate kind for required-criteria-met, hint pacing UI decision (immediate / delayed / on-button), semantic misconceptions (anchor-based vetoes), production embedder (in-browser WASM or backend so Phase 2 can ship to GitHub Pages), model-id-aware thresholds. Gated on a calibration session in the rubric testlab to settle thresholds against real student answers.
 
 ## Working conventions
 
