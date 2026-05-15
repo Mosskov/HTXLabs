@@ -1,0 +1,89 @@
+{
+  "id": "template-hypothesis",
+  "version": 1,
+  "title": "Hypotese — sammenhæng mellem X og Y",
+  "criteria": [
+    {
+      "id": "iv",
+      "label": "Uafhængig variabel (X)",
+      "hint": "Nævn X som den størrelse du varierer i forsøget.",
+      "any": [
+        {
+          "kind": "semantic",
+          "threshold": 0.6,
+          "anchors": [
+            "X er den uafhængige variabel",
+            "jeg varierer X i forsøget",
+            "den uafhængige størrelse er X",
+            "jeg ændrer værdien af X for hver måling"
+          ]
+        },
+        {
+          "kind": "literal",
+          "terms": ["uafhængig", "varierer"]
+        }
+      ]
+    },
+    {
+      "id": "dv",
+      "label": "Afhængig variabel (Y)",
+      "hint": "Nævn Y som den størrelse du måler for hver indstilling.",
+      "any": [
+        {
+          "kind": "semantic",
+          "threshold": 0.6,
+          "anchors": [
+            "Y er den afhængige variabel",
+            "jeg måler Y for hver indstilling af X",
+            "den afhængige størrelse er Y",
+            "Y observerer jeg som resultat"
+          ]
+        },
+        {
+          "kind": "literal",
+          "terms": ["afhængig"]
+        }
+      ]
+    },
+    {
+      "id": "relation",
+      "label": "Forudsagt sammenhæng",
+      "hint": "Beskriv hvordan Y ændrer sig når X varieres (op, ned, eller konstant).",
+      "any": [
+        {
+          "kind": "semantic",
+          "threshold": 0.6,
+          "anchors": [
+            "Y stiger når X øges",
+            "når X bliver større, vokser Y",
+            "Y falder når X stiger",
+            "hvis X øges, ændrer Y sig proportionalt",
+            "jo større X, desto større Y",
+            "Y vokser proportionalt med X"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "principle",
+      "label": "Lineær form (valgfrit)",
+      "required": false,
+      "any": [
+        {
+          "kind": "semantic",
+          "threshold": 0.6,
+          "anchors": [
+            "sammenhængen er lineær",
+            "Y vokser med konstant takt",
+            "der er en ret linje på grafen",
+            "ligningen er på formen Y = a·X + b"
+          ]
+        },
+        {
+          "kind": "literal",
+          "terms": ["lineær", "ret linje", "konstant takt"]
+        }
+      ]
+    }
+  ]
+}

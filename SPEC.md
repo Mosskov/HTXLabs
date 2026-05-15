@@ -935,6 +935,25 @@ All `<input>`, `<textarea>` and contenteditable surfaces in the framework block 
 
 ---
 
+## 17.A Rubric engine (Phase 1: engine + dev tester)
+
+Foundation for evaluating free-form student responses (hypotheses, conclusions, error analyses) beyond keyword counting. **Phase 1 is dev-only** — no widget integration, no new gate kind. The engine lives at `src/lib/rubric/` (sibling of `regression.ts`, `textMatch.ts`) and is exercised through a diagnostic testlab at `/emner/testlabs/rubric-test`.
+
+**Criterion model.** A rubric is a list of criteria, each scored independently:
+- `any: Check[]` — evidence list. A criterion is satisfied when **any** check fires. Three check kinds: `semantic` (max-pooled cosine across 3–5 paraphrase anchors, threshold ~0.55–0.70), `regex`, and `literal` (case-insensitive substring on a term list).
+- `none: Veto[]` — vetoes. If **any** triggers, the criterion fails regardless of evidence. Lets authors block known wrong answers explicitly.
+- `misconceptions: { regex, hint }[]` — orthogonal to satisfaction. A passing answer can still surface a misconception note. Phase 1 is regex-only.
+
+There is no ALL-mode at the criterion level — if you need AND, split into two criteria so per-criterion feedback stays meaningful.
+
+**Never-throw contract.** `evaluateRubric(text, rubric, embedder)` is total over its argument types and cannot throw. Bad regex → `skipped-bad-regex`. Embedder failure/timeout → `skipped-embedder`. Empty/too-short text → semantic checks become `skipped-too-short` (literal/regex still evaluate). The result distinguishes four criterion states: `satisfied`, `evaluable` (false iff every check skipped), `degraded` (some skipped, some evaluated → verdict is partial), `vetoed`. Bad rubrics are rejected at module-load by `parseRubric(unknown)`, so `evaluateRubric` only sees valid `Rubric` values.
+
+**Dev-only embedder.** Semantic checks call out to a local Node service (`scripts/embed-server.mjs`, started with `npm run dev:embed`) that wraps `Xenova/multilingual-e5-small` via `@huggingface/transformers`. The server pre-embeds every rubric anchor at boot, persists the cache to `node_modules/.cache/htxlabs-embedder.json`, and refuses to start under `NODE_ENV=production`. The `@huggingface/transformers` package is in **devDependencies** and is never imported from `src/` — the `Embedder` interface enforces the boundary at the type level, and Vite globs `src/` only.
+
+**Dev/student split.** The diagnostic component lives in `src/lab-guide/dev/RubricTester.tsx` (sibling of `GateDebug.tsx`) — dev-only, refuses to render in production builds, MDX imports it directly into the testlab phase. Student-facing widget/gate integration is Phase 2.
+
+---
+
 ## 18. Visual design
 
 Match htxlabs.dk's style closely. From your draft:
