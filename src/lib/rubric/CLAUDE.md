@@ -13,3 +13,7 @@ Never import `@huggingface/transformers` from anywhere under `src/`. The embedde
 - [embedder.ts](./embedder.ts) — `Embedder` interface + `HttpEmbedder` (talks to localhost:8001) + `MockEmbedder` (test-only, direct text → vector lookup).
 
 The engine is pure (sibling of `regression.ts`, `textMatch.ts`). No React, no I/O. Consumers: the dev-only diagnostic component in [src/lab-guide/dev/RubricTester.tsx](../../lab-guide/dev/RubricTester.tsx), and (Phase 2) the future free-text gate kind.
+
+## Literal matching is whole-word (Unicode-aware)
+
+`literal` checks and vetoes match on whole-word boundaries via `\p{L}\p{N}` lookarounds with the `u` flag — so a term `"afhængig"` does *not* fire inside `"uafhængig"`, and Danish letters at boundaries are respected. The match is also case-insensitive. Inflected forms are NOT covered automatically (e.g. `"afhængig"` doesn't match `"afhængige"`); list inflected variants explicitly or reach for `regex` if you need fuzzy matching.

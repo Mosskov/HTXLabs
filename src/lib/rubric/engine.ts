@@ -39,6 +39,9 @@ export interface CheckResult {
   anchorScores?: { text: string; score: number }[];
   /** regex/literal hits */
   matches?: string[];
+  /** regex: the authored pattern. Surfaced so dev diagnostics can name a
+   *  failing-to-compile regex instead of reporting just "regex". */
+  pattern?: string;
   hint?: string;
 }
 
@@ -53,7 +56,8 @@ export interface CriterionResult {
   degraded: boolean;
   vetoed: boolean;
   checks: CheckResult[];
-  vetoes: { kind: Veto['kind']; status: VetoStatus }[];
+  /** `pattern` populated only for regex vetoes — same diagnostic rationale as `CheckResult.pattern`. */
+  vetoes: { kind: Veto['kind']; status: VetoStatus; pattern?: string }[];
   misconceptions: { pattern: string; hint: string; status: MisconceptionStatus }[];
   hint?: string;
 }
@@ -112,7 +116,6 @@ export async function evaluateRubric(
   const debug = opts?.debug === true;
 
   const normalized = text.trim().replace(/\s+/g, ' ');
-  const lower = normalized.toLowerCase();
   const wordCount = normalized === '' ? 0 : normalized.split(' ').length;
 
   // Collect unique anchor texts in order of first appearance, dedup across criteria.
@@ -150,7 +153,7 @@ export async function evaluateRubric(
   }
 
   const criteria = rubric.criteria.map((c) =>
-    evaluateCriterion(c, normalized, lower, wordCount, studentVec, anchorVecs, debug),
+    evaluateCriterion(c, normalized, wordCount, studentVec, anchorVecs, debug),
   );
 
   const requiredSatisfied = criteria.filter((c) => c.required).every((c) => c.satisfied);
@@ -168,19 +171,19 @@ export async function evaluateRubric(
 function evaluateCriterion(
   criterion: Criterion,
   normalized: string,
-  lower: string,
   wordCount: number,
   studentVec: number[] | null,
   anchorVecs: Map<string, number[]>,
   debug: boolean,
 ): CriterionResult {
   const checks = criterion.any.map((check) =>
-    evaluateCheck(check, normalized, lower, wordCount, studentVec, anchorVecs, debug),
+    evaluateCheck(check, normalized, wordCount, studentVec, anchorVecs, debug),
   );
 
   const vetoes = (criterion.none ?? []).map((v) => ({
     kind: v.kind,
-    status: evaluateVeto(v, normalized, lower),
+    status: evaluateVeto(v, normalized),
+    pattern: v.kind === 'regex' ? v.pattern : undefined,
   }));
 
   const misconceptions = (criterion.misconceptions ?? []).map((m) => ({
@@ -225,14 +228,13 @@ function evaluateCriterion(
 function evaluateCheck(
   check: Check,
   normalized: string,
-  lower: string,
   wordCount: number,
   studentVec: number[] | null,
   anchorVecs: Map<string, number[]>,
   debug: boolean,
 ): CheckResult {
   if (check.kind === 'literal') {
-    const matches = check.terms.filter((t) => lower.includes(t.toLowerCase()));
+    const matches = check.terms.filter((t) => matchesWord(normalized, t));
     return {
       kind: 'literal',
       status: matches.length > 0 ? CHECK_STATUSES.PASS : CHECK_STATUSES.FAIL,
@@ -244,13 +246,19 @@ function evaluateCheck(
   if (check.kind === 'regex') {
     const re = compileRegex(check);
     if (re === null) {
-      return { kind: 'regex', status: CHECK_STATUSES.SKIPPED_BAD_REGEX, hint: check.hint };
+      return {
+        kind: 'regex',
+        status: CHECK_STATUSES.SKIPPED_BAD_REGEX,
+        pattern: check.pattern,
+        hint: check.hint,
+      };
     }
     const m = re.exec(normalized);
     return {
       kind: 'regex',
       status: m ? CHECK_STATUSES.PASS : CHECK_STATUSES.FAIL,
       matches: m ? [m[0]] : undefined,
+      pattern: check.pattern,
       hint: check.hint,
     };
   }
@@ -282,9 +290,9 @@ function evaluateCheck(
   };
 }
 
-function evaluateVeto(veto: Veto, normalized: string, lower: string): VetoStatus {
+function evaluateVeto(veto: Veto, normalized: string): VetoStatus {
   if (veto.kind === 'literal') {
-    return veto.terms.some((t) => lower.includes(t.toLowerCase()))
+    return veto.terms.some((t) => matchesWord(normalized, t))
       ? VETO_STATUSES.TRIGGERED
       : VETO_STATUSES.NOT_TRIGGERED;
   }
@@ -305,6 +313,20 @@ function isSkipped(s: CheckStatus): boolean {
     s === CHECK_STATUSES.SKIPPED_TOO_SHORT ||
     s === CHECK_STATUSES.SKIPPED_BAD_REGEX
   );
+}
+
+// Unicode-aware whole-word match. JS `\b` is ASCII-only, so "uafhængig" would
+// otherwise satisfy a literal check for "afhængig". The `\p{L}\p{N}` lookarounds
+// (with `u` flag) make boundaries respect Danish letters on either side.
+const WORD_RE_CACHE = new Map<string, RegExp>();
+function matchesWord(haystack: string, term: string): boolean {
+  let re = WORD_RE_CACHE.get(term);
+  if (!re) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    re = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu');
+    WORD_RE_CACHE.set(term, re);
+  }
+  return re.test(haystack);
 }
 
 function cosine(a: number[], b: number[]): number {

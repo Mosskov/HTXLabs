@@ -174,6 +174,29 @@ export function RunnerProvider({
     }, 200);
   }, []);
 
+  // Flush a pending sim-state debounce synchronously. The reducer dispatch
+  // can't propagate during unmount or pagehide, so write directly through
+  // `save()` using the latest committed state + the up-to-date sim ref.
+  const flushSimulationState = useCallback(() => {
+    if (persistTimerRef.current === null) return;
+    clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = null;
+    save({ ...stateRef.current, simulationState: simulationStateRef.current });
+  }, []);
+
+  // Unmount cleanup: covers route changes inside the SPA.
+  useEffect(() => {
+    return () => flushSimulationState();
+  }, [flushSimulationState]);
+
+  // pagehide: covers hard reload, tab close, and bfcache transitions.
+  // Preferred over `beforeunload` for mobile and bfcache reliability.
+  useEffect(() => {
+    const handler = () => flushSimulationState();
+    window.addEventListener('pagehide', handler);
+    return () => window.removeEventListener('pagehide', handler);
+  }, [flushSimulationState]);
+
   const registerWidgetState = useCallback((id: string, ws: WidgetState | null) => {
     if (ws === null) {
       delete widgetStateRef.current[id];

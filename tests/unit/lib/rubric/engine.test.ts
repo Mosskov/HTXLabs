@@ -335,7 +335,131 @@ describe('evaluateRubric — invariants', () => {
     const parsed = parseRubric(raw);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    const r = await evaluateRubric('Snorlængden er konstant', parsed.rubric, embedder);
+    const r = await evaluateRubric('Snorlængde er konstant', parsed.rubric, embedder);
     expect(r.criteria[0].satisfied).toBe(true);
+  });
+});
+
+describe('literal matching is whole-word (Unicode-aware)', () => {
+  function singleLiteral(terms: string[], vetoTerms?: string[]) {
+    const raw = {
+      id: 't',
+      version: 1,
+      title: 'T',
+      criteria: [
+        {
+          id: 'c1',
+          label: 'c1',
+          any: [{ kind: 'literal', terms }],
+          ...(vetoTerms ? { none: [{ kind: 'literal', terms: vetoTerms }] } : {}),
+        },
+      ],
+    };
+    const parsed = parseRubric(raw);
+    if (!parsed.ok) throw new Error(`rubric invalid: ${JSON.stringify(parsed.errors)}`);
+    return parsed.rubric;
+  }
+
+  it('does NOT match a term embedded inside a longer Danish word', async () => {
+    const r = await evaluateRubric(
+      'X er den uafhængige variabel',
+      singleLiteral(['afhængig']),
+      embedder,
+    );
+    expect(r.criteria[0].satisfied).toBe(false);
+  });
+
+  it('matches when the term is a standalone word', async () => {
+    const r = await evaluateRubric('Y er afhængig variabel', singleLiteral(['afhængig']), embedder);
+    expect(r.criteria[0].satisfied).toBe(true);
+  });
+
+  it('does NOT match inflected forms — literal is the exact stem', async () => {
+    // "afhængige" trails the term with letter `e` — lookahead rejects it.
+    // Authors who need inflection should list variants or use regex.
+    const r = await evaluateRubric(
+      'Y er den afhængige variabel',
+      singleLiteral(['afhængig']),
+      embedder,
+    );
+    expect(r.criteria[0].satisfied).toBe(false);
+  });
+
+  it('matches at punctuation boundaries', async () => {
+    const r1 = await evaluateRubric('Y er afhængig, ja.', singleLiteral(['afhængig']), embedder);
+    const r2 = await evaluateRubric('(afhængig)', singleLiteral(['afhængig']), embedder);
+    expect(r1.criteria[0].satisfied).toBe(true);
+    expect(r2.criteria[0].satisfied).toBe(true);
+  });
+
+  it('treats hyphen as a non-letter boundary', async () => {
+    const r = await evaluateRubric(
+      'X-afhængig størrelse',
+      singleLiteral(['afhængig']),
+      embedder,
+    );
+    expect(r.criteria[0].satisfied).toBe(true);
+  });
+
+  it('applies the same rule to literal vetoes', async () => {
+    // "konstantinopel" must NOT trigger a veto on "konstant".
+    const r = await evaluateRubric(
+      'Y i konstantinopel',
+      singleLiteral(['Y'], ['konstant']),
+      embedder,
+    );
+    expect(r.criteria[0].vetoed).toBe(false);
+    expect(r.criteria[0].satisfied).toBe(true);
+  });
+});
+
+describe('regex diagnostics carry the failing pattern', () => {
+  it('check: populates `pattern` on skipped-bad-regex', async () => {
+    const parsed = parseRubric({
+      id: 't',
+      version: 1,
+      title: 'T',
+      criteria: [{ id: 'c', label: 'c', any: [{ kind: 'regex', pattern: '(unclosed' }] }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('whatever', parsed.rubric, embedder);
+    expect(r.criteria[0].checks[0].status).toBe('skipped-bad-regex');
+    expect(r.criteria[0].checks[0].pattern).toBe('(unclosed');
+  });
+
+  it('check: populates `pattern` on a passing regex too', async () => {
+    const parsed = parseRubric({
+      id: 't',
+      version: 1,
+      title: 'T',
+      criteria: [{ id: 'c', label: 'c', any: [{ kind: 'regex', pattern: 'foo' }] }],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('foo bar', parsed.rubric, embedder);
+    expect(r.criteria[0].checks[0].status).toBe('pass');
+    expect(r.criteria[0].checks[0].pattern).toBe('foo');
+  });
+
+  it('veto: populates `pattern` on skipped-bad-regex', async () => {
+    const parsed = parseRubric({
+      id: 't',
+      version: 1,
+      title: 'T',
+      criteria: [
+        {
+          id: 'c',
+          label: 'c',
+          any: [{ kind: 'literal', terms: ['x'] }],
+          none: [{ kind: 'regex', pattern: '(also-unclosed' }],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('x', parsed.rubric, embedder);
+    expect(r.criteria[0].vetoes[0].status).toBe('skipped-bad-regex');
+    expect(r.criteria[0].vetoes[0].pattern).toBe('(also-unclosed');
   });
 });

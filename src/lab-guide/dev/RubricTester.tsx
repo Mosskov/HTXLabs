@@ -124,13 +124,13 @@ function ResultView({ result, debug }: { result: RubricResult; debug: boolean })
   const badRegex = result.criteria.flatMap((c) => [
     ...c.vetoes
       .filter((v) => v.status === VETO_STATUSES.SKIPPED_BAD_REGEX)
-      .map((v) => ({ kind: 'veto' as const, criterionId: c.id, info: v.kind })),
+      .map((v) => ({ kind: 'veto' as const, criterionId: c.id, info: v.pattern ?? v.kind })),
     ...c.misconceptions
       .filter((m) => m.status === VETO_STATUSES.SKIPPED_BAD_REGEX)
       .map((m) => ({ kind: 'misconception' as const, criterionId: c.id, info: m.pattern })),
     ...c.checks
       .filter((ck) => ck.status === CHECK_STATUSES.SKIPPED_BAD_REGEX)
-      .map((ck) => ({ kind: 'check' as const, criterionId: c.id, info: ck.kind })),
+      .map((ck) => ({ kind: 'check' as const, criterionId: c.id, info: ck.pattern ?? ck.kind })),
   ]);
 
   return (
