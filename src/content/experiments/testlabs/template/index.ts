@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 8,
+  version: 9,
   title: 'Template',
   simulationId: 'template-sim',
   learningObjectives: ['Forstå hvordan en generisk lab er opbygget i frameworket'],
@@ -28,10 +28,10 @@ export const frontmatter: ExperimentFrontmatter = {
           id: 'planlaeg',
           title: 'Planlæg',
           steps: [
-            'Læs teorien og overvej hvilken sammenhæng du forventer mellem X og Y.',
-            'Formulér en kort hypotese om hvordan Y afhænger af X.',
+            'Identificér din uafhængige og afhængige variabel.',
+            'Formulér en kort hypotese om sammenhængen.',
           ],
-          gate: { type: 'rubric-required', widgetIds: ['hypotese'] },
+          gate: { type: 'all-satisfied', widgetIds: ['variables', 'hypotese'] },
         },
         {
           id: 'opstil',

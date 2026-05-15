@@ -1,7 +1,10 @@
 import rubric from './rubrics/template-hypothesis.json';
+import { TemplateHypothesisSection } from './TemplateHypothesisSection';
 
-Inden du går i gang med målingerne, så tag stilling til hvad du forventer at se. En klar hypotese gør det lettere bagefter at vurdere, om dine data passer med teorien.
+Inden du går i gang med målingerne: identificér først hvad du arbejder med, og formulér derefter en kort hypotese om sammenhængen.
 
-<RubricResponse id="hypotese" rubric={rubric}
-  prompt="Skriv en kort hypotese: hvordan forventer du at Y afhænger af X?"
-  minWords={10} />
+<VariableTable id="variables" />
+
+<RevealWhen widgetIds={['variables']} clearOnHide={['hypotese']}>
+  <TemplateHypothesisSection rubric={rubric} />
+</RevealWhen>

@@ -501,6 +501,68 @@ describe('rubric-required gate', () => {
   });
 });
 
+describe('all-satisfied gate', () => {
+  const allSatGate: Gate = { type: 'all-satisfied', widgetIds: ['variables', 'hypotese'] };
+
+  it('returns false when no widget state is registered', () => {
+    expect(isGateSatisfied(allSatGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
+  });
+
+  it('returns false when any listed widget is unsatisfied', () => {
+    const ctx = makeCtx({
+      variables: { kind: 'filled', filled: true },
+      hypotese: { kind: 'rubric', satisfied: false },
+    });
+    expect(isGateSatisfied(allSatGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('returns true when every listed widget projects satisfied', () => {
+    const ctx = makeCtx({
+      variables: { kind: 'filled', filled: true },
+      hypotese: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(allSatGate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('projects correctly across all widget kinds', () => {
+    const gate: Gate = { type: 'all-satisfied', widgetIds: ['a', 'b', 'c', 'd', 'e'] };
+    const ctx = makeCtx({
+      a: { kind: 'correct', correct: true },
+      b: { kind: 'checked', allChecked: true },
+      c: { kind: 'filled', filled: true },
+      d: { kind: 'rubric', satisfied: true },
+      e: { kind: 'keywords', foundCount: 3, total: 3 },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('returns false when a keyword widget has not hit all groups', () => {
+    const gate: Gate = { type: 'all-satisfied', widgetIds: ['a', 'b'] };
+    const ctx = makeCtx({
+      a: { kind: 'rubric', satisfied: true },
+      b: { kind: 'keywords', foundCount: 2, total: 3 },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('an absent registration counts as unsatisfied', () => {
+    const ctx = makeCtx({ variables: { kind: 'filled', filled: true } });
+    expect(isGateSatisfied(allSatGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('gateMessage names the participating widget ids', () => {
+    expect(gateMessage(allSatGate)).toBe(
+      'Fuldfør alle delopgaver for at fortsætte (variables, hypotese).',
+    );
+  });
+
+  it('open mode bypasses without satisfied widgets', () => {
+    expect(
+      isGateSatisfied(allSatGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
+  });
+});
+
 describe('canAdvanceTo', () => {
   it('current phase is reachable from itself', () => {
     expect(canAdvanceTo('planlaeg', phases, makeState(), undefined, makeCtx())).toBe(true);

@@ -1,0 +1,170 @@
+import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
+import { RevealWhen } from '@/lab-guide/widgets/RevealWhen';
+import type { Phase } from '@/lib/schema';
+import { act, render, screen } from '@testing-library/react';
+import { useEffect } from 'react';
+import { describe, expect, it } from 'vitest';
+
+const phase: Phase = { id: 'p', title: 'P', gate: { type: 'always' } };
+
+/** Test-only widget that registers a `filled` state via the runner API.
+ *  Lets each test stage widget state without rendering a real widget. */
+function FakeWidget({ id, filled }: { id: string; filled: boolean }) {
+  const { registerWidgetState } = useRunner();
+  useEffect(() => {
+    registerWidgetState(id, { kind: 'filled', filled });
+  }, [id, filled, registerWidgetState]);
+  return null;
+}
+
+function Registry({ id }: { id: string }) {
+  const { gateCtx } = useRunner();
+  const w = gateCtx.widgets[id];
+  return <div data-testid={`reg-${id}`}>{w ? 'present' : 'absent'}</div>;
+}
+
+function Harness({
+  experimentId,
+  children,
+}: {
+  experimentId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[phase]}>
+      {children}
+    </RunnerProvider>
+  );
+}
+
+describe('RevealWhen', () => {
+  it('hides children when the watched widget is absent', () => {
+    render(
+      <Harness experimentId="rw/1">
+        <RevealWhen widgetIds={['variables']}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+
+  it('hides children when the watched widget reports filled=false', () => {
+    render(
+      <Harness experimentId="rw/2">
+        <FakeWidget id="variables" filled={false} />
+        <RevealWhen widgetIds={['variables']}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+
+  it('reveals children when the watched widget reports filled=true', () => {
+    render(
+      <Harness experimentId="rw/3">
+        <FakeWidget id="variables" filled={true} />
+        <RevealWhen widgetIds={['variables']}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+  });
+
+  it('re-hides when the watched widget flips back to unsatisfied', () => {
+    function Switch({ filled }: { filled: boolean }) {
+      return (
+        <Harness experimentId="rw/4">
+          <FakeWidget id="variables" filled={filled} />
+          <RevealWhen widgetIds={['variables']}>
+            <div data-testid="child">child</div>
+          </RevealWhen>
+        </Harness>
+      );
+    }
+    const { rerender } = render(<Switch filled={true} />);
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+    rerender(<Switch filled={false} />);
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+
+  it('requires ALL listed widgets to be satisfied (multi-id AND)', () => {
+    render(
+      <Harness experimentId="rw/5">
+        <FakeWidget id="a" filled={true} />
+        <FakeWidget id="b" filled={false} />
+        <RevealWhen widgetIds={['a', 'b']}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+
+  it('clearOnHide removes the listed widget ids from the registry on the visible→hidden edge', () => {
+    function Setup({ filled }: { filled: boolean }) {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        // Stage a dependent widget that previously published satisfied:true.
+        registerWidgetState('dependent', { kind: 'rubric', satisfied: true });
+      }, [registerWidgetState]);
+      return (
+        <>
+          <FakeWidget id="variables" filled={filled} />
+          <RevealWhen widgetIds={['variables']} clearOnHide={['dependent']}>
+            <div data-testid="child">child</div>
+          </RevealWhen>
+          <Registry id="dependent" />
+        </>
+      );
+    }
+
+    function Wrapper({ filled }: { filled: boolean }) {
+      return (
+        <Harness experimentId="rw/6">
+          <Setup filled={filled} />
+        </Harness>
+      );
+    }
+
+    const { rerender } = render(<Wrapper filled={true} />);
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+    expect(screen.getByTestId('reg-dependent')).toHaveTextContent('present');
+
+    // Flip variables to unsatisfied → reveal hides → dependent must be cleared.
+    act(() => {
+      rerender(<Wrapper filled={false} />);
+    });
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+    expect(screen.getByTestId('reg-dependent')).toHaveTextContent('absent');
+  });
+
+  it('does not clear dependents when starting hidden (no false transition)', () => {
+    function Setup() {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        registerWidgetState('dependent', { kind: 'rubric', satisfied: true });
+      }, [registerWidgetState]);
+      return (
+        <>
+          <FakeWidget id="variables" filled={false} />
+          <RevealWhen widgetIds={['variables']} clearOnHide={['dependent']}>
+            <div data-testid="child">child</div>
+          </RevealWhen>
+          <Registry id="dependent" />
+        </>
+      );
+    }
+    render(
+      <Harness experimentId="rw/7">
+        <Setup />
+      </Harness>,
+    );
+    // First render starts hidden — clearOnHide must not fire because there was
+    // no visible→hidden transition.
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+    expect(screen.getByTestId('reg-dependent')).toHaveTextContent('present');
+  });
+});

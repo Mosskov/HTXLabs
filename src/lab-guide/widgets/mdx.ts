@@ -10,7 +10,9 @@ import {
   KeyEquation,
   Quiz,
   ResetButton,
+  RevealWhen,
   RubricResponse,
+  VariableTable,
 } from '.';
 
 export const mdxComponents = {
@@ -20,5 +22,7 @@ export const mdxComponents = {
   KeyEquation,
   Quiz,
   ResetButton,
+  RevealWhen,
   RubricResponse,
+  VariableTable,
 };

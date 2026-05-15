@@ -135,6 +135,16 @@ export const strings = {
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
       bonusPanelTitle: 'Vil du gøre svaret stærkere?',
     },
+    variableTable: {
+      ivLabel: 'Uafhængig variabel',
+      dvLabel: 'Afhængig variabel',
+      constantsLabel: 'Konstanter',
+      nameHeader: 'Fysisk størrelse',
+      symbolHeader: 'Symbol',
+      unitHeader: 'Enhed',
+      addConstantLabel: '+ Tilføj konstant',
+      removeConstantAriaLabel: 'Fjern konstant',
+    },
   },
   gates: {
     milestone: 'Du skal gennemføre forsøget mindst én gang for at fortsætte.',
@@ -148,6 +158,8 @@ export const strings = {
     keywordCountAll: 'Brug nøgleord fra alle krav for at fortsætte.',
     predicate: 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.',
     rubricRequired: 'Skriv et svar og tryk Tjek mit svar — alle krav skal være opfyldt.',
+    /** Vars: {ids} = comma-separated list of participating widget ids. */
+    allSatisfied: 'Fuldfør alle delopgaver for at fortsætte ({ids}).',
   },
   errors: {
     notFound: 'Forsøget blev ikke fundet.',

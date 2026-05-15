@@ -264,3 +264,15 @@ export function useRunner(): RunnerApi {
   if (!ctx) throw new Error('useRunner must be used within RunnerProvider');
   return ctx;
 }
+
+/** Read a peer widget's registered state. Used by widgets that compose
+ *  ({@link RevealWhen}) or read sibling data (the template hypothesis section
+ *  reads `'variables'` for symbol injection). Re-renders the caller when any
+ *  widget registration changes via the existing `tick` subscription that
+ *  `gateCtx` depends on. Returns `undefined` if the widget hasn't registered
+ *  (yet, or after `RevealWhen.clearOnHide` cleared it). The caller narrows on
+ *  `.kind` if it needs a specific shape. */
+export function useWidgetState(id: string): WidgetState | undefined {
+  const { gateCtx } = useRunner();
+  return gateCtx.widgets[id];
+}

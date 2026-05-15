@@ -50,6 +50,35 @@ describe('Gate schema — rubric-required', () => {
   });
 });
 
+describe('Gate schema — all-satisfied', () => {
+  it('accepts all-satisfied with two widgetIds', () => {
+    const result = Gate.safeParse({ type: 'all-satisfied', widgetIds: ['a', 'b'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts all-satisfied with more than two widgetIds', () => {
+    const result = Gate.safeParse({ type: 'all-satisfied', widgetIds: ['a', 'b', 'c'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects all-satisfied with a single widgetId', () => {
+    // Singleton is already covered by the kind-specific gates — guard against
+    // an authoring mistake that would silently degrade the gate's semantics.
+    const result = Gate.safeParse({ type: 'all-satisfied', widgetIds: ['only'] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects all-satisfied with an empty widgetIds array', () => {
+    const result = Gate.safeParse({ type: 'all-satisfied', widgetIds: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects all-satisfied with no widgetIds key', () => {
+    const result = Gate.safeParse({ type: 'all-satisfied' });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('ExperimentFrontmatter — devOnly', () => {
   const base = {
     title: 'Test',

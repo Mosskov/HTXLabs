@@ -44,6 +44,16 @@ export const Gate = z.discriminatedUnion('type', [
      * silently auto-open the gate. */
     widgetIds: z.array(z.string()).min(1),
   }),
+  z.object({
+    type: z.literal('all-satisfied'),
+    /** Widget ids whose kind-aware satisfaction bit must all be true. Reads
+     *  `correct` from kind='correct', `allChecked` from 'checked', `filled`
+     *  from 'filled', `satisfied` from 'rubric', and `foundCount === total`
+     *  from 'keywords'. `.min(2)` because the single-widget case is already
+     *  covered by the kind-specific gates (`all-filled`, `rubric-required`,
+     *  …); a singleton would just be a less-specific version. */
+    widgetIds: z.array(z.string()).min(2),
+  }),
 ]);
 export type Gate = z.infer<typeof Gate>;
 

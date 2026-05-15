@@ -16,9 +16,11 @@ export type WidgetState =
   /** `filled` is the `all-filled` gate's read facet (boolean satisfaction).
    *  `count` is an optional sibling facet — currently only the DataTable
    *  publishes it, and only the `data-points` gate consults it (when the
-   *  gate spec carries a `widgetId`). Lets a single registration drive
-   *  both gate kinds without double-keying the widget registry. */
-  | { kind: 'filled'; filled: boolean; count?: number }
+   *  gate spec carries a `widgetId`). `values` is an opaque payload for
+   *  sibling widgets that want to read what was filled (read via
+   *  `useWidgetState`); gate evaluators ignore it. Lets a single registration
+   *  drive multiple gate kinds without double-keying the widget registry. */
+  | { kind: 'filled'; filled: boolean; count?: number; values?: unknown }
   | { kind: 'keywords'; foundCount: number; total: number }
   /** `<RubricResponse>` registers this. `satisfied` is a single derived bit:
    *  most recent rubric result must be present, fresh (not edited since
@@ -130,7 +132,34 @@ const GATE_HANDLERS: GateHandlerMap = {
       }),
     message: () => strings.gates.rubricRequired,
   },
+  // Flat (non-recursive) AND across heterogeneous widget kinds. Projects each
+  // widget to a single satisfaction bit; an absent registration counts as
+  // unsatisfied. The lock message lists the participating widget ids so the
+  // student knows which sections must be complete.
+  'all-satisfied': {
+    check: (gate, _state, _module, ctx) =>
+      gate.widgetIds.every((id) => widgetSatisfied(ctx.widgets[id])),
+    message: (gate) => format(strings.gates.allSatisfied, { ids: gate.widgetIds.join(', ') }),
+  },
 };
+
+/** Kind-aware satisfaction projection used by `'all-satisfied'`. An absent
+ *  registration counts as unsatisfied. Keep this in lock-step with WidgetState. */
+function widgetSatisfied(w: WidgetState | undefined): boolean {
+  if (!w) return false;
+  switch (w.kind) {
+    case 'correct':
+      return w.correct;
+    case 'checked':
+      return w.allChecked;
+    case 'filled':
+      return w.filled;
+    case 'rubric':
+      return w.satisfied;
+    case 'keywords':
+      return w.total > 0 && w.foundCount === w.total;
+  }
+}
 
 /** All gate kinds known to the engine — derived from the handler map so this
  * list stays in lock-step with `GATE_HANDLERS`. */

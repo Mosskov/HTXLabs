@@ -55,6 +55,7 @@ describe('validateAuthorableGates', () => {
       { type: 'all-correct', widgetIds: ['a'] },
       { type: 'keyword-count', widgetId: 'a', min: 'all' },
       { type: 'keyword-count', widgetId: 'a', min: 3 },
+      { type: 'all-satisfied', widgetIds: ['a', 'b'] },
     ];
     for (const gate of supported) {
       it(`accepts ${gate.type}${'min' in gate ? ` (min=${String(gate.min)})` : ''}`, () => {
@@ -110,7 +111,7 @@ describe('validateAuthorableGates', () => {
         guided: [makePhase('p', { type: 'predicate', name: 'foo' })],
       });
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count, rubric-required\./,
+        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count, rubric-required, all-satisfied\./,
       );
     });
 
@@ -154,6 +155,22 @@ describe('validateAuthorableGates', () => {
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(
         /uses gate kind "data-points"/,
       );
+    });
+
+    it('accepts all-satisfied on a theory-only lab (flat, widget-driven only)', () => {
+      // The new combinator is flat (no nested gates), so there is no recursion
+      // path through which a sim-driven kind could smuggle itself onto a
+      // theory-only lab. Validates that the kind itself is in AUTHORABLE_GATE_KINDS.
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('planlaeg', {
+            type: 'all-satisfied',
+            widgetIds: ['variables', 'hypotese'],
+          }),
+        ],
+      });
+      // simulationId is '__none' by default → theory-only path.
+      expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
     });
 
     it('skips the check when the lab is tagged "test" (framework testbed escape hatch)', () => {

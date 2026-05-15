@@ -9,4 +9,6 @@ export { FreeTextResponse } from './FreeTextResponse';
 export { KeyEquation } from './KeyEquation';
 export { Quiz } from './Quiz';
 export { ResetButton } from './ResetButton';
+export { RevealWhen } from './RevealWhen';
 export { RubricResponse } from './RubricResponse';
+export { VariableTable } from './VariableTable';
