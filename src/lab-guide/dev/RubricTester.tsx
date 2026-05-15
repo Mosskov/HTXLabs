@@ -2,8 +2,10 @@
 // Sibling of GateDebug. Refuses to render in production builds.
 import { HttpEmbedder } from '@/lib/rubric/embedder';
 import {
+  CHECK_STATUSES,
   type CriterionResult,
   type RubricResult,
+  VETO_STATUSES,
   evaluateRubric,
   parseRubric,
 } from '@/lib/rubric/engine';
@@ -32,8 +34,15 @@ function RubricTesterInner({ rubric }: RubricTesterProps) {
 
   const [text, setText] = useState('');
   const [result, setResult] = useState<RubricResult | null>(null);
-  const [embedderDown, setEmbedderDown] = useState(false);
   const [pending, setPending] = useState(false);
+
+  const embedderDown = useMemo(
+    () =>
+      result?.criteria.some((c) =>
+        c.checks.some((ck) => ck.status === CHECK_STATUSES.SKIPPED_EMBEDDER),
+      ) ?? false,
+    [result],
+  );
 
   if (!parsed.ok) {
     return (
@@ -53,10 +62,6 @@ function RubricTesterInner({ rubric }: RubricTesterProps) {
     try {
       const r = await evaluateRubric(text, rubricObj, embedder, { debug });
       setResult(r);
-      const anySkipped = r.criteria.some((c) =>
-        c.checks.some((ck) => ck.status === 'skipped-embedder'),
-      );
-      setEmbedderDown(anySkipped);
     } finally {
       setPending(false);
     }
@@ -113,18 +118,18 @@ function RubricTesterInner({ rubric }: RubricTesterProps) {
 function ResultView({ result, debug }: { result: RubricResult; debug: boolean }) {
   const triggeredMisconceptions = result.criteria.flatMap((c) =>
     c.misconceptions
-      .filter((m) => m.status === 'triggered')
+      .filter((m) => m.status === VETO_STATUSES.TRIGGERED)
       .map((m) => ({ ...m, criterionId: c.id })),
   );
   const badRegex = result.criteria.flatMap((c) => [
     ...c.vetoes
-      .filter((v) => v.status === 'skipped-bad-regex')
+      .filter((v) => v.status === VETO_STATUSES.SKIPPED_BAD_REGEX)
       .map((v) => ({ kind: 'veto' as const, criterionId: c.id, info: v.kind })),
     ...c.misconceptions
-      .filter((m) => m.status === 'skipped-bad-regex')
+      .filter((m) => m.status === VETO_STATUSES.SKIPPED_BAD_REGEX)
       .map((m) => ({ kind: 'misconception' as const, criterionId: c.id, info: m.pattern })),
     ...c.checks
-      .filter((ck) => ck.status === 'skipped-bad-regex')
+      .filter((ck) => ck.status === CHECK_STATUSES.SKIPPED_BAD_REGEX)
       .map((ck) => ({ kind: 'check' as const, criterionId: c.id, info: ck.kind })),
   ]);
 
@@ -190,7 +195,7 @@ function CriterionRow({ c, debug }: { c: CriterionResult; debug: boolean }) {
   const scoreCell = c.checks
     .map((ck) => {
       if (ck.kind === 'semantic') {
-        if (ck.status === 'pass' || ck.status === 'fail') {
+        if (ck.status === CHECK_STATUSES.PASS || ck.status === CHECK_STATUSES.FAIL) {
           return `sem ${ck.score?.toFixed(3)} (${ck.bestAnchor?.text.slice(0, 30)}…)`;
         }
         return `sem ${ck.status}`;

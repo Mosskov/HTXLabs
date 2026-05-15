@@ -10,15 +10,23 @@ import {
   type Veto,
 } from './schema';
 
-export type CheckStatus =
-  | 'pass'
-  | 'fail'
-  | 'skipped-embedder'
-  | 'skipped-too-short'
-  | 'skipped-bad-regex';
+export const CHECK_STATUSES = {
+  PASS: 'pass',
+  FAIL: 'fail',
+  SKIPPED_EMBEDDER: 'skipped-embedder',
+  SKIPPED_TOO_SHORT: 'skipped-too-short',
+  SKIPPED_BAD_REGEX: 'skipped-bad-regex',
+} as const;
 
-export type VetoStatus = 'triggered' | 'not-triggered' | 'skipped-bad-regex';
-export type MisconceptionStatus = 'triggered' | 'not-triggered' | 'skipped-bad-regex';
+export const VETO_STATUSES = {
+  TRIGGERED: 'triggered',
+  NOT_TRIGGERED: 'not-triggered',
+  SKIPPED_BAD_REGEX: 'skipped-bad-regex',
+} as const;
+
+export type CheckStatus = (typeof CHECK_STATUSES)[keyof typeof CHECK_STATUSES];
+export type VetoStatus = (typeof VETO_STATUSES)[keyof typeof VETO_STATUSES];
+export type MisconceptionStatus = VetoStatus;
 
 export interface CheckResult {
   kind: Check['kind'];
@@ -60,14 +68,39 @@ export interface RubricResult {
   allSatisfied: boolean;
 }
 
+/** Compiled-regex cache keyed by the schema node's object identity. A bad
+ *  regex is cached as `null` so the skipped-bad-regex path stays free of
+ *  retries. WeakMap means parsed rubrics that go out of scope GC normally. */
+const regexCache = new WeakMap<object, RegExp | null>();
+
+function compileRegex(node: { pattern: string; flags?: string }): RegExp | null {
+  const cached = regexCache.get(node);
+  if (cached !== undefined) return cached;
+  let re: RegExp | null;
+  try {
+    re = new RegExp(node.pattern, node.flags);
+  } catch {
+    re = null;
+  }
+  regexCache.set(node, re);
+  return re;
+}
+
 /** Load-time validation. Bad rubric is filtered out at the type boundary, so
- *  `evaluateRubric` only sees valid rubrics and can be total. */
+ *  `evaluateRubric` only sees valid rubrics and can be total. Also pre-compiles
+ *  every regex node so per-evaluation cost is one cache lookup per check. */
 export function parseRubric(
   input: unknown,
 ): { ok: true; rubric: Rubric } | { ok: false; errors: z.ZodIssue[] } {
   const result = RubricSchema.safeParse(input);
-  if (result.success) return { ok: true, rubric: result.data };
-  return { ok: false, errors: result.error.issues };
+  if (!result.success) return { ok: false, errors: result.error.issues };
+  const rubric = result.data;
+  for (const c of rubric.criteria) {
+    for (const check of c.any) if (check.kind === 'regex') compileRegex(check);
+    for (const v of c.none ?? []) if (v.kind === 'regex') compileRegex(v);
+    for (const m of c.misconceptions ?? []) compileRegex(m);
+  }
+  return { ok: true, rubric };
 }
 
 export async function evaluateRubric(
@@ -156,8 +189,8 @@ function evaluateCriterion(
     status: evaluateMisconception(m, normalized),
   }));
 
-  const vetoed = vetoes.some((v) => v.status === 'triggered');
-  const anyPass = checks.some((c) => c.status === 'pass');
+  const vetoed = vetoes.some((v) => v.status === VETO_STATUSES.TRIGGERED);
+  const anyPass = checks.some((c) => c.status === CHECK_STATUSES.PASS);
   const anySkipped = checks.some((c) => isSkipped(c.status));
   const anyEvaluated = checks.some((c) => !isSkipped(c.status));
   const satisfied = anyPass && !vetoed;
@@ -168,7 +201,7 @@ function evaluateCriterion(
   // check's own hint if present (author order).
   let hint = criterion.hint;
   for (const c of checks) {
-    if (c.status === 'fail' && c.hint) {
+    if (c.status === CHECK_STATUSES.FAIL && c.hint) {
       hint = c.hint;
       break;
     }
@@ -202,23 +235,21 @@ function evaluateCheck(
     const matches = check.terms.filter((t) => lower.includes(t.toLowerCase()));
     return {
       kind: 'literal',
-      status: matches.length > 0 ? 'pass' : 'fail',
+      status: matches.length > 0 ? CHECK_STATUSES.PASS : CHECK_STATUSES.FAIL,
       matches: matches.length > 0 ? matches : undefined,
       hint: check.hint,
     };
   }
 
   if (check.kind === 'regex') {
-    let re: RegExp;
-    try {
-      re = new RegExp(check.pattern, check.flags);
-    } catch {
-      return { kind: 'regex', status: 'skipped-bad-regex', hint: check.hint };
+    const re = compileRegex(check);
+    if (re === null) {
+      return { kind: 'regex', status: CHECK_STATUSES.SKIPPED_BAD_REGEX, hint: check.hint };
     }
     const m = re.exec(normalized);
     return {
       kind: 'regex',
-      status: m ? 'pass' : 'fail',
+      status: m ? CHECK_STATUSES.PASS : CHECK_STATUSES.FAIL,
       matches: m ? [m[0]] : undefined,
       hint: check.hint,
     };
@@ -226,10 +257,10 @@ function evaluateCheck(
 
   // semantic
   if (studentVec === null) {
-    return { kind: 'semantic', status: 'skipped-embedder', hint: check.hint };
+    return { kind: 'semantic', status: CHECK_STATUSES.SKIPPED_EMBEDDER, hint: check.hint };
   }
   if (wordCount < (check.minWords ?? 3)) {
-    return { kind: 'semantic', status: 'skipped-too-short', hint: check.hint };
+    return { kind: 'semantic', status: CHECK_STATUSES.SKIPPED_TOO_SHORT, hint: check.hint };
   }
 
   const scores = check.anchors.map((a) => {
@@ -243,7 +274,7 @@ function evaluateCheck(
 
   return {
     kind: 'semantic',
-    status: best.score >= check.threshold ? 'pass' : 'fail',
+    status: best.score >= check.threshold ? CHECK_STATUSES.PASS : CHECK_STATUSES.FAIL,
     score: best.score,
     bestAnchor: best,
     anchorScores: debug ? scores : undefined,
@@ -253,27 +284,27 @@ function evaluateCheck(
 
 function evaluateVeto(veto: Veto, normalized: string, lower: string): VetoStatus {
   if (veto.kind === 'literal') {
-    return veto.terms.some((t) => lower.includes(t.toLowerCase())) ? 'triggered' : 'not-triggered';
+    return veto.terms.some((t) => lower.includes(t.toLowerCase()))
+      ? VETO_STATUSES.TRIGGERED
+      : VETO_STATUSES.NOT_TRIGGERED;
   }
-  try {
-    const re = new RegExp(veto.pattern, veto.flags);
-    return re.test(normalized) ? 'triggered' : 'not-triggered';
-  } catch {
-    return 'skipped-bad-regex';
-  }
+  const re = compileRegex(veto);
+  if (re === null) return VETO_STATUSES.SKIPPED_BAD_REGEX;
+  return re.test(normalized) ? VETO_STATUSES.TRIGGERED : VETO_STATUSES.NOT_TRIGGERED;
 }
 
 function evaluateMisconception(m: Misconception, normalized: string): MisconceptionStatus {
-  try {
-    const re = new RegExp(m.pattern, m.flags);
-    return re.test(normalized) ? 'triggered' : 'not-triggered';
-  } catch {
-    return 'skipped-bad-regex';
-  }
+  const re = compileRegex(m);
+  if (re === null) return VETO_STATUSES.SKIPPED_BAD_REGEX;
+  return re.test(normalized) ? VETO_STATUSES.TRIGGERED : VETO_STATUSES.NOT_TRIGGERED;
 }
 
 function isSkipped(s: CheckStatus): boolean {
-  return s === 'skipped-embedder' || s === 'skipped-too-short' || s === 'skipped-bad-regex';
+  return (
+    s === CHECK_STATUSES.SKIPPED_EMBEDDER ||
+    s === CHECK_STATUSES.SKIPPED_TOO_SHORT ||
+    s === CHECK_STATUSES.SKIPPED_BAD_REGEX
+  );
 }
 
 function cosine(a: number[], b: number[]): number {

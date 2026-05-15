@@ -91,14 +91,19 @@ async function discoverAnchors() {
     return [];
   }
   const anchors = new Set();
-  for (const f of files) {
-    try {
-      const raw = await readFile(f, 'utf8');
-      const json = JSON.parse(raw);
-      for (const a of collectAnchors(json)) anchors.add(a);
-    } catch (e) {
-      console.warn(`[discover] skipping ${f}: ${e?.message ?? e}`);
-    }
+  const parsed = await Promise.all(
+    files.map(async (f) => {
+      try {
+        return JSON.parse(await readFile(f, 'utf8'));
+      } catch (e) {
+        console.warn(`[discover] skipping ${f}: ${e?.message ?? e}`);
+        return null;
+      }
+    }),
+  );
+  for (const json of parsed) {
+    if (!json) continue;
+    for (const a of collectAnchors(json)) anchors.add(a);
   }
   return [...anchors];
 }
