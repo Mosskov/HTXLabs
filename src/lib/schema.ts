@@ -37,6 +37,13 @@ export const Gate = z.discriminatedUnion('type', [
      * the generic Danish prompt when omitted. */
     message: z.string().optional(),
   }),
+  z.object({
+    type: z.literal('rubric-required'),
+    /** Widget ids that must each register `{ kind: 'rubric', satisfied: true }`.
+     * `.min(1)` because an empty list would vacuously satisfy `every` and
+     * silently auto-open the gate. */
+    widgetIds: z.array(z.string()).min(1),
+  }),
 ]);
 export type Gate = z.infer<typeof Gate>;
 
@@ -110,6 +117,13 @@ export const ExperimentFrontmatter = z.object({
 
   // SEN escape hatch — disable global copy/paste protection on this lab.
   allowPaste: z.boolean().default(false),
+
+  // Hide from the production build's content index when true. Used for labs
+  // that depend on the local embed server (Rubric engine Phase 1). The
+  // `import.meta.env.PROD` check happens in src/lib/content.ts via
+  // `isVisibleInEnv`; .optional() (not .default(false)) so existing fixtures
+  // and frontmatter shapes don't change.
+  devOnly: z.boolean().optional(),
 
   tags: z.array(z.string()).default([]),
 });

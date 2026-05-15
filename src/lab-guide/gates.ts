@@ -19,7 +19,12 @@ export type WidgetState =
    *  gate spec carries a `widgetId`). Lets a single registration drive
    *  both gate kinds without double-keying the widget registry. */
   | { kind: 'filled'; filled: boolean; count?: number }
-  | { kind: 'keywords'; foundCount: number; total: number };
+  | { kind: 'keywords'; foundCount: number; total: number }
+  /** `<RubricResponse>` registers this. `satisfied` is a single derived bit:
+   *  most recent rubric result must be present, fresh (not edited since
+   *  evaluation), not embedder-down, and have `requiredSatisfied: true`. The
+   *  widget owns that derivation; the gate just reads the bit. */
+  | { kind: 'rubric'; satisfied: boolean };
 
 /** Gate kinds whose evaluation depends on the simulation rather than a widget.
  * Authorable labs (non-`tags: ['test']`) are limited to widget-driven kinds —
@@ -116,6 +121,14 @@ const GATE_HANDLERS: GateHandlerMap = {
     check: (gate, _state, module, ctx) =>
       module?.gates?.[gate.name]?.(ctx.simulationStateRef.current) ?? false,
     message: (gate) => gate.message ?? strings.gates.predicate,
+  },
+  'rubric-required': {
+    check: (gate, _state, _module, ctx) =>
+      gate.widgetIds.every((id) => {
+        const w = ctx.widgets[id];
+        return w?.kind === 'rubric' && w.satisfied;
+      }),
+    message: () => strings.gates.rubricRequired,
   },
 };
 

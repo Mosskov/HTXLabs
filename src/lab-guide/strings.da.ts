@@ -121,6 +121,19 @@ export const strings = {
       /** Sim-mode footer text when no measurements have been recorded yet. */
       simEmpty: 'Ingen målinger endnu — registrér målinger i simulationen.',
     },
+    rubric: {
+      placeholder: 'Skriv dit svar her...',
+      checkLabel: 'Tjek mit svar',
+      evaluating: 'Tjekker…',
+      /** Vars: {n} = minWords threshold */
+      tooShort: 'Skriv mindst {n} ord før du tjekker.',
+      embedderDown:
+        'Den semantiske vurdering er ikke tilgængelig lige nu — start embed-serveren og prøv igen.',
+      statusUnchecked: 'Ikke tjekket endnu',
+      statusPassed: 'Godkendt',
+      statusEdited: 'Ændret siden tjek',
+      rubricError: 'Denne opgave er midlertidigt utilgængelig.',
+    },
   },
   gates: {
     milestone: 'Du skal gennemføre forsøget mindst én gang for at fortsætte.',
@@ -133,6 +146,7 @@ export const strings = {
     keywordCount: 'Find mindst {min} nøgleord.',
     keywordCountAll: 'Brug nøgleord fra alle krav for at fortsætte.',
     predicate: 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.',
+    rubricRequired: 'Skriv et svar og tryk Tjek mit svar — alle krav skal være opfyldt.',
   },
   errors: {
     notFound: 'Forsøget blev ikke fundet.',

@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 6,
+  version: 7,
   title: 'Template',
   simulationId: 'template-sim',
   learningObjectives: ['Forstå hvordan en generisk lab er opbygget i frameworket'],
@@ -31,7 +31,7 @@ export const frontmatter: ExperimentFrontmatter = {
             'Læs teorien og overvej hvilken sammenhæng du forventer mellem X og Y.',
             'Formulér en kort hypotese om hvordan Y afhænger af X.',
           ],
-          gate: { type: 'all-filled', widgetIds: ['hypotese'] },
+          gate: { type: 'rubric-required', widgetIds: ['hypotese'] },
         },
         {
           id: 'opstil',
@@ -82,6 +82,9 @@ export const frontmatter: ExperimentFrontmatter = {
   },
   labModes: { virtual: { enabled: true } },
   allowPaste: false,
+  // Hidden in production until a production embedder ships — `planlaeg` now
+  // gates via the rubric engine, which requires the local embed server.
+  devOnly: true,
   tags: ['template'],
 };
 

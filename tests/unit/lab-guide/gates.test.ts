@@ -447,6 +447,60 @@ describe('predicate gate', () => {
   });
 });
 
+describe('rubric-required gate', () => {
+  const rubricGate: Gate = { type: 'rubric-required', widgetIds: ['hypotese'] };
+
+  it('returns false when no widget state is registered', () => {
+    expect(isGateSatisfied(rubricGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
+  });
+
+  it('returns false when the widget reports satisfied:false', () => {
+    const ctx = makeCtx({ hypotese: { kind: 'rubric', satisfied: false } });
+    expect(isGateSatisfied(rubricGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('returns true when the widget reports satisfied:true', () => {
+    const ctx = makeCtx({ hypotese: { kind: 'rubric', satisfied: true } });
+    expect(isGateSatisfied(rubricGate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('returns false when a listed widget reports the wrong kind', () => {
+    const ctx = makeCtx({ hypotese: { kind: 'filled', filled: true } });
+    expect(isGateSatisfied(rubricGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('multi-widget: any one satisfied:false closes the gate', () => {
+    const multi: Gate = { type: 'rubric-required', widgetIds: ['a', 'b', 'c'] };
+    const ctx = makeCtx({
+      a: { kind: 'rubric', satisfied: true },
+      b: { kind: 'rubric', satisfied: false },
+      c: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(multi, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('multi-widget: all satisfied opens the gate', () => {
+    const multi: Gate = { type: 'rubric-required', widgetIds: ['a', 'b'] };
+    const ctx = makeCtx({
+      a: { kind: 'rubric', satisfied: true },
+      b: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(multi, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('gateMessage returns the canonical Danish prompt', () => {
+    expect(gateMessage(rubricGate)).toBe(
+      'Skriv et svar og tryk Tjek mit svar — alle krav skal være opfyldt.',
+    );
+  });
+
+  it('open mode bypasses without rubric widgets', () => {
+    expect(
+      isGateSatisfied(rubricGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
+    ).toBe(true);
+  });
+});
+
 describe('canAdvanceTo', () => {
   it('current phase is reachable from itself', () => {
     expect(canAdvanceTo('planlaeg', phases, makeState(), undefined, makeCtx())).toBe(true);

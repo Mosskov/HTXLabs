@@ -1,17 +1,18 @@
-// Diagnostic testlab for the rubric engine. Loads pendulum-hypothesis.json,
-// validates it via parseRubric at module-load (bad rubric → dev build fails),
-// renders <RubricTester> in its single phase.
+// Diagnostic testlab for the rubric engine. Loads template-hypothesis.json
+// (canonical copy lives with the template lab), validates it via parseRubric
+// at module-load (bad rubric → dev build fails), renders <RubricTester> in
+// its single phase.
 import { parseRubric } from '@/lib/rubric/engine';
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
+import rubricJson from '../template/rubrics/template-hypothesis.json';
 import PhasePlanlaeg from './phase-planlaeg.mdx';
-import rubricJson from './rubrics/template-hypothesis.json';
 import Theory from './theory.mdx';
 
 const parsed = parseRubric(rubricJson);
 if (!parsed.ok) {
   throw new Error(
-    `[rubric-test] pendulum-hypothesis.json failed validation:\n${JSON.stringify(parsed.errors, null, 2)}`,
+    `[rubric-test] template-hypothesis.json failed validation:\n${JSON.stringify(parsed.errors, null, 2)}`,
   );
 }
 
@@ -36,6 +37,7 @@ export const frontmatter: ExperimentFrontmatter = {
   },
   labModes: { virtual: { enabled: true } },
   allowPaste: false,
+  devOnly: true,
   tags: ['test'],
 };
 

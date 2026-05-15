@@ -9,3 +9,4 @@ export { FreeTextResponse } from './FreeTextResponse';
 export { KeyEquation } from './KeyEquation';
 export { Quiz } from './Quiz';
 export { ResetButton } from './ResetButton';
+export { RubricResponse } from './RubricResponse';

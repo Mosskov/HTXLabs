@@ -1,5 +1,10 @@
 // Embedder interface + HttpEmbedder (localhost:8001) + MockEmbedder (direct text → vector for tests).
 
+/** Default dev-time embed-server URL. Re-export so the diagnostic component
+ *  (RubricTester) and the student-facing widget (RubricResponse) don't drift
+ *  apart on the URL. The server lives in scripts/embed-server.mjs. */
+export const DEV_EMBEDDER_URL = 'http://localhost:8001/embed';
+
 export interface Embedder {
   /** Engine convention (invariant 2): texts[0] is the student query, texts[1..] are anchors. */
   embed(texts: string[]): Promise<number[][]>;

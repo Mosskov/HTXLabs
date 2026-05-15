@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { validateAuthorableGates, validateSimGateRefs } from '@/lib/content';
+import { isVisibleInEnv, validateAuthorableGates, validateSimGateRefs } from '@/lib/content';
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { Gate, Phase } from '@/lib/schema';
 import type { SimulationMeta } from '@/sim-contract';
@@ -110,7 +110,7 @@ describe('validateAuthorableGates', () => {
         guided: [makePhase('p', { type: 'predicate', name: 'foo' })],
       });
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count\./,
+        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count, rubric-required\./,
       );
     });
 
@@ -293,5 +293,34 @@ describe('validateSimGateRefs', () => {
     expect(() => validateSimGateRefs(fm, makeMeta(['m1']), ctx)).toThrow(
       /mode "semi-guided".*"bogus"/,
     );
+  });
+});
+
+describe('isVisibleInEnv', () => {
+  function fm(devOnly: boolean | undefined): ExperimentFrontmatter {
+    const f = makeFrontmatter({});
+    f.devOnly = devOnly;
+    return f;
+  }
+
+  it('hides a devOnly lab in production', () => {
+    expect(isVisibleInEnv(fm(true), true)).toBe(false);
+  });
+
+  it('shows a devOnly lab in dev', () => {
+    expect(isVisibleInEnv(fm(true), false)).toBe(true);
+  });
+
+  it('shows a lab with devOnly:false in production', () => {
+    expect(isVisibleInEnv(fm(false), true)).toBe(true);
+  });
+
+  it('shows a lab with devOnly omitted in production', () => {
+    expect(isVisibleInEnv(fm(undefined), true)).toBe(true);
+  });
+
+  it('shows everything in dev', () => {
+    expect(isVisibleInEnv(fm(false), false)).toBe(true);
+    expect(isVisibleInEnv(fm(undefined), false)).toBe(true);
   });
 });

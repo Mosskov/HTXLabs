@@ -1,6 +1,6 @@
 // Dev-only diagnostic UI for the rubric engine — type a student answer, see per-criterion scoring.
 // Sibling of GateDebug. Refuses to render in production builds.
-import { HttpEmbedder } from '@/lib/rubric/embedder';
+import { DEV_EMBEDDER_URL, HttpEmbedder } from '@/lib/rubric/embedder';
 import {
   CHECK_STATUSES,
   type CriterionResult,
@@ -11,7 +11,7 @@ import {
 } from '@/lib/rubric/engine';
 import { useMemo, useState } from 'react';
 
-const embedder = new HttpEmbedder('http://localhost:8001/embed');
+const embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
 interface RubricTesterProps {
   rubric: unknown;

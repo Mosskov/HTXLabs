@@ -47,6 +47,18 @@ Phase-scope `milestone` and `data-points` gates via per-phase buckets; leave `pr
 
 ---
 
+## Rubric engine
+
+### Tighten `template-hypothesis.json` against gibberish-with-key-tokens
+Manual review 2026-05-15 found that *"noget med y og x men lige hvad j jv jv stiger"* clears all three required criteria of the template rubric: `iv` and `dv` via semantic-on-bare-token (`x` / `y` alone scores above 0.85 against anchors whose dominant token is the same symbol), and `relation` via the loose single-clause regex picking up `stiger`. Fix is (a) drop semantic from `iv`/`dv` and replace with literal/regex requiring both the concept word (`uafhængig`/`afhængig`) and the symbol mention, and (b) tighten the `relation` regex to bind the change verb to X/Y (clause-shape pattern), mirroring the `rubric-test` v2 calibration.
+**Why:** the rubric engine isn't broken — the template rubric is too lenient for what it gates. Specific-claim criteria aren't safely gateable on semantic alone (Phase 1 calibration conclusion), and the template rubric is the copyable teaching example, so it has to model the right pattern.
+
+### Coherence check kind
+A new rubric check kind (alongside `semantic` / `regex` / `literal`) that asks "is this a coherent answer at all?" rather than "does it contain the required claim?". Sentence-transformer embeddings can't do this — they're trained for meaning-similarity, not fluency, and a short input with the right salient tokens lands close to anchors regardless of whether the connecting words make sense. Candidate implementations: small-LM perplexity, dictionary-word ratio / lexical density, or an LLM-judge call. Would compose with the existing kinds (e.g. a criterion could require `coherence` AND a literal claim).
+**Why:** today's review showed gibberish-with-key-tokens passes the rubric. Tightening individual rubrics (above) closes the specific holes, but a coherence kind would be a structural fix — and the Phase 1 calibration already concluded that fluency is fundamentally outside the embedder's job. Deferred until a real lab needs it; design and model choice are open.
+
+---
+
 ## Content
 
 *(No standing items. Lab-specific work is tracked in memory; entries here would be patterns or conventions cutting across labs.)*

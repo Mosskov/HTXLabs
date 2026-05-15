@@ -3,7 +3,15 @@
 // public API of `./index.ts`. Add a new author-callable widget by exporting
 // it here (and from `./index.ts`).
 
-import { Checklist, DataTable, FreeTextResponse, KeyEquation, Quiz, ResetButton } from '.';
+import {
+  Checklist,
+  DataTable,
+  FreeTextResponse,
+  KeyEquation,
+  Quiz,
+  ResetButton,
+  RubricResponse,
+} from '.';
 
 export const mdxComponents = {
   Checklist,
@@ -12,4 +20,5 @@ export const mdxComponents = {
   KeyEquation,
   Quiz,
   ResetButton,
+  RubricResponse,
 };

@@ -23,6 +23,16 @@ const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set(
 
 const CANONICAL_PHASE_ID_SET: ReadonlySet<string> = new Set(CANONICAL_PHASE_IDS);
 
+/** A lab tagged `devOnly: true` is unreachable in the production build — used
+ * by labs that require the local embed server (rubric engine). The `prod`
+ * argument is injectable so the predicate is testable without module reset. */
+export function isVisibleInEnv(
+  fm: ExperimentFrontmatter,
+  prod: boolean = import.meta.env.PROD,
+): boolean {
+  return !(fm.devOnly && prod);
+}
+
 function modeEntries(fm: ExperimentFrontmatter): Array<[string, { phases: Phase[] } | undefined]> {
   return [
     ['guided', fm.modes.guided],
@@ -168,6 +178,9 @@ for (const [path, mod] of Object.entries(experimentModules)) {
     });
     continue;
   }
+  // devOnly labs vanish from the production index entirely — no 404 card,
+  // no listTopics entry, no loadExperiment hit. Dev builds always see them.
+  if (!isVisibleInEnv(parsed.data)) continue;
   // Reject gate kinds whose widget/sim wiring isn't implemented in this build —
   // otherwise the student gets a silent permanent lock. See AUTHORABLE_GATE_KINDS.
   try {
@@ -239,11 +252,14 @@ export function listTopics(): LoadedTopic[] {
       frontmatter,
       experiments: validExperimentsForTopic(frontmatter.id),
     }))
+    .filter((t) => t.experiments.length > 0)
     .sort((a, b) => a.frontmatter.order - b.frontmatter.order);
 }
 
 export function loadTopic(slug: string): LoadedTopic | null {
   const fm = topicsIndex.get(slug);
   if (!fm) return null;
-  return { frontmatter: fm, experiments: validExperimentsForTopic(slug) };
+  const experiments = validExperimentsForTopic(slug);
+  if (experiments.length === 0) return null;
+  return { frontmatter: fm, experiments };
 }
