@@ -2,10 +2,19 @@
 //
 // Contract with the gate: this widget registers `{ kind: 'rubric', satisfied }`
 // where `satisfied` is derived each render from
-//   `result && !dirty && !embedderDown && result.requiredSatisfied`.
-// Editing the text flips `dirty:true` → `satisfied:false` → the gate re-closes
-// without us touching the stored `result`. The status pill ("Ændret siden tjek")
-// communicates that an earlier check happened but is now stale.
+//   `!dirty && !embedderDown && requiredSatisfied`, sourced from the live
+// `result` (just-evaluated) or the persisted pass record (cross-reload).
+// Editing the text — or changing `dependsOn` — flips `dirty:true` → the gate
+// re-closes without us touching the persisted record. The status pill
+// ("Ændret siden tjek") communicates that an earlier check is now stale.
+//
+// Reload-safety: each completed evaluate writes a minimal pass record to
+// `widgetValues[`${id}:result`]` containing
+//   `{ lastCheckedText, lastCheckedDependsOn, requiredSatisfied, embedderDown }`.
+// On reload, that record hydrates the gate + pill so a prior pass survives
+// without forcing a re-Tjek. The full `RubricResult` (criteria, hints) is
+// component-state only — hints disappear on reload and reappear on next Tjek,
+// which is the accepted trade-off vs. persisting embedder vectors.
 import { DEV_EMBEDDER_URL, type Embedder, HttpEmbedder } from '@/lib/rubric/embedder';
 import {
   CHECK_STATUSES,
@@ -22,6 +31,27 @@ import { ProtectedTextarea } from './ProtectedInput';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
+interface PersistedPass {
+  lastCheckedText: string;
+  lastCheckedDependsOn: string | null;
+  requiredSatisfied: boolean;
+  embedderDown: boolean;
+}
+
+function readPersisted(value: unknown): PersistedPass | null {
+  if (!value || typeof value !== 'object') return null;
+  const p = value as Partial<PersistedPass>;
+  if (typeof p.lastCheckedText !== 'string') return null;
+  if (typeof p.requiredSatisfied !== 'boolean') return null;
+  return {
+    lastCheckedText: p.lastCheckedText,
+    lastCheckedDependsOn:
+      typeof p.lastCheckedDependsOn === 'string' ? p.lastCheckedDependsOn : null,
+    requiredSatisfied: p.requiredSatisfied,
+    embedderDown: p.embedderDown === true,
+  };
+}
+
 interface Props {
   id: string;
   prompt: string;
@@ -36,6 +66,11 @@ interface Props {
    *  optional criteria still carry tiered hints. Defaults to
    *  `strings.widgets.rubric.bonusPanelTitle`. */
   bonusPanelTitle?: string;
+  /** Opaque dependency string. When it changes after a check, `dirty` flips on
+   *  (same as editing the text) and the gate re-closes. Use it to bind the
+   *  pass to external context the prompt depends on — e.g. variable symbols
+   *  the prompt interpolates. Caller stringifies; no deep equality. */
+  dependsOn?: string;
   /** Test-injection seam. Defaults to a module-level HttpEmbedder pointed at
    *  the local dev server (no embed server in production → embedder-down
    *  banner is the expected path; gate stays closed). */
@@ -53,11 +88,16 @@ export function RubricResponse({
   tooShortMessage,
   embedderDownMessage,
   bonusPanelTitle,
+  dependsOn,
   embedder = defaultEmbedder,
 }: Props) {
   const { state, setWidgetValue, incrementRubricTier } = useRunner();
   const text = (state.widgetValues[id] as string | undefined) ?? '';
   const tiers = state.rubricHintTiers[id] ?? {};
+  const dependsOnNorm = dependsOn ?? null;
+
+  const persistedKey = `${id}:result`;
+  const persisted = readPersisted(state.widgetValues[persistedKey]);
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
   // Surface parse failures in the dev console — author sees them on page load.
@@ -68,7 +108,6 @@ export function RubricResponse({
   }, [parsed, id]);
 
   const [result, setResult] = useState<RubricResult | null>(null);
-  const [lastCheckedText, setLastCheckedText] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
@@ -80,13 +119,36 @@ export function RubricResponse({
     };
   }, []);
 
-  const embedderDown =
+  // Derive the "what was checked last" pair from the persisted record so a
+  // reload (no live `result`) still produces the right dirty/satisfied bits.
+  // Live evaluates write the record synchronously alongside `setResult`, so
+  // the two sources never disagree at render time.
+  const lastCheckedText = persisted?.lastCheckedText ?? null;
+  const lastCheckedDependsOn = persisted?.lastCheckedDependsOn ?? null;
+
+  // embedderDown: live result wins; otherwise the persisted bit (so a prior
+  // outage doesn't silently re-open after reload).
+  const liveEmbedderDown =
     !!result &&
     result.criteria.some((c) =>
       c.checks.some((ch) => ch.status === CHECK_STATUSES.SKIPPED_EMBEDDER),
     );
-  const dirty = lastCheckedText !== null && text !== lastCheckedText;
-  const satisfied = parsed.ok && !!result && !dirty && !embedderDown && result.requiredSatisfied;
+  const embedderDown = result ? liveEmbedderDown : (persisted?.embedderDown ?? false);
+
+  const dirty =
+    lastCheckedText !== null &&
+    (text !== lastCheckedText || dependsOnNorm !== lastCheckedDependsOn);
+
+  const requiredSatisfied = result
+    ? result.requiredSatisfied
+    : (persisted?.requiredSatisfied ?? false);
+
+  // `lastCheckedText !== null` gates satisfaction on "an evaluate has actually
+  // happened" — protects against a live `result` outliving a wiped persisted
+  // record (e.g. after `resetLab`, which clears widgetValues but not component
+  // state).
+  const satisfied =
+    parsed.ok && lastCheckedText !== null && !dirty && !embedderDown && requiredSatisfied;
 
   // Always-register pattern — even with a bad rubric, we publish satisfied:false
   // from mount so hooks order is stable across the render-branch below.
@@ -99,9 +161,9 @@ export function RubricResponse({
   const onTextChange = (next: string) => {
     // Invalidate any in-flight evaluation: when it resolves, its requestId
     // won't match anymore and the resolution gets dropped (pending still
-    // clears so the button re-enables). We deliberately do NOT clear `result`
-    // or `lastCheckedText` here — those are what let the pill show "Ændret
-    // siden tjek" rather than reverting to "Ikke tjekket endnu".
+    // clears so the button re-enables). We deliberately do NOT clear the
+    // persisted record here — that's what lets the pill show "Ændret siden
+    // tjek" rather than reverting to "Ikke tjekket endnu".
     requestIdRef.current += 1;
     setWidgetValue(id, next);
   };
@@ -110,13 +172,25 @@ export function RubricResponse({
     if (!parsed.ok) return;
     const reqId = ++requestIdRef.current;
     const snapshotText = text;
+    const snapshotDependsOn = dependsOnNorm;
     setPending(true);
     try {
       const r = await evaluateRubric(snapshotText, parsed.rubric, embedder);
       if (!mountedRef.current) return;
       if (reqId === requestIdRef.current) {
+        const skipped = r.criteria.some((c) =>
+          c.checks.some((ch) => ch.status === CHECK_STATUSES.SKIPPED_EMBEDDER),
+        );
         setResult(r);
-        setLastCheckedText(snapshotText);
+        // Persist the minimal pass record alongside the live result. React
+        // batches the dispatch + setResult so the next render sees both.
+        const record: PersistedPass = {
+          lastCheckedText: snapshotText,
+          lastCheckedDependsOn: snapshotDependsOn,
+          requiredSatisfied: r.requiredSatisfied,
+          embedderDown: skipped,
+        };
+        setWidgetValue(persistedKey, record);
         // Post-resolve tier bump for criteria still failing. Required
         // criteria always count; optional criteria only count once required
         // all pass AND the optional criterion was actually evaluable — an

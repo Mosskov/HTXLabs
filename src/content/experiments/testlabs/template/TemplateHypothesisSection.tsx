@@ -30,6 +30,7 @@ export function TemplateHypothesisSection({ rubric }: Props) {
         prompt={`Skriv en kort hypotese om sammenhængen mellem ${iv} og ${dv}.`}
         placeholder={`Fx. Det forventes at ${dv} stiger lineært med ${iv} …`}
         minWords={10}
+        dependsOn={`${iv}|${dv}`}
       />
     </>
   );

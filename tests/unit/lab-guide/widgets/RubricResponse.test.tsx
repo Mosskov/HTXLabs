@@ -5,6 +5,7 @@ import { MockEmbedder } from '@/lib/rubric/embedder';
 import type { Gate, Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 
 // A minimal rubric with one required semantic criterion + one literal-only
@@ -354,5 +355,74 @@ describe('RubricResponse — tiered hints', () => {
     // No bonus panel surfaced — the criterion was skipped, not failing.
     expect(screen.queryByText(/vil du gøre svaret stærkere/i)).not.toBeInTheDocument();
     expect(screen.queryByText('bonus-t1')).not.toBeInTheDocument();
+  });
+});
+
+describe('RubricResponse — reload safety', () => {
+  it('restores the gate as passed when a prior pass is in widgetValues', async () => {
+    const experimentId = 'rr-reload/1';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    const user = userEvent.setup();
+    const first = render(
+      <Harness experimentId={experimentId}>
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={mockEmbedder()} />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), passingText);
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+    first.unmount();
+
+    // Fresh mount with the same experimentId — state hydrates from
+    // localStorage and the gate reports pass without re-clicking Tjek.
+    render(
+      <Harness experimentId={experimentId}>
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={mockEmbedder()} />
+      </Harness>,
+    );
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+    expect(screen.getByText(/godkendt/i)).toBeInTheDocument();
+  });
+
+  it('marks dirty + closes the gate when dependsOn changes after a pass', async () => {
+    const experimentId = 'rr-deps/1';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    function Bound() {
+      const [deps, setDeps] = useState('X|Y');
+      return (
+        <>
+          <button type="button" data-testid="flip-deps" onClick={() => setDeps('m|F')}>
+            flip
+          </button>
+          <RubricResponse
+            id="hypotese"
+            prompt="?"
+            rubric={passingRubric}
+            dependsOn={deps}
+            embedder={mockEmbedder()}
+          />
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId={experimentId}>
+        <Bound />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), passingText);
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+
+    // Flip the external dep — text is unchanged, but the prior pass no longer
+    // applies. Gate re-closes; "Ændret siden tjek" pill surfaces.
+    await user.click(screen.getByTestId('flip-deps'));
+    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    expect(screen.getByText(/ændret siden tjek/i)).toBeInTheDocument();
   });
 });
