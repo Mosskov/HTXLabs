@@ -134,4 +134,56 @@ describe('RubricSchema', () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.required).toBe(true);
   });
+
+  describe('tiered hints', () => {
+    it('accepts a criterion with hints[]', () => {
+      const result = CriterionSchema.safeParse({
+        id: 'c1',
+        label: 'x',
+        hints: ['tier 1', 'tier 2', 'tier 3'],
+        any: [{ kind: 'literal', terms: ['x'] }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.hints).toEqual(['tier 1', 'tier 2', 'tier 3']);
+    });
+
+    it('still accepts legacy hint (single string)', () => {
+      const result = CriterionSchema.safeParse({
+        id: 'c1',
+        label: 'x',
+        hint: 'one shot',
+        any: [{ kind: 'literal', terms: ['x'] }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.hint).toBe('one shot');
+    });
+
+    it('rejects when both hint and hints are present', () => {
+      const result = CriterionSchema.safeParse({
+        id: 'c1',
+        label: 'x',
+        hint: 'one',
+        hints: ['t1', 't2'],
+        any: [{ kind: 'literal', terms: ['x'] }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(
+          result.error.issues.some(
+            (i) => i.message.includes("'c1'") && i.message.includes('not both'),
+          ),
+        ).toBe(true);
+      }
+    });
+
+    it('accepts empty hints[]', () => {
+      const result = CriterionSchema.safeParse({
+        id: 'c1',
+        label: 'x',
+        hints: [],
+        any: [{ kind: 'literal', terms: ['x'] }],
+      });
+      expect(result.success).toBe(true);
+    });
+  });
 });

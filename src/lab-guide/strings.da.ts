@@ -133,6 +133,7 @@ export const strings = {
       statusPassed: 'Godkendt',
       statusEdited: 'Ændret siden tjek',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
+      bonusPanelTitle: 'Vil du gøre svaret stærkere?',
     },
   },
   gates: {

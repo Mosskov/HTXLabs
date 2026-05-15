@@ -217,7 +217,15 @@ function CriterionRow({ c, debug }: { c: CriterionResult; debug: boolean }) {
         </td>
         <td className={`py-1 pr-2 font-semibold ${badgeColor}`}>{badge}</td>
         <td className="py-1 pr-2 font-mono">{scoreCell}</td>
-        <td className="py-1 pr-2 text-stone-700">{!c.satisfied && c.hint ? c.hint : null}</td>
+        <td className="py-1 pr-2 text-stone-700">
+          {!c.satisfied && c.hints.length > 0 ? (
+            <ol className="list-decimal pl-4">
+              {c.hints.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ol>
+          ) : null}
+        </td>
       </tr>
       {debug && (
         <tr className="border-b border-amber-100">

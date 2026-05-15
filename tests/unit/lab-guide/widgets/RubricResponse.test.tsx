@@ -175,3 +175,184 @@ describe('RubricResponse', () => {
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
   });
 });
+
+describe('RubricResponse — tiered hints', () => {
+  // Rubric with two required literal criteria sharing tier 1 (dedupe target)
+  // and an optional literal criterion for the bonus panel. No semantic checks
+  // so no embedder calls are needed.
+  const tieredRubric = {
+    id: 'tiered',
+    version: 1,
+    title: 'Tiered',
+    criteria: [
+      {
+        id: 'iv',
+        label: 'IV',
+        hints: ['shared-t1', 'shared-t2', 'iv-t3'],
+        any: [{ kind: 'literal', terms: ['uafhængig'] }],
+      },
+      {
+        id: 'dv',
+        label: 'DV',
+        hints: ['shared-t1', 'shared-t2', 'dv-t3'],
+        any: [{ kind: 'literal', terms: ['afhængig'] }],
+      },
+      {
+        id: 'bonus',
+        label: 'Bonus',
+        required: false,
+        hints: ['bonus-t1', 'bonus-t2'],
+        any: [{ kind: 'literal', terms: ['ekstra'] }],
+      },
+    ],
+  };
+  const empty = new MockEmbedder({});
+
+  it('reveals tier-1 hint after first failing tjek, deduped across criteria', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rrt/1">
+        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt her');
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText('shared-t1')).toBeInTheDocument();
+    // Only one bullet for the shared tier-1 hint — dedupe.
+    expect(screen.getAllByText('shared-t1')).toHaveLength(1);
+    // Tier 2/3 not yet revealed.
+    expect(screen.queryByText('shared-t2')).not.toBeInTheDocument();
+    expect(screen.queryByText('iv-t3')).not.toBeInTheDocument();
+  });
+
+  it('stacks hints tier 1 → 1+2 → 1+2+3 across repeated tjek, caps at 3', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rrt/2">
+        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
+      </Harness>,
+    );
+    const button = screen.getByRole('button', { name: /tjek/i });
+    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt her');
+
+    await user.click(button);
+    expect(await screen.findByText('shared-t1')).toBeInTheDocument();
+
+    await user.click(button);
+    expect(await screen.findByText('shared-t2')).toBeInTheDocument();
+    expect(screen.getByText('shared-t1')).toBeInTheDocument();
+
+    await user.click(button);
+    expect(await screen.findByText('iv-t3')).toBeInTheDocument();
+    expect(screen.getByText('dv-t3')).toBeInTheDocument();
+    expect(screen.getByText('shared-t1')).toBeInTheDocument();
+    expect(screen.getByText('shared-t2')).toBeInTheDocument();
+
+    // Fourth click — caps; no new bullets.
+    await user.click(button);
+    expect(screen.getAllByText('iv-t3')).toHaveLength(1);
+    expect(screen.getAllByText('dv-t3')).toHaveLength(1);
+  });
+
+  it('shows the bonus panel when required pass and the optional has tiered hints', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rrt/3">
+        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
+      </Harness>,
+    );
+    await user.type(
+      screen.getByRole('textbox'),
+      'min uafhængig og min afhængig variabel er klare',
+    );
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(screen.getByText(/vil du gøre svaret stærkere/i)).toBeInTheDocument();
+    expect(screen.getByText('bonus-t1')).toBeInTheDocument();
+    expect(screen.queryByText('bonus-t2')).not.toBeInTheDocument();
+  });
+
+  it('hides the bonus panel on required regression but preserves the tier', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rrt/4">
+        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
+      </Harness>,
+    );
+    const textbox = screen.getByRole('textbox');
+    await user.type(textbox, 'min uafhængig og min afhængig variabel er klare');
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText('bonus-t1')).toBeInTheDocument();
+
+    // Edit to break the dv keyword (replace "afhængig" → drop it entirely).
+    await user.clear(textbox);
+    await user.type(textbox, 'kun min uafhængig variabel er klar');
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+
+    // Required regression: bonus panel hides; required failure hint surfaces.
+    await screen.findByText('shared-t1');
+    expect(screen.queryByText(/vil du gøre svaret stærkere/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('bonus-t1')).not.toBeInTheDocument();
+
+    // Re-pass required → bonus tier preserved across the regression cycle and
+    // increments again on this new tjek with bonus still failing. If the tier
+    // had been reset to 0 on regression, only bonus-t1 would surface here.
+    await user.clear(textbox);
+    await user.type(textbox, 'min uafhængig og min afhængig variabel er klare igen');
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText('bonus-t2')).toBeInTheDocument();
+    expect(screen.getByText('bonus-t1')).toBeInTheDocument();
+  });
+
+  it('does not escalate or render a semantic-only bonus while the embedder is down', async () => {
+    // The bonus criterion is semantic-only; with a flaky embedder it goes
+    // skipped-embedder → !evaluable. Required criteria are literal-only so
+    // they still pass. The widget must not ratchet the bonus tier or show
+    // the panel under the embedder-down banner.
+    const semanticBonusRubric = {
+      id: 'tiered-sem',
+      version: 1,
+      title: 'Sem bonus',
+      criteria: [
+        {
+          id: 'iv',
+          label: 'IV',
+          hints: ['iv-t1'],
+          any: [{ kind: 'literal', terms: ['uafhængig'] }],
+        },
+        {
+          id: 'dv',
+          label: 'DV',
+          hints: ['dv-t1'],
+          any: [{ kind: 'literal', terms: ['afhængig'] }],
+        },
+        {
+          id: 'bonus',
+          label: 'Bonus',
+          required: false,
+          hints: ['bonus-t1', 'bonus-t2'],
+          any: [{ kind: 'semantic', threshold: 0.5, anchors: ['something'] }],
+        },
+      ],
+    };
+    const flaky = {
+      async embed() {
+        throw new Error('embed server down');
+      },
+    };
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rrt/5">
+        <RubricResponse id="hyp" prompt="?" rubric={semanticBonusRubric} embedder={flaky} />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), 'min uafhængig og afhængig variabel');
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    // Embedder-down banner shows; gate stays closed.
+    expect(await screen.findByText(/semantiske vurdering/i)).toBeInTheDocument();
+    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    // No bonus panel surfaced — the criterion was skipped, not failing.
+    expect(screen.queryByText(/vil du gøre svaret stærkere/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('bonus-t1')).not.toBeInTheDocument();
+  });
+});

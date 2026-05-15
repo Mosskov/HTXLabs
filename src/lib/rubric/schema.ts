@@ -61,12 +61,25 @@ export const CriterionSchema = z
     id: z.string(),
     label: z.string(),
     required: z.boolean().default(true),
+    /** Legacy single-shot hint. Normalized to `hints: [hint]` in the engine.
+     *  Mutually exclusive with `hints` — both-present rejected by superRefine. */
     hint: z.string().optional(),
+    /** Tiered progressive hints; engine surfaces these on CriterionResult.hints. */
+    hints: z.array(z.string()).optional(),
     any: z.array(CheckSchema).min(1),
     none: z.array(VetoSchema).optional(),
     misconceptions: z.array(MisconceptionSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((c, ctx) => {
+    if (c.hint !== undefined && c.hints !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `criterion '${c.id}': use 'hint' or 'hints', not both`,
+        path: ['hints'],
+      });
+    }
+  });
 export type Criterion = z.infer<typeof CriterionSchema>;
 
 export const RubricSchema = z

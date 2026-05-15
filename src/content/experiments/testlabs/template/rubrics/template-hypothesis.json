@@ -1,16 +1,20 @@
 {
   "id": "template-hypothesis",
-  "version": 3,
+  "version": 4,
   "title": "Hypotese — sammenhæng mellem X og Y",
   "criteria": [
     {
       "id": "iv",
       "label": "Uafhængig variabel (X)",
-      "hint": "Skriv at X er den uafhængige variabel — eller at du varierer X i forsøget.",
+      "hints": [
+        "Har du læst teoriafsnittet igennem? Brug teorien til at skrive en god hypotese.",
+        "Relevante fysiske størrelser skal indgå i hypotesen.",
+        "Den uafhængige variabel skal indgå i hypotesen."
+      ],
       "any": [
         {
           "kind": "literal",
-          "terms": ["uafhængig", "uafhængige", "varierer"]
+          "terms": ["x", "X"]
         }
       ],
       "misconceptions": [
@@ -25,22 +29,30 @@
     {
       "id": "dv",
       "label": "Afhængig variabel (Y)",
-      "hint": "Skriv at Y er den afhængige variabel som du måler.",
+      "hints": [
+        "Har du læst teoriafsnittet igennem? Brug teorien til at skrive en god hypotese.",
+        "Relevante fysiske størrelser skal indgå i hypotesen.",
+        "Den afhængige variabel skal indgå i hypotesen."
+      ],
       "any": [
         {
           "kind": "literal",
-          "terms": ["afhængig", "afhængige"]
+          "terms": ["y", "Y"]
         }
       ]
     },
     {
       "id": "relation",
       "label": "Forudsagt sammenhæng",
-      "hint": "Beskriv hvordan Y ændrer sig når X varieres — knyt ændringen til X eller Y i samme sætning.",
+      "hints": [
+        "Har du læst teoriafsnittet igennem? Brug teorien til at skrive en god hypotese.",
+        "Din hypotese skal forudsige en sammenhæng.",
+        "Hvad sker der med den ene variabel, når du varierer den anden? Skriv det som én sætning."
+      ],
       "any": [
         {
           "kind": "regex",
-          "pattern": "\\b[XxYy]\\b[^.!?\\n]*\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre|uafhængig)\\b|\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre|uafhængig)\\b[^.!?\\n]*\\b[XxYy]\\b",
+          "pattern": "\\b[XxYy]\\b[^.!?\\n]*\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b|\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b[^.!?\\n]*\\b[XxYy]\\b",
           "flags": "iu"
         }
       ],
@@ -57,6 +69,10 @@
       "id": "principle",
       "label": "Lineær form (valgfrit)",
       "required": false,
+      "hints": [
+        "Bonus: Kan teorien hjælpe dig med at sige mere præcist, hvilken type sammenhæng du forventer?",
+        "Hvis den ene størrelse vokser med samme takt, hver gang den anden stiger, kan du bruge ordet lineær."
+      ],
       "any": [
         {
           "kind": "semantic",

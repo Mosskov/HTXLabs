@@ -303,7 +303,7 @@ describe('evaluateRubric — invariants', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     const r = await evaluateRubric('no match here', parsed.rubric, embedder);
-    expect(r.criteria[0].hint).toBe('check-specific');
+    expect(r.criteria[0].hints).toEqual(['check-specific']);
   });
 
   it('debug payload: anchorScores populated only when opts.debug=true', async () => {
@@ -461,5 +461,87 @@ describe('regex diagnostics carry the failing pattern', () => {
     const r = await evaluateRubric('x', parsed.rubric, embedder);
     expect(r.criteria[0].vetoes[0].status).toBe('skipped-bad-regex');
     expect(r.criteria[0].vetoes[0].pattern).toBe('(also-unclosed');
+  });
+});
+
+describe('evaluateRubric — hints normalization', () => {
+  const buildEmbedder = () => new MockEmbedder({});
+
+  it('surfaces hints[] verbatim when criterion uses tiered hints', async () => {
+    const parsed = parseRubric({
+      id: 'rh',
+      version: 1,
+      title: 'rh',
+      criteria: [
+        {
+          id: 'c1',
+          label: 'c1',
+          hints: ['t1', 't2', 't3'],
+          any: [{ kind: 'literal', terms: ['nope'] }],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('nothing matching', parsed.rubric, buildEmbedder());
+    expect(r.criteria[0].hints).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('wraps legacy hint string in a single-element list', async () => {
+    const parsed = parseRubric({
+      id: 'rh',
+      version: 1,
+      title: 'rh',
+      criteria: [
+        {
+          id: 'c1',
+          label: 'c1',
+          hint: 'one shot',
+          any: [{ kind: 'literal', terms: ['nope'] }],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('nothing matching', parsed.rubric, buildEmbedder());
+    expect(r.criteria[0].hints).toEqual(['one shot']);
+  });
+
+  it('falls back to a failed check-level hint when no criterion hint is set', async () => {
+    const parsed = parseRubric({
+      id: 'rh',
+      version: 1,
+      title: 'rh',
+      criteria: [
+        {
+          id: 'c1',
+          label: 'c1',
+          any: [{ kind: 'literal', terms: ['nope'], hint: 'check-level' }],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('nothing matching', parsed.rubric, buildEmbedder());
+    expect(r.criteria[0].hints).toEqual(['check-level']);
+  });
+
+  it('returns an empty list when no hint is authored anywhere', async () => {
+    const parsed = parseRubric({
+      id: 'rh',
+      version: 1,
+      title: 'rh',
+      criteria: [
+        {
+          id: 'c1',
+          label: 'c1',
+          any: [{ kind: 'literal', terms: ['nope'] }],
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const r = await evaluateRubric('nothing matching', parsed.rubric, buildEmbedder());
+    expect(r.criteria[0].hints).toEqual([]);
   });
 });

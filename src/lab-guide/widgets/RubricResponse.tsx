@@ -32,6 +32,10 @@ interface Props {
   checkLabel?: string;
   tooShortMessage?: string;
   embedderDownMessage?: string;
+  /** Title for the bonus panel surfaced when required criteria all pass but
+   *  optional criteria still carry tiered hints. Defaults to
+   *  `strings.widgets.rubric.bonusPanelTitle`. */
+  bonusPanelTitle?: string;
   /** Test-injection seam. Defaults to a module-level HttpEmbedder pointed at
    *  the local dev server (no embed server in production → embedder-down
    *  banner is the expected path; gate stays closed). */
@@ -48,10 +52,12 @@ export function RubricResponse({
   checkLabel,
   tooShortMessage,
   embedderDownMessage,
+  bonusPanelTitle,
   embedder = defaultEmbedder,
 }: Props) {
-  const { state, setWidgetValue } = useRunner();
+  const { state, setWidgetValue, incrementRubricTier } = useRunner();
   const text = (state.widgetValues[id] as string | undefined) ?? '';
+  const tiers = state.rubricHintTiers[id] ?? {};
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
   // Surface parse failures in the dev console — author sees them on page load.
@@ -111,6 +117,19 @@ export function RubricResponse({
       if (reqId === requestIdRef.current) {
         setResult(r);
         setLastCheckedText(snapshotText);
+        // Post-resolve tier bump for criteria still failing. Required
+        // criteria always count; optional criteria only count once required
+        // all pass AND the optional criterion was actually evaluable — an
+        // embedder outage on a semantic-only bonus must not ratchet the tier,
+        // since the student can't make progress against a skipped check.
+        for (const c of r.criteria) {
+          if (c.satisfied || c.hints.length === 0) continue;
+          if (c.required) {
+            incrementRubricTier(id, c.id, c.hints.length);
+          } else if (r.requiredSatisfied && c.evaluable) {
+            incrementRubricTier(id, c.id, c.hints.length);
+          }
+        }
       }
     } finally {
       if (mountedRef.current) setPending(false);
@@ -150,17 +169,62 @@ export function RubricResponse({
             .map((m) => ({ criterionId: c.id, hint: m.hint })),
         )
       : [];
-  const failedHints =
-    result && !dirty && !pending
-      ? result.criteria.flatMap((c) =>
-          !c.satisfied && c.required && c.hint ? [{ criterionId: c.id, hint: c.hint }] : [],
-        )
-      : [];
+  // Tiered hint stack for failing required criteria. Each criterion contributes
+  // its first `tier` hints; we dedupe by text so e.g. a shared tier-1 nudge
+  // collapses to one bullet across iv/dv/relation. First producer wins the key.
+  const failedHints = (() => {
+    if (!result || dirty || pending) return [] as { key: string; text: string }[];
+    const entries: { criterionId: string; tier: number; text: string }[] = [];
+    for (const c of result.criteria) {
+      if (c.satisfied || !c.required) continue;
+      const tier = tiers[c.id] ?? 0;
+      if (tier === 0 || c.hints.length === 0) continue;
+      for (let i = 0; i < Math.min(tier, c.hints.length); i++) {
+        const text = c.hints[i];
+        if (text !== undefined) entries.push({ criterionId: c.id, tier: i + 1, text });
+      }
+    }
+    const seen = new Set<string>();
+    const out: { key: string; text: string }[] = [];
+    for (const e of entries) {
+      if (seen.has(e.text)) continue;
+      seen.add(e.text);
+      out.push({ key: `fail-${e.criterionId}-${e.tier}`, text: e.text });
+    }
+    return out;
+  })();
+  // Bonus panel hints — same dedupe pass over optional unsatisfied criteria.
+  // Non-evaluable optional criteria are skipped: when the embedder is down a
+  // semantic-only bonus would otherwise surface unreachable advice.
+  const bonusHints = (() => {
+    if (!result || dirty || pending || !result.requiredSatisfied) {
+      return [] as { key: string; text: string }[];
+    }
+    const entries: { criterionId: string; tier: number; text: string }[] = [];
+    for (const c of result.criteria) {
+      if (c.satisfied || c.required || !c.evaluable) continue;
+      const tier = tiers[c.id] ?? 0;
+      if (tier === 0 || c.hints.length === 0) continue;
+      for (let i = 0; i < Math.min(tier, c.hints.length); i++) {
+        const text = c.hints[i];
+        if (text !== undefined) entries.push({ criterionId: c.id, tier: i + 1, text });
+      }
+    }
+    const seen = new Set<string>();
+    const out: { key: string; text: string }[] = [];
+    for (const e of entries) {
+      if (seen.has(e.text)) continue;
+      seen.add(e.text);
+      out.push({ key: `bonus-${e.criterionId}-${e.tier}`, text: e.text });
+    }
+    return out;
+  })();
   const showHints =
     !!result &&
     !dirty &&
     !pending &&
     (failedHints.length > 0 || triggeredMisconceptions.length > 0);
+  const showBonusPanel = bonusHints.length > 0;
   const showEmbedderBanner = embedderDown && !dirty;
 
   const tooShort = nonEmpty && !meetsMinWords;
@@ -214,7 +278,7 @@ export function RubricResponse({
       {showHints && (
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
           {failedHints.map((h) => (
-            <li key={`fail-${h.criterionId}`}>{h.hint}</li>
+            <li key={h.key}>{h.text}</li>
           ))}
           {triggeredMisconceptions.map((m) => (
             <li key={`mis-${m.criterionId}-${m.hint}`} className="text-orange-800">
@@ -222,6 +286,19 @@ export function RubricResponse({
             </li>
           ))}
         </ul>
+      )}
+
+      {showBonusPanel && (
+        <div className="mt-3 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          <div className="mb-1 font-semibold">
+            {bonusPanelTitle ?? strings.widgets.rubric.bonusPanelTitle}
+          </div>
+          <ul className="list-disc space-y-1 pl-5">
+            {bonusHints.map((h) => (
+              <li key={h.key}>{h.text}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

@@ -40,6 +40,9 @@ interface RunnerApi {
   setDataTable: (id: string, rows: DataRow[]) => void;
   bumpAttempts: (id: string) => number;
   fireMilestone: (id: string) => void;
+  /** Bump the tier counter for a RubricResponse widget's failing criterion.
+   *  Capped at `cap` (the criterion's `hints.length`). Idempotent at cap. */
+  incrementRubricTier: (widgetId: string, criterionId: string, cap: number) => void;
   onSimulationProgress: (e: ProgressEvent) => void;
   setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
@@ -145,6 +148,10 @@ export function RunnerProvider({
     dispatch({ type: 'FIRE_MILESTONE', id });
   }, []);
 
+  const incrementRubricTier = useCallback((widgetId: string, criterionId: string, cap: number) => {
+    dispatch({ type: 'INCREMENT_RUBRIC_TIER', widgetId, criterionId, cap });
+  }, []);
+
   const onSimulationProgress = useCallback((e: ProgressEvent) => {
     switch (e.type) {
       case 'milestone':
@@ -240,6 +247,7 @@ export function RunnerProvider({
     setDataTable,
     bumpAttempts,
     fireMilestone,
+    incrementRubricTier,
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,

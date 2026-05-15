@@ -13,6 +13,7 @@ export type RunnerAction =
   | { type: 'FIRE_MILESTONE'; id: string }
   | { type: 'INCREMENT_DATA_POINTS'; count: number }
   | { type: 'SET_SIMULATION_STATE'; state: unknown }
+  | { type: 'INCREMENT_RUBRIC_TIER'; widgetId: string; criterionId: string; cap: number }
   | { type: 'RESET'; nextState: RunnerState };
 
 export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerState {
@@ -72,6 +73,21 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
       // commit on a quiet sim).
       if (state.simulationState === action.state) return state;
       return { ...state, simulationState: action.state };
+    case 'INCREMENT_RUBRIC_TIER': {
+      // Capped increment: once a criterion's hints array is exhausted, stays
+      // at cap (idempotent). Independent per widgetId / criterionId.
+      const widgetBucket = state.rubricHintTiers[action.widgetId] ?? {};
+      const prev = widgetBucket[action.criterionId] ?? 0;
+      const next = Math.min(action.cap, prev + 1);
+      if (next === prev) return state;
+      return {
+        ...state,
+        rubricHintTiers: {
+          ...state.rubricHintTiers,
+          [action.widgetId]: { ...widgetBucket, [action.criterionId]: next },
+        },
+      };
+    }
     case 'RESET':
       return action.nextState;
   }

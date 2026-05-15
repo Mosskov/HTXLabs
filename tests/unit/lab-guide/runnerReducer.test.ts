@@ -17,6 +17,7 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     dataTables: {},
     attemptCounts: {},
     simulationState: null,
+    rubricHintTiers: {},
     ...overrides,
   };
 }
@@ -213,6 +214,62 @@ describe('runnerReducer', () => {
       expect(Object.keys(s.firedMilestones).sort()).toEqual(snapshot.firedMilestonesKeys);
       expect(Array.from(s.firedMilestones.planlaeg ?? [])).toEqual(Array.from(planlaegSnapshot));
       expect(s.attemptCounts).toEqual(snapshot.attemptCounts);
+    });
+  });
+
+  describe('INCREMENT_RUBRIC_TIER', () => {
+    it('creates a widget bucket and sets tier=1 on first fire', () => {
+      const next = runnerReducer(makeState(), {
+        type: 'INCREMENT_RUBRIC_TIER',
+        widgetId: 'w1',
+        criterionId: 'iv',
+        cap: 3,
+      });
+      expect(next.rubricHintTiers).toEqual({ w1: { iv: 1 } });
+    });
+
+    it('increments until the cap and then becomes a no-op (idempotent)', () => {
+      let s = makeState();
+      const action: RunnerAction = {
+        type: 'INCREMENT_RUBRIC_TIER',
+        widgetId: 'w1',
+        criterionId: 'iv',
+        cap: 2,
+      };
+      s = runnerReducer(s, action);
+      s = runnerReducer(s, action);
+      expect(s.rubricHintTiers.w1?.iv).toBe(2);
+      // Third fire stays at cap and returns the same state reference.
+      const prev = s;
+      s = runnerReducer(s, action);
+      expect(s).toBe(prev);
+      expect(s.rubricHintTiers.w1?.iv).toBe(2);
+    });
+
+    it('tracks independent counters per widget and per criterion', () => {
+      let s = makeState();
+      s = runnerReducer(s, {
+        type: 'INCREMENT_RUBRIC_TIER',
+        widgetId: 'w1',
+        criterionId: 'iv',
+        cap: 3,
+      });
+      s = runnerReducer(s, {
+        type: 'INCREMENT_RUBRIC_TIER',
+        widgetId: 'w1',
+        criterionId: 'dv',
+        cap: 3,
+      });
+      s = runnerReducer(s, {
+        type: 'INCREMENT_RUBRIC_TIER',
+        widgetId: 'w2',
+        criterionId: 'iv',
+        cap: 3,
+      });
+      expect(s.rubricHintTiers).toEqual({
+        w1: { iv: 1, dv: 1 },
+        w2: { iv: 1 },
+      });
     });
   });
 });

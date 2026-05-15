@@ -37,6 +37,10 @@ export interface RunnerState {
    *  mirror, "already done X" buttons) survives reload. `null` when no sim
    *  has published yet. */
   simulationState: unknown;
+  /** Tier reached per RubricResponse widget per criterion. 0 = no hints
+   *  surfaced yet; widget reveals hints[0..tier]. Incremented post-resolve
+   *  in the widget for criteria still failing in the latest result. */
+  rubricHintTiers: Record<string, Record<string, number>>;
 }
 
 interface SerializedRunnerState {
@@ -52,6 +56,7 @@ interface SerializedRunnerState {
   dataTables: Record<string, DataRow[]>;
   attemptCounts: Record<string, number>;
   simulationState: unknown;
+  rubricHintTiers: Record<string, Record<string, number>>;
 }
 
 const storageKey = (experimentId: string) => `htxlabs:state:${experimentId}`;
@@ -77,6 +82,7 @@ export function emptyState(
     dataTables: {},
     attemptCounts: {},
     simulationState: null,
+    rubricHintTiers: {},
   };
 }
 
@@ -106,6 +112,7 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     dataTables: raw.dataTables ?? {},
     attemptCounts: raw.attemptCounts ?? {},
     simulationState: raw.simulationState ?? null,
+    rubricHintTiers: raw.rubricHintTiers ?? {},
   };
 }
 

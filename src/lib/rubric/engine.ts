@@ -59,7 +59,10 @@ export interface CriterionResult {
   /** `pattern` populated only for regex vetoes — same diagnostic rationale as `CheckResult.pattern`. */
   vetoes: { kind: Veto['kind']; status: VetoStatus; pattern?: string }[];
   misconceptions: { pattern: string; hint: string; status: MisconceptionStatus }[];
-  hint?: string;
+  /** Normalized progressive hints — `criterion.hints` verbatim if present,
+   *  else `[criterion.hint]` if set, else `[firstFailedCheck.hint]` if a
+   *  check carries one, else `[]`. Tiering happens at the widget layer. */
+  hints: string[];
 }
 
 export interface RubricResult {
@@ -200,14 +203,21 @@ function evaluateCriterion(
   const evaluable = anyEvaluated;
   const degraded = anySkipped && anyEvaluated;
 
-  // Hint tiebreak: criterion-level default, overridden by the first failed
-  // check's own hint if present (author order).
-  let hint = criterion.hint;
-  for (const c of checks) {
-    if (c.status === CHECK_STATUSES.FAIL && c.hint) {
-      hint = c.hint;
-      break;
+  // Normalize hints into a list. `criterion.hints` (tiered) takes precedence
+  // verbatim. Legacy path preserves the old precedence: criterion.hint is the
+  // default, but a failing check's own hint wins (first one in author order).
+  let hints: string[];
+  if (criterion.hints !== undefined) {
+    hints = criterion.hints;
+  } else {
+    let single: string | undefined = criterion.hint;
+    for (const c of checks) {
+      if (c.status === CHECK_STATUSES.FAIL && c.hint) {
+        single = c.hint;
+        break;
+      }
     }
+    hints = single ? [single] : [];
   }
 
   return {
@@ -221,7 +231,7 @@ function evaluateCriterion(
     checks,
     vetoes,
     misconceptions,
-    hint,
+    hints,
   };
 }
 

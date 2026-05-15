@@ -11,6 +11,8 @@ Loaded on demand when files under `src/content/` are read.
 
 Canonical phase ids are the 7 from SPEC §2 — don't invent new ones.
 
+**`theory.mdx` must be sufficient to answer Phase 1.** The `<RubricResponse>` widget's first-tier hint nudges students back to the theory section ("Har du læst teoriafsnittet igennem?"); if a lab's theory leaves a Phase-1 rubric criterion unaddressable, that hint is a dead end.
+
 ## Phase text — three layers, three roles
 
 Each phase has an instruction-box, an MDX prose body, and one or more widgets with their own labels. They are **not** three places to say the same thing:
