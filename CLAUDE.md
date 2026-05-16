@@ -83,6 +83,7 @@ npm test             # Vitest (watch); append `-- --run` for CI/one-shot (e.g. `
 npm run test:e2e     # Playwright
 npm run lint         # Biome check (also runs in CI; must pass)
 npm run format       # Biome format --write
+npm run verify       # lint + one-shot tests + production build
 ```
 
 CI (`.github/workflows/deploy.yml`) runs `lint` → `test -- --run` → `build` and deploys `dist/` to GitHub Pages. The workflow is **manual-only** (`workflow_dispatch`) — trigger it from the Actions tab when you want to deploy. The build sets `BASE_URL=/<repo>/` for project pages; clear it (and add `public/CNAME`) for a custom domain.

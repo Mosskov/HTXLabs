@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:e2e": "playwright test",
     "lint": "biome check src",
-    "format": "biome format --write src"
+    "format": "biome format --write src",
+    "verify": "npm run lint && npm test -- --run && npm run build"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
