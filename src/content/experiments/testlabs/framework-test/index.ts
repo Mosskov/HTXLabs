@@ -63,6 +63,8 @@ export const frontmatter: ExperimentFrontmatter = {
   },
   labModes: { virtual: { enabled: true } },
   allowPaste: false,
+  // Diagnostic framework-probe — hidden from students in production.
+  devOnly: true,
   tags: ['test'],
 };
 

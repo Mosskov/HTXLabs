@@ -13,6 +13,9 @@ export interface Embedder {
 export class HttpEmbedder implements Embedder {
   constructor(
     private readonly url: string,
+    /** Tuning constant: 5s covers e5-small batches of ~32 anchors on a warm
+     *  server. Raise if larger rubrics start timing out; failure is safe
+     *  (engine returns `skipped-embedder`, widget closes the gate). */
     private readonly timeoutMs: number = 5000,
   ) {}
 

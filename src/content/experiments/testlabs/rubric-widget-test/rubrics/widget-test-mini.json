@@ -1,0 +1,33 @@
+{
+  "id": "widget-test-mini",
+  "version": 1,
+  "title": "Widget-test (minimal, literal-only)",
+  "criteria": [
+    {
+      "id": "needsKeyword",
+      "label": "Indeholder nøgleord",
+      "hints": [
+        "Brug ordet 'test' i dit svar.",
+        "Skriv en sætning der eksplicit nævner ordet 'test'."
+      ],
+      "any": [
+        {
+          "kind": "literal",
+          "terms": ["test"]
+        }
+      ]
+    },
+    {
+      "id": "bonusKeyword",
+      "label": "Bonus-ord (valgfrit)",
+      "required": false,
+      "hints": ["Tilføj ordet 'bonus' for fuld diagnostik."],
+      "any": [
+        {
+          "kind": "literal",
+          "terms": ["bonus"]
+        }
+      ]
+    }
+  ]
+}

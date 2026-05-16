@@ -1,0 +1,13 @@
+import rubric from '../template/rubrics/template-hypothesis.json';
+import { DependsOnDriver } from './DependsOnDriver';
+
+`dependsOn`-churn og misconception-visning. Knappen ovenover widget'en muterer `seed`-værdien der sendes til `dependsOn`; misforståelses-regex'en på `relation`-kriteriet trigger på ord som **pendul**, **lod** og **svinger**.
+
+**Probe-tjekliste**
+- Pass rubric'en (fx. "X stiger, så Y vokser") → "Godkendt".
+- Klik **Skift dependsOn** uden at redigere teksten → "Ændret siden tjek", gate lukker.
+- Tryk Tjek igen uden ændringer → samme tekst, ny `dependsOn` → "Godkendt".
+- Skriv en sætning med ordet "pendul" → misforståelses-hint vises i orange.
+- Sluk for embed-serveren (`Ctrl-C` i embed-terminalen) og tryk Tjek → embedder-down-banner, `principle` rapporterer som skipped men `relation` regex-check passerer fortsat alene — `satisfied` forbliver `false` (literal/regex-pass alene er ikke nok).
+
+<DependsOnDriver rubric={rubric} />

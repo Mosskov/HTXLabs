@@ -1,0 +1,17 @@
+import rubric from '../template/rubrics/template-hypothesis.json';
+
+Baseline: standardprops, `rubric-required`-gate. Brug fasen til at verificere status-pille-overgangene og tier-progression i hints.
+
+**Probe-tjekliste**
+- Tom tekst → Tjek-knappen er deaktiveret.
+- Under 10 ord → knap stadig deaktiveret.
+- Mindst 10 ord uden relations-verbum → klik Tjek tre gange; tier-1 → tier-1+2 → tier-1+2+3 (cap).
+- Skriv "X stiger, så Y vokser" og klik Tjek → grøn "Godkendt"-pille, bonus-panel for `principle` dukker op.
+- Redigér teksten efter pass → "Ændret siden tjek"-pille (amber), gate lukker igen.
+
+<RubricResponse
+  id="hypotese"
+  rubric={rubric}
+  prompt="Skriv en kort hypotese om sammenhængen mellem X og Y."
+  minWords={10}
+/>

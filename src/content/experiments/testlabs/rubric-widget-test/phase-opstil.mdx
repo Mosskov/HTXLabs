@@ -1,0 +1,24 @@
+import rubric from './rubrics/widget-test-mini.json';
+
+Custom string-overrides og `maxChars`. Rubric'en er literal-only, så embed-serveren er ikke påkrævet i denne fase.
+
+**Probe-tjekliste**
+- Knap-label er **"Bedøm"** (ikke default "Tjek mit svar").
+- Placeholder er **"Skriv et kort svar…"**.
+- Skriv 1-4 ord → custom too-short-besked: **"For kort — mindst 5 ord."** (ikke default).
+- Tæller viser `X / 80` til højre under feltet og stopper ved 80 tegn.
+- Skriv "Det her er en test" (5 ord, indeholder "test") → "Godkendt"-pille.
+- Tilføj IKKE "bonus" → bonus-panel åbner med custom titel **"Vil du gå længere?"**.
+
+<RubricResponse
+  id="overrides"
+  rubric={rubric}
+  prompt="Skriv et kort svar — brug ordet 'test' (og evt. 'bonus')."
+  minWords={5}
+  maxChars={80}
+  checkLabel="Bedøm"
+  placeholder="Skriv et kort svar…"
+  tooShortMessage="For kort — mindst 5 ord."
+  embedderDownMessage="Embed-server svarer ikke (custom besked)."
+  bonusPanelTitle="Vil du gå længere?"
+/>

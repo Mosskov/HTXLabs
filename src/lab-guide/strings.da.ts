@@ -134,6 +134,7 @@ export const strings = {
       statusEdited: 'Ændret siden tjek',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
       bonusPanelTitle: 'Vil du gøre svaret stærkere?',
+      hintsLabel: 'Tips til de manglende krav',
     },
     variableTable: {
       ivLabel: 'Uafhængig variabel',

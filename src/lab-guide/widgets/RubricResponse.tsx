@@ -24,6 +24,7 @@ import {
   parseRubric,
 } from '@/lib/rubric/engine';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
@@ -31,25 +32,22 @@ import { ProtectedTextarea } from './ProtectedInput';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
-interface PersistedPass {
-  lastCheckedText: string;
-  lastCheckedDependsOn: string | null;
-  requiredSatisfied: boolean;
-  embedderDown: boolean;
-}
+// Persisted across reload via `widgetValues[${id}:result]`. Validated with
+// Zod so a future shape change (or hand-edited localStorage) lands as a
+// safe `null` rather than poisoning the gate with a half-typed object.
+const PersistedPassSchema = z
+  .object({
+    lastCheckedText: z.string(),
+    lastCheckedDependsOn: z.string().nullable(),
+    requiredSatisfied: z.boolean(),
+    embedderDown: z.boolean(),
+  })
+  .strict();
+type PersistedPass = z.infer<typeof PersistedPassSchema>;
 
 function readPersisted(value: unknown): PersistedPass | null {
-  if (!value || typeof value !== 'object') return null;
-  const p = value as Partial<PersistedPass>;
-  if (typeof p.lastCheckedText !== 'string') return null;
-  if (typeof p.requiredSatisfied !== 'boolean') return null;
-  return {
-    lastCheckedText: p.lastCheckedText,
-    lastCheckedDependsOn:
-      typeof p.lastCheckedDependsOn === 'string' ? p.lastCheckedDependsOn : null,
-    requiredSatisfied: p.requiredSatisfied,
-    embedderDown: p.embedderDown === true,
-  };
+  const parsed = PersistedPassSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 interface Props {
@@ -350,7 +348,11 @@ export function RubricResponse({
       )}
 
       {showHints && (
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+        <ul
+          aria-label={strings.widgets.rubric.hintsLabel}
+          aria-live="polite"
+          className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"
+        >
           {failedHints.map((h) => (
             <li key={h.key}>{h.text}</li>
           ))}
@@ -364,10 +366,10 @@ export function RubricResponse({
 
       {showBonusPanel && (
         <div className="mt-3 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-          <div className="mb-1 font-semibold">
+          <h3 className="mb-1 font-semibold text-sm">
             {bonusPanelTitle ?? strings.widgets.rubric.bonusPanelTitle}
-          </div>
-          <ul className="list-disc space-y-1 pl-5">
+          </h3>
+          <ul aria-live="polite" className="list-disc space-y-1 pl-5">
             {bonusHints.map((h) => (
               <li key={h.key}>{h.text}</li>
             ))}

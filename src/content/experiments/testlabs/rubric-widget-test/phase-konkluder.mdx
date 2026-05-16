@@ -1,0 +1,10 @@
+import { RubricTester } from '@/lab-guide/dev/RubricTester';
+import rubric from '../template/rubrics/template-hypothesis.json';
+
+Motor-probe via `<RubricTester>`. Bevarer den rå per-kriterium scoring-visning som `<RubricResponse>` bevidst skjuler for elever — anker-scores, status-tabel og advarsler om dårlig regex. Gate er `always`; fasen blokerer ikke fremdrift.
+
+**Probe-tjekliste**
+- Skriv en formulering og klik Evaluér → tabel med per-kriterium status (✓ / ✗ / `?`), semantiske scores og literal-matches.
+- Tilføj `?debug` til URL'en og genindlæs → ekstra rækker med rå anker-scores under hvert semantisk kriterium.
+
+<RubricTester rubric={rubric} />

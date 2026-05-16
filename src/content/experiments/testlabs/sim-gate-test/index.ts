@@ -45,6 +45,8 @@ export const frontmatter: ExperimentFrontmatter = {
   },
   labModes: { virtual: { enabled: true } },
   allowPaste: false,
+  // Diagnostic sim-gate-probe — hidden from students in production.
+  devOnly: true,
   tags: ['test'],
 };
 

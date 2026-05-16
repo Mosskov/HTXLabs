@@ -1,0 +1,14 @@
+## Formål
+Diagnostisk testlab for `<RubricResponse>`-widgetens UI og tilstandsmaskine. Hver fase isolerer en bestemt opførsel: status-pille, hint-tiers, override-props, multi-widget-gate, `dependsOn`-churn og rå motor-scoring.
+
+## Sådan bruger du laben
+Hver fase har en *probe-tjekliste* i prosa under instruktionsboksen — listen viser hvad du bør se i widget'en for at bekræfte at den opfører sig korrekt. Brug fasen som en manuel testbænk.
+
+## Teori (kontekst for template-hypothesis-rubric'en)
+Flere af faserne bruger `template-hypothesis.json` som rubric. Den rubric'es tier-1 hint nudger eleven tilbage til teorien, så afsnittet her holder hint-nudge'en levende.
+
+Når to størrelser hænger sammen, kan man ofte beskrive forholdet med en simpel ligning. Den ene størrelse — den **uafhængige** — varieres med vilje, mens den anden — den **afhængige** — måles for hver indstilling. En **lineær sammenhæng** betyder at Y stiger (eller falder) med konstant takt når X øges:
+
+<KeyEquation>$Y = a \cdot X + b$</KeyEquation>
+
+Hældningen *a* beskriver hvor meget Y ændrer sig pr. enhed af X; skæringen *b* fortæller hvor grafen rammer Y-aksen.

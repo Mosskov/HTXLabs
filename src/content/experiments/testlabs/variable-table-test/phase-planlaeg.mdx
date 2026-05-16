@@ -1,0 +1,23 @@
+Tre VariableTable-instanser. Den første bruger standarder, den anden kræver enheder, den tredje har egne labels. Alle tre skal være udfyldt før du kan gå videre.
+
+**1. Standard:** Kun navn + symbol kræves (enhed er valgfri).
+
+<VariableTable id="variables-default" />
+
+**2. Med enheder:** `requireUnits={true}` — enhed skal også udfyldes på både uafhængig og afhængig variabel.
+
+<VariableTable id="variables-units" requireUnits={true} />
+
+**3. Med override-labels:** alle syv label-props sat eksplicit (SPEC §17 — per-instance override).
+
+<VariableTable
+  id="variables-overrides"
+  requireUnits={true}
+  ivLabel="Input-variabel (override)"
+  dvLabel="Output-variabel (override)"
+  constantsLabel="Holdt konstant (override)"
+  nameHeader="Størrelse"
+  symbolHeader="Bogstav"
+  unitHeader="SI-enhed"
+  addConstantLabel="+ Ny konstant"
+/>
