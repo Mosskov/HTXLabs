@@ -13,4 +13,8 @@ coverage
 .claude/worktrees/
 .claude/settings.local.json
 .claude/check-status-stale.sh
+.claude/scheduled_tasks.lock
+.agents/
+.codex/
+tsconfig.tsbuildinfo
 codebase-map.html
