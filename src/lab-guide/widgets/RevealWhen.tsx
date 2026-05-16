@@ -1,6 +1,6 @@
 // MDX primitive: render children only when every widget in `widgetIds`
-// reports a positive satisfaction bit. Mirrors the kind-aware projection
-// used by the `'all-satisfied'` gate.
+// reports a positive satisfaction bit. Uses the same kind-aware projection
+// as the `'all-satisfied'` gate (imported from gates.ts — single source).
 //
 // `clearOnHide` is the invalidation contract: when the reveal flips from
 // visible to hidden, each listed widget id is removed from the runner's
@@ -10,7 +10,7 @@
 // gate while visually hidden.
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useRunner } from '../RunnerContext';
-import type { WidgetState } from '../gates';
+import { widgetSatisfied } from '../gates';
 
 interface Props {
   widgetIds: string[];
@@ -21,22 +21,6 @@ interface Props {
    *  already-absent id is a no-op. */
   clearOnHide?: string[];
   children: ReactNode;
-}
-
-function widgetSatisfied(w: WidgetState | undefined): boolean {
-  if (!w) return false;
-  switch (w.kind) {
-    case 'correct':
-      return w.correct;
-    case 'checked':
-      return w.allChecked;
-    case 'filled':
-      return w.filled;
-    case 'rubric':
-      return w.satisfied;
-    case 'keywords':
-      return w.total > 0 && w.foundCount === w.total;
-  }
 }
 
 export function RevealWhen({ widgetIds, clearOnHide, children }: Props) {

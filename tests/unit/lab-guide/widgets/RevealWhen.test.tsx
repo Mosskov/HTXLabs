@@ -167,4 +167,28 @@ describe('RevealWhen', () => {
     expect(screen.queryByTestId('child')).not.toBeInTheDocument();
     expect(screen.getByTestId('reg-dependent')).toHaveTextContent('present');
   });
+
+  it('projection stays presence-only for kind:filled — correct:false does not hide', () => {
+    // RevealWhen now imports widgetSatisfied from gates.ts. This test guards
+    // against a future accidental projection change (e.g., projecting
+    // correct ?? filled for 'filled' kind): a widget that publishes
+    // filled:true but correct:false must STILL reveal its children, because
+    // RevealWhen mirrors the all-satisfied gate's presence-only contract.
+    function FakeWidgetWithCorrect({ id }: { id: string }) {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        registerWidgetState(id, { kind: 'filled', filled: true, correct: false });
+      }, [id, registerWidgetState]);
+      return null;
+    }
+    render(
+      <Harness experimentId="rw/8">
+        <FakeWidgetWithCorrect id="variables" />
+        <RevealWhen widgetIds={['variables']}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+  });
 });

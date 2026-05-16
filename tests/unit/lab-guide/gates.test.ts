@@ -669,3 +669,87 @@ describe('canAdvanceTo', () => {
     expect(canAdvanceTo('b', simPhases, state, undefined, makeCtx())).toBe(true);
   });
 });
+
+describe('all-validated gate', () => {
+  const validatedGate: Gate = { type: 'all-validated', widgetIds: ['vt'] };
+
+  it('opens when widget publishes correct:true', () => {
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: true },
+    });
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('stays locked when widget publishes correct:false', () => {
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: false },
+    });
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('stays locked when widget never publishes correct (no expected prop)', () => {
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true },
+    });
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('stays locked when widget is absent', () => {
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, makeCtx(), PHASE)).toBe(false);
+  });
+
+  it('ignores the count facet — DataTable-style {filled:true, count:5} stays locked without correct', () => {
+    // Now that kind:'filled' is shared by VariableTable, DataTable, and
+    // FreeTextResponse, guard against accidental coupling: count must not
+    // satisfy the correctness gate.
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, count: 5 },
+    });
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('rejects kind:rubric even when satisfied:true (strict kind narrowing)', () => {
+    // The rubric satisfaction bit should never accidentally count as
+    // correctness — they're semantically different.
+    const ctx = makeCtx({
+      vt: { kind: 'rubric', satisfied: true } as WidgetState,
+    });
+    expect(isGateSatisfied(validatedGate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('requires ALL listed widgets to publish correct:true', () => {
+    const gate: Gate = { type: 'all-validated', widgetIds: ['a', 'b'] };
+    const ctx = makeCtx({
+      a: { kind: 'filled', filled: true, correct: true },
+      b: { kind: 'filled', filled: true, correct: false },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('gate message uses gates.allValidated string', () => {
+    expect(gateMessage(validatedGate)).toBe('Udfyld alle felter korrekt for at fortsætte.');
+  });
+});
+
+describe('all-filled and all-satisfied preserve presence-only semantics', () => {
+  it('all-filled still passes with {filled:true, correct:false}', () => {
+    // Adding `expected` to a widget must not silently re-lock unrelated
+    // all-filled gates elsewhere — presence is the only contract here.
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: false },
+    });
+    const gate: Gate = { type: 'all-filled', widgetIds: ['vt'] };
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('all-satisfied still passes when a kind:filled widget is {filled:true, correct:false}', () => {
+    // Mixed-widget AND. If `all-satisfied` ever silently projected
+    // `correct ?? filled` for 'filled' widgets, this test would catch it.
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: false },
+      quiz: { kind: 'correct', correct: true },
+    });
+    const gate: Gate = { type: 'all-satisfied', widgetIds: ['vt', 'quiz'] };
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+});

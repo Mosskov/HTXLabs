@@ -54,6 +54,15 @@ export const Gate = z.discriminatedUnion('type', [
      *  …); a singleton would just be a less-specific version. */
     widgetIds: z.array(z.string()).min(2),
   }),
+  z.object({
+    type: z.literal('all-validated'),
+    /** Widget ids that must each register `kind: 'filled'` with
+     *  `correct: true`. Widget-agnostic correctness gate — currently used by
+     *  `<VariableTable expected>`. `.min(1)` because a singleton case is
+     *  legitimate (one VariableTable with an answer key), unlike
+     *  `all-satisfied`. */
+    widgetIds: z.array(z.string()).min(1),
+  }),
 ]);
 export type Gate = z.infer<typeof Gate>;
 

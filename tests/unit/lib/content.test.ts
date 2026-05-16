@@ -56,6 +56,7 @@ describe('validateAuthorableGates', () => {
       { type: 'keyword-count', widgetId: 'a', min: 'all' },
       { type: 'keyword-count', widgetId: 'a', min: 3 },
       { type: 'all-satisfied', widgetIds: ['a', 'b'] },
+      { type: 'all-validated', widgetIds: ['a'] },
     ];
     for (const gate of supported) {
       it(`accepts ${gate.type}${'min' in gate ? ` (min=${String(gate.min)})` : ''}`, () => {
@@ -111,7 +112,7 @@ describe('validateAuthorableGates', () => {
         guided: [makePhase('p', { type: 'predicate', name: 'foo' })],
       });
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count, rubric-required, all-satisfied\./,
+        /Supported kinds: always, all-correct, all-checked, all-filled, keyword-count, rubric-required, all-satisfied, all-validated\./,
       );
     });
 

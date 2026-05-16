@@ -16,11 +16,25 @@ export type WidgetState =
   /** `filled` is the `all-filled` gate's read facet (boolean satisfaction).
    *  `count` is an optional sibling facet — currently only the DataTable
    *  publishes it, and only the `data-points` gate consults it (when the
-   *  gate spec carries a `widgetId`). `values` is an opaque payload for
+   *  gate spec carries a `widgetId`). `correct` is an optional facet for
+   *  widgets that support author-supplied answer checks (currently only
+   *  VariableTable when its `expected` prop is set); the `all-validated`
+   *  gate reads it. Note: `widgetSatisfied` (used by `all-satisfied`) still
+   *  projects `filled` regardless of `correct` — correctness gating is
+   *  explicit via `all-validated`, never implicit. `errors` is the matching
+   *  widget's opaque error payload (typed `unknown` here so gates.ts stays
+   *  free of widget-specific types). `values` is an opaque payload for
    *  sibling widgets that want to read what was filled (read via
    *  `useWidgetState`); gate evaluators ignore it. Lets a single registration
    *  drive multiple gate kinds without double-keying the widget registry. */
-  | { kind: 'filled'; filled: boolean; count?: number; values?: unknown }
+  | {
+      kind: 'filled';
+      filled: boolean;
+      count?: number;
+      correct?: boolean;
+      errors?: unknown;
+      values?: unknown;
+    }
   | { kind: 'keywords'; foundCount: number; total: number }
   /** `<RubricResponse>` registers this. `satisfied` is a single derived bit:
    *  most recent rubric result must be present, fresh (not edited since
@@ -141,11 +155,31 @@ const GATE_HANDLERS: GateHandlerMap = {
       gate.widgetIds.every((id) => widgetSatisfied(ctx.widgets[id])),
     message: (gate) => format(strings.gates.allSatisfied, { ids: gate.widgetIds.join(', ') }),
   },
+  // Widget-agnostic correctness gate — reads `correct: true` from any widget
+  // registering `kind: 'filled'` (currently VariableTable with `expected`).
+  // Strict on both `kind` and `correct === true`: a widget that only publishes
+  // `filled` (no `expected`) keeps the gate locked. Decoupled from
+  // `all-filled` so that adding `expected` to a widget never silently changes
+  // a presence-only gate elsewhere.
+  'all-validated': {
+    check: (gate, _state, _module, ctx) =>
+      gate.widgetIds.every((id) => {
+        const w = ctx.widgets[id];
+        return w?.kind === 'filled' && w.correct === true;
+      }),
+    message: () => strings.gates.allValidated,
+  },
 };
 
-/** Kind-aware satisfaction projection used by `'all-satisfied'`. An absent
- *  registration counts as unsatisfied. Keep this in lock-step with WidgetState. */
-function widgetSatisfied(w: WidgetState | undefined): boolean {
+/** Kind-aware satisfaction projection used by `'all-satisfied'` and by
+ *  `<RevealWhen>`. Exported so the projection lives in one place — both
+ *  consumers must agree on what "satisfied" means per kind. An absent
+ *  registration counts as unsatisfied. Keep this in lock-step with WidgetState.
+ *
+ *  Note: for `kind: 'filled'`, this projects `w.filled` regardless of `correct`.
+ *  Correctness gating is opt-in via the `all-validated` gate kind — adding
+ *  `expected` to a widget never silently re-locks an `all-satisfied` gate. */
+export function widgetSatisfied(w: WidgetState | undefined): boolean {
   if (!w) return false;
   switch (w.kind) {
     case 'correct':

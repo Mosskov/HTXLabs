@@ -1,5 +1,8 @@
 ## Formål
-Diagnostisk testlab for `<VariableTable>`-widgetten. Mounter tre instanser side om side, så man kan verificere at standardopførsel, `requireUnits` og per-instance label-overrides alle fungerer som ventet.
+Diagnostisk testlab for `<VariableTable>`-widgetten. To faser:
+
+1. **Planlæg** — tre instanser side om side: standardopførsel, `requireUnits={true}`, og per-instance label-overrides. Gate: `all-filled`.
+2. **Korrekthedstjek** — én instans med `expected`-prop (en faldforsøgs-answer-key) og `all-validated`-gate. Test at navne er case-insensitive, at symbol/enhed er case-sensitive (fx `M` udløser case-mismatch), og at manglende konstanter blokerer gaten.
 
 ## Sådan bruger du den
-Åbn guidet tilstand og udfyld de tre tabeller i fase 1. Når alle tre rapporterer `filled`, åbner `all-filled`-gaten og Næste-knappen aktiveres. Detaljerede tjekpunkter står i selve fasen.
+Åbn guidet tilstand og gennemfør faserne i rækkefølge. Når alle widgets i en fase opfylder kravene, åbner gaten og Næste-knappen aktiveres.

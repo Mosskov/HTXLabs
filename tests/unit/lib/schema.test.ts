@@ -79,6 +79,29 @@ describe('Gate schema — all-satisfied', () => {
   });
 });
 
+describe('Gate schema — all-validated', () => {
+  it('accepts all-validated with a single widgetId (singleton allowed)', () => {
+    const result = Gate.safeParse({ type: 'all-validated', widgetIds: ['a'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts all-validated with multiple widgetIds', () => {
+    const result = Gate.safeParse({ type: 'all-validated', widgetIds: ['a', 'b', 'c'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects all-validated with an empty widgetIds array', () => {
+    // Empty array → every() returns true vacuously → silent auto-open.
+    const result = Gate.safeParse({ type: 'all-validated', widgetIds: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects all-validated with no widgetIds key', () => {
+    const result = Gate.safeParse({ type: 'all-validated' });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('ExperimentFrontmatter — devOnly', () => {
   const base = {
     title: 'Test',

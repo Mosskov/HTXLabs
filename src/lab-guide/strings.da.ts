@@ -145,6 +145,30 @@ export const strings = {
       unitHeader: 'Enhed',
       addConstantLabel: '+ Tilføj konstant',
       removeConstantAriaLabel: 'Fjern konstant',
+      /** Per-cell hint strings keyed by `CellError.type` values so the future
+       *  visuals renderer can do `hints[cell][error.type]` directly. Cell
+       *  kinds (name/symbol/unit) carry different hints because the error
+       *  meaning differs (e.g., case matters on units but not names). */
+      hints: {
+        name: {
+          empty: 'Skriv navnet på variablen.',
+          mismatch: 'Det navn passer ikke — tjek teorien.',
+        },
+        symbol: {
+          empty: 'Indsæt et symbol for variablen.',
+          mismatch: 'Det symbol passer ikke — tjek teorien.',
+          'case-mismatch': 'Tjek brugen af store og små bogstaver.',
+        },
+        unit: {
+          empty: 'Skriv en enhed for variablen.',
+          mismatch: 'Den enhed passer ikke — tjek SI-enheder.',
+          'case-mismatch': 'SI-enheder skelner mellem store og små bogstaver (fx m ≠ M).',
+        },
+        /** Vars: {name}, {symbol}, {unit} — renderer pre-resolves to the
+         *  first synonym from each expected.constants[i] accepted-array via
+         *  asArray(...)[0]. */
+        constantMissing: 'Du mangler en konstant: {name} ({symbol}, {unit}).',
+      },
     },
   },
   gates: {
@@ -161,6 +185,7 @@ export const strings = {
     rubricRequired: 'Skriv et svar og tryk Tjek mit svar — alle krav skal være opfyldt.',
     /** Vars: {ids} = comma-separated list of participating widget ids. */
     allSatisfied: 'Fuldfør alle delopgaver for at fortsætte ({ids}).',
+    allValidated: 'Udfyld alle felter korrekt for at fortsætte.',
   },
   errors: {
     notFound: 'Forsøget blev ikke fundet.',

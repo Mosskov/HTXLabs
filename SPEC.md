@@ -137,6 +137,7 @@ const Gate = z.discriminatedUnion('type', [
   z.object({ type: z.literal('all-correct'), widgetIds: z.array(z.string()) }),    // batch-check widgets all passed
   z.object({ type: z.literal('all-checked'), widgetIds: z.array(z.string()) }),    // checklist widgets all ticked
   z.object({ type: z.literal('all-filled'), widgetIds: z.array(z.string()) }),     // reflections / inputs all non-empty
+  z.object({ type: z.literal('all-validated'), widgetIds: z.array(z.string()) }),  // widgets (currently VariableTable) publish correct:true against author answer key
   z.object({
     type: z.literal('keyword-count'),
     widgetId: z.string(),
@@ -428,6 +429,7 @@ function isGateSatisfied(gate: Gate, s: RunnerState, mod: SimulationModule | und
     case 'all-correct':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'correct'  && ctx.widgets[id].correct);
     case 'all-checked':   return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'checked'  && ctx.widgets[id].allChecked);
     case 'all-filled':    return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'filled'   && ctx.widgets[id].filled);
+    case 'all-validated': return gate.widgetIds.every(id => ctx.widgets[id]?.kind === 'filled'   && ctx.widgets[id].correct === true);
     case 'keyword-count': {
       const w = ctx.widgets[gate.widgetId];
       if (w?.kind !== 'keywords') return false;
@@ -468,6 +470,7 @@ The tooltip on a locked stepper circle and the inline gate message under "Næste
 - `all-correct` → "Klik 'Tjek X' og opnå alle korrekte svar."
 - `all-checked` → "Sæt flueben ved alle punkter på tjeklisten."
 - `all-filled` → "Besvar alle spørgsmål for at fortsætte."
+- `all-validated` → "Udfyld alle felter korrekt for at fortsætte."
 - `keyword-count` → "Find mindst {min} nøgleord."
 - `predicate` → author-provided message in frontmatter.
 

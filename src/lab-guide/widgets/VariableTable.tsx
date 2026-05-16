@@ -7,10 +7,21 @@
 // The `values` facet on the registration lets sibling widgets read the
 // committed symbols (the template hypothesis section interpolates them
 // into its rubric prompt). Gate evaluators ignore `values`.
+//
+// Optional `expected` prop opts in to correctness checking: the widget
+// publishes a `correct: boolean` bit + opaque `errors` payload, both
+// consumed by the `all-validated` gate. The matching logic lives in
+// `variableTableCorrectness.ts` so this file stays presentation-focused.
 import { useRunner } from '../RunnerContext';
 import { strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import { ProtectedInput } from './ProtectedInput';
+import {
+  type CorrectnessReport,
+  type ExpectedVariables,
+  evaluateTable,
+  isCorrect,
+} from './variableTableCorrectness';
 
 export interface VariableEntry {
   name: string;
@@ -30,6 +41,12 @@ interface Props {
    *  to report `filled: true`. Default `false` because not all lab theories
    *  teach specific units; the template lab leaves this off. */
   requireUnits?: boolean;
+  /** Optional author-supplied answer key. When set, the widget computes a
+   *  `correct: boolean` + structured `errors` payload (in addition to the
+   *  default `filled` bit) so an `all-validated` gate can require correct
+   *  answers. Each cell in each expected entry is independently optional —
+   *  the author validates only what they care about. */
+  expected?: ExpectedVariables;
   /** Per-instance label overrides (SPEC §17). Defaults live in strings.da.ts. */
   ivLabel?: string;
   dvLabel?: string;
@@ -64,6 +81,7 @@ function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
 export function VariableTable({
   id,
   requireUnits = false,
+  expected,
   ivLabel,
   dvLabel,
   constantsLabel,
@@ -76,8 +94,41 @@ export function VariableTable({
   const values = readValues(state.widgetValues[id]);
   const filled = entryFilled(values.iv, requireUnits) && entryFilled(values.dv, requireUnits);
 
-  useRegisteredWidgetState(id, { kind: 'filled', filled, values }, [
+  // `correct` implies `filled` — a student can't be "correct" if requireUnits
+  // makes them not `filled`, even when expected.unit is omitted.
+  const errors: CorrectnessReport | undefined = expected
+    ? evaluateTable(values, expected)
+    : undefined;
+  const correct = errors !== undefined ? filled && isCorrect(errors) : undefined;
+
+  // Dev-only author guard: warn if a constant has neither symbol nor name —
+  // such an entry is silently skipped by evaluateConstants (never produces
+  // `missing`), so without this warning a misauthored lab would look fine.
+  if (import.meta.env.DEV && expected?.constants) {
+    for (const c of expected.constants) {
+      if (c.symbol === undefined && c.name === undefined) {
+        console.warn(
+          `[VariableTable id=${id}] expected.constants entry has neither symbol nor name — it will never match any student row.`,
+        );
+      }
+    }
+  }
+
+  // Conditional spread: when `expected` is absent, omit the `correct`/`errors`
+  // keys entirely (not `undefined`) so back-compat consumers can rely on
+  // `'correct' in state` semantics.
+  const widgetState =
+    expected !== undefined
+      ? ({ kind: 'filled', filled, correct, errors, values } as const)
+      : ({ kind: 'filled', filled, values } as const);
+
+  useRegisteredWidgetState(id, widgetState, [
     filled,
+    correct ?? null,
+    // Explicit errors key: technically redundant since cell-value deps below
+    // already cover freshness (errors is purely derived), but documents intent
+    // and survives future refactors that might drop cell-value deps.
+    JSON.stringify(errors ?? null),
     values.iv.name,
     values.iv.symbol,
     values.iv.unit,
