@@ -1,0 +1,38 @@
+import { ErrorInspector } from './ErrorInspector';
+
+Diagnostisk fase: udforsk hvilke fejltyper engine flagger. Tabellen nedenfor har en `expected` answer-key, og inspektoren under den viser den live `CorrectnessReport` — fejl pr. celle for IV/DV samt status pr. forventet konstant.
+
+**Korrekte svar:**
+
+- **Uafhængig variabel** — navn `højde` eller `faldhøjde`, symbol `h`, enhed `m`.
+- **Afhængig variabel** — navn `tid`, symbol `t`, enhed `s`.
+- **Konstant #0** — navn `tyngdeacceleration`, symbol `g`, enhed `m/s²` (eller `m/s^2`).
+- **Konstant #1** — navn `masse`, symbol `m`, enhed `kg`.
+
+**Prøv disse for at se hver fejltype:**
+
+- *empty* — lad en celle stå tom (fx IV-navn).
+- *mismatch* — skriv `kg` i IV-enhed (forkert symbol, ikke bare case).
+- *case-mismatch* — skriv `M` i IV-enhed eller `H` i IV-symbol (rigtigt bogstav, forkert case). Bemærk at navne aldrig flagger `case-mismatch` (de er case-insensitive).
+- *constant matched* — udfyld konstant #0 korrekt.
+- *constant partial* — skriv `masse / m / g` (rigtigt navn+symbol, forkert enhed).
+- *constant missing* — slet en konstant-række helt med ×.
+- *synonym* — skriv `Højde` (med stort H) i IV-navn — accepteres (case-folded).
+- *case-only på konstantens nøgle* — skriv `G` i stedet for `g` på konstant #0 — pass 2b matcher case-insensitivt, så row tagges `partial` med `symbol: case-mismatch` (ikke `missing`).
+
+<VariableTable
+  id="variables-inspect"
+  requireUnits={true}
+  expected={{
+    iv: { name: ['højde', 'faldhøjde'], symbol: 'h', unit: 'm' },
+    dv: { name: 'tid', symbol: 't', unit: 's' },
+    constants: [
+      { name: 'tyngdeacceleration', symbol: 'g', unit: ['m/s²', 'm/s^2'] },
+      { name: 'masse', symbol: 'm', unit: 'kg' },
+    ],
+  }}
+/>
+
+<ErrorInspector widgetId="variables-inspect" />
+
+Gate-typen her er `always` — fasen er fri-fremmende; du kan altid trykke Næste. Diagnostikkens formål er at gøre fejlflagningen synlig før de egentlige student-visuals designes.

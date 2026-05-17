@@ -4,7 +4,7 @@ Forsøget: et lod slippes fra en bestemt højde, og faldtiden måles. Korrekte s
 
 - **Uafhængig variabel** — `højde` eller `faldhøjde`, symbol `h`, enhed `m`.
 - **Afhængig variabel** — `tid`, symbol `t`, enhed `s`.
-- **Konstant** — `tyngdeacceleration`, symbol `g`, enhed `m/s²`.
+- **Konstant** — `tyngdeacceleration`, symbol `g`, enhed `m/s²` eller `m/s^2`.
 
 Symbol og enhed er case-sensitive (skriv `M` i stedet for `m` for at se case-mismatch-fejlen). Navnet er case-insensitive — `Højde` accepteres.
 
@@ -15,7 +15,7 @@ Symbol og enhed er case-sensitive (skriv `M` i stedet for `m` for at se case-mis
     iv: { name: ['højde', 'faldhøjde'], symbol: 'h', unit: 'm' },
     dv: { name: 'tid', symbol: 't', unit: 's' },
     constants: [
-      { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
+      { name: 'tyngdeacceleration', symbol: 'g', unit: ['m/s²', 'm/s^2']},
     ],
   }}
 />

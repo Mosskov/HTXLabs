@@ -1,8 +1,9 @@
 ## Formål
-Diagnostisk testlab for `<VariableTable>`-widgetten. To faser:
+Diagnostisk testlab for `<VariableTable>`-widgetten. Tre faser:
 
 1. **Planlæg** — tre instanser side om side: standardopførsel, `requireUnits={true}`, og per-instance label-overrides. Gate: `all-filled`.
 2. **Korrekthedstjek** — én instans med `expected`-prop (en faldforsøgs-answer-key) og `all-validated`-gate. Test at navne er case-insensitive, at symbol/enhed er case-sensitive (fx `M` udløser case-mismatch), og at manglende konstanter blokerer gaten.
+3. **Diagnostik — fejlflagning** — én `expected`-instans plus en co-lokeret `ErrorInspector`, der viser den live `CorrectnessReport`. Gate: `always`, så fasen er fri-fremmende; formålet er at gøre hver CellError-type og ConstantMatch-status synlig.
 
 ## Sådan bruger du den
 Åbn guidet tilstand og gennemfør faserne i rækkefølge. Når alle widgets i en fase opfylder kravene, åbner gaten og Næste-knappen aktiveres.
