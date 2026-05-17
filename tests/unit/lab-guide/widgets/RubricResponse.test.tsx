@@ -1,5 +1,6 @@
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { isGateSatisfied } from '@/lab-guide/gates';
+import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { RubricResponse } from '@/lab-guide/widgets/RubricResponse';
 import { MockEmbedder } from '@/lib/rubric/embedder';
 import type { Gate, Phase } from '@/lib/schema';
@@ -185,6 +186,25 @@ describe('RubricResponse', () => {
       <Harness experimentId="rr-paste/allowed">
         <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} allowPaste />
       </Harness>,
+    );
+    expect(firePaste(screen.getByRole('textbox'))).toBe(false);
+  });
+
+  it('falls back to LabPasteContext when no widget-level allowPaste is passed', () => {
+    // Mirrors the production wiring: ExperimentRoute injects
+    // `frontmatter.allowPaste` via LabPasteContext, and the rubric widget
+    // (without its own allowPaste prop) must honour that lab-level default.
+    function firePaste(textarea: HTMLElement): boolean {
+      const evt = new Event('paste', { bubbles: true, cancelable: true });
+      textarea.dispatchEvent(evt);
+      return evt.defaultPrevented;
+    }
+    render(
+      <LabPasteContext.Provider value={true}>
+        <Harness experimentId="rr-paste/context">
+          <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} />
+        </Harness>
+      </LabPasteContext.Provider>,
     );
     expect(firePaste(screen.getByRole('textbox'))).toBe(false);
   });

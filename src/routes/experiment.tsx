@@ -3,6 +3,7 @@ import { LabGuide } from '@/lab-guide/LabGuide';
 import { LabLanding } from '@/lab-guide/LabLanding';
 import type { Mode } from '@/lab-guide/runner';
 import { strings } from '@/lab-guide/strings.da';
+import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';
 import { loadExperiment, loadTopic } from '@/lib/content';
 import { loadSimulation } from '@/lib/simulations';
@@ -107,40 +108,42 @@ export function ExperimentRoute() {
   const topicTitle = loadTopic(loaded.topic)?.frontmatter.title ?? loaded.topic;
 
   return (
-    <MDXProvider components={mdxComponents}>
-      {hasMode ? (
-        <LabGuide
-          experiment={loaded.frontmatter}
-          topic={loaded.topic}
-          topicTitle={topicTitle}
-          slug={loaded.slug}
-          mode={mode}
-          theory={<Theory />}
-          phaseBodies={phaseBodies}
-          simulation={simulation}
-          onSwitchInquiryForm={handleSwitchInquiryForm}
-          onResetView={handleResetView}
-          theoryOpen={theoryOpen}
-          onToggleTheory={onToggleTheory}
-          simOpen={simOpen}
-          onToggleSim={onToggleSim}
-        />
-      ) : (
-        <LabLanding
-          experiment={loaded.frontmatter}
-          topic={loaded.topic}
-          topicTitle={topicTitle}
-          slug={loaded.slug}
-          theory={<Theory />}
-          simulation={simulation}
-          onSelectMode={handleSelectMode}
-          onResetView={handleResetView}
-          theoryOpen={theoryOpen}
-          onToggleTheory={onToggleTheory}
-          simOpen={simOpen}
-          onToggleSim={onToggleSim}
-        />
-      )}
-    </MDXProvider>
+    <LabPasteContext.Provider value={loaded.frontmatter.allowPaste}>
+      <MDXProvider components={mdxComponents}>
+        {hasMode ? (
+          <LabGuide
+            experiment={loaded.frontmatter}
+            topic={loaded.topic}
+            topicTitle={topicTitle}
+            slug={loaded.slug}
+            mode={mode}
+            theory={<Theory />}
+            phaseBodies={phaseBodies}
+            simulation={simulation}
+            onSwitchInquiryForm={handleSwitchInquiryForm}
+            onResetView={handleResetView}
+            theoryOpen={theoryOpen}
+            onToggleTheory={onToggleTheory}
+            simOpen={simOpen}
+            onToggleSim={onToggleSim}
+          />
+        ) : (
+          <LabLanding
+            experiment={loaded.frontmatter}
+            topic={loaded.topic}
+            topicTitle={topicTitle}
+            slug={loaded.slug}
+            theory={<Theory />}
+            simulation={simulation}
+            onSelectMode={handleSelectMode}
+            onResetView={handleResetView}
+            theoryOpen={theoryOpen}
+            onToggleTheory={onToggleTheory}
+            simOpen={simOpen}
+            onToggleSim={onToggleSim}
+          />
+        )}
+      </MDXProvider>
+    </LabPasteContext.Provider>
   );
 }

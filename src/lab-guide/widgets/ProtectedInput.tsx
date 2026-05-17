@@ -4,6 +4,7 @@ import {
   type DragEvent,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
+  createContext,
   forwardRef,
   useCallback,
   useContext,
@@ -11,8 +12,17 @@ import {
 import { strings } from '../strings.da';
 import { ToastContext } from './ToastContext';
 
+/** Per-lab default for paste-block bypass, sourced from
+ *  `frontmatter.allowPaste`. ExperimentRoute injects it; ProtectedInput /
+ *  ProtectedTextarea read it when their own `allowPaste` prop is undefined.
+ *  An explicit widget-level prop still overrides the context (kept so
+ *  per-widget tests can opt in without faking a provider). */
+export const LabPasteContext = createContext<boolean>(false);
+
 type CommonProps = {
-  /** Bypass copy/paste protection — only set this from a per-lab `allowPaste: true`. */
+  /** Bypass copy/paste protection. Defaults to the surrounding
+   *  `LabPasteContext` (set from per-lab `frontmatter.allowPaste`); pass
+   *  explicitly to override per-widget. */
   allowPaste?: boolean;
 };
 
@@ -31,8 +41,10 @@ function useGuard(allow: boolean) {
 export const ProtectedInput = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement> & CommonProps
->(function ProtectedInput({ allowPaste = false, className = '', ...rest }, ref) {
-  const guard = useGuard(allowPaste);
+>(function ProtectedInput({ allowPaste, className = '', ...rest }, ref) {
+  const labAllowPaste = useContext(LabPasteContext);
+  const allow = allowPaste ?? labAllowPaste;
+  const guard = useGuard(allow);
   return (
     <input
       ref={ref}
@@ -41,7 +53,7 @@ export const ProtectedInput = forwardRef<
       onDrop={guard}
       onDragOver={(e) => e.preventDefault()}
       onAuxClick={(e) => {
-        if (!allowPaste && e.button === 1) e.preventDefault();
+        if (!allow && e.button === 1) e.preventDefault();
       }}
       autoComplete="off"
       autoCorrect="off"
@@ -55,8 +67,10 @@ export const ProtectedInput = forwardRef<
 export const ProtectedTextarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement> & CommonProps
->(function ProtectedTextarea({ allowPaste = false, className = '', ...rest }, ref) {
-  const guard = useGuard(allowPaste);
+>(function ProtectedTextarea({ allowPaste, className = '', ...rest }, ref) {
+  const labAllowPaste = useContext(LabPasteContext);
+  const allow = allowPaste ?? labAllowPaste;
+  const guard = useGuard(allow);
   return (
     <textarea
       ref={ref}
