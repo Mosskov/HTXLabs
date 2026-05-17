@@ -189,6 +189,50 @@ describe('VariableTable', () => {
     expect(document.getElementById('variables-c0-name')).toBeNull();
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
   });
+
+  it('repeated constant rows get a programmatic aria-label per cell', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt/9">
+        <VariableTable id="variables" />
+      </Harness>,
+    );
+    // Two rows: first keeps the visible header; second falls back to aria-label.
+    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
+    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
+
+    const symbol2 = document.getElementById('variables-c1-symbol') as HTMLInputElement;
+    expect(symbol2.getAttribute('aria-label')).toMatch(/Konstant 2.*Symbol/i);
+    const name2 = document.getElementById('variables-c1-name') as HTMLInputElement;
+    expect(name2.getAttribute('aria-label')).toMatch(/Konstant 2/i);
+  });
+
+  it('blocks paste by default; allowPaste lets it through', () => {
+    function firePaste(input: HTMLElement): boolean {
+      const evt = new Event('paste', { bubbles: true, cancelable: true });
+      input.dispatchEvent(evt);
+      return evt.defaultPrevented;
+    }
+
+    const blocked = render(
+      <Harness experimentId="vt-paste/blocked">
+        <VariableTable id="variables" />
+      </Harness>,
+    );
+    expect(
+      firePaste(document.getElementById('variables-iv-symbol') as HTMLInputElement),
+    ).toBe(true);
+    blocked.unmount();
+
+    render(
+      <Harness experimentId="vt-paste/allowed">
+        <VariableTable id="variables" allowPaste />
+      </Harness>,
+    );
+    expect(
+      firePaste(document.getElementById('variables-iv-symbol') as HTMLInputElement),
+    ).toBe(false);
+  });
 });
 
 describe('VariableTable — expected (correctness checking)', () => {

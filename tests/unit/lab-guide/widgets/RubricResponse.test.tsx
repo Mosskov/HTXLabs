@@ -164,6 +164,31 @@ describe('RubricResponse', () => {
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
   });
 
+  it('blocks paste by default; allowPaste lets it through', () => {
+    // Helper: dispatch a real paste event and report whether the widget called
+    // preventDefault — the proxy ProtectedTextarea exposes for the SEN escape.
+    function firePaste(textarea: HTMLElement): boolean {
+      const evt = new Event('paste', { bubbles: true, cancelable: true });
+      textarea.dispatchEvent(evt);
+      return evt.defaultPrevented;
+    }
+
+    const blocked = render(
+      <Harness experimentId="rr-paste/blocked">
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} />
+      </Harness>,
+    );
+    expect(firePaste(screen.getByRole('textbox'))).toBe(true);
+    blocked.unmount();
+
+    render(
+      <Harness experimentId="rr-paste/allowed">
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} allowPaste />
+      </Harness>,
+    );
+    expect(firePaste(screen.getByRole('textbox'))).toBe(false);
+  });
+
   it('renders an error card and registers satisfied:false on a malformed rubric', () => {
     // Missing required `criteria` array → parseRubric returns ok:false. The
     // widget must still register (hooks order stable) and show an error card.
@@ -384,6 +409,34 @@ describe('RubricResponse — reload safety', () => {
     );
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
     expect(screen.getByText(/godkendt/i)).toBeInTheDocument();
+  });
+
+  it('ignores the persisted pass when the rubric version bumps', async () => {
+    const experimentId = 'rr-rubric-version/1';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    const user = userEvent.setup();
+    const first = render(
+      <Harness experimentId={experimentId}>
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={mockEmbedder()} />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), passingText);
+    await user.click(screen.getByRole('button', { name: /tjek/i }));
+    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+    first.unmount();
+
+    // Author bumps the rubric version (e.g. tightened threshold, new criterion).
+    // The persisted record is now stale → gate must re-close until a fresh Tjek.
+    const bumpedRubric = { ...passingRubric, version: passingRubric.version + 1 };
+    render(
+      <Harness experimentId={experimentId}>
+        <RubricResponse id="hypotese" prompt="?" rubric={bumpedRubric} embedder={mockEmbedder()} />
+      </Harness>,
+    );
+    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    expect(screen.getByText(/ikke tjekket endnu/i)).toBeInTheDocument();
   });
 
   it('marks dirty + closes the gate when dependsOn changes after a pass', async () => {

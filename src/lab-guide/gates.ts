@@ -148,12 +148,12 @@ const GATE_HANDLERS: GateHandlerMap = {
   },
   // Flat (non-recursive) AND across heterogeneous widget kinds. Projects each
   // widget to a single satisfaction bit; an absent registration counts as
-  // unsatisfied. The lock message lists the participating widget ids so the
-  // student knows which sections must be complete.
+  // unsatisfied. The lock message is intentionally generic — internal widget
+  // ids are not student-facing copy.
   'all-satisfied': {
     check: (gate, _state, _module, ctx) =>
       gate.widgetIds.every((id) => widgetSatisfied(ctx.widgets[id])),
-    message: (gate) => format(strings.gates.allSatisfied, { ids: gate.widgetIds.join(', ') }),
+    message: () => strings.gates.allSatisfied,
   },
   // Widget-agnostic correctness gate — reads `correct: true` from any widget
   // registering `kind: 'filled'` (currently VariableTable with `expected`).

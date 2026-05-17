@@ -35,8 +35,13 @@ const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 // Persisted across reload via `widgetValues[${id}:result]`. Validated with
 // Zod so a future shape change (or hand-edited localStorage) lands as a
 // safe `null` rather than poisoning the gate with a half-typed object.
+// `rubricId`/`rubricVersion` are checked at the use site (not the schema)
+// against the currently parsed rubric — a mismatch makes the record ignored
+// so an edited rubric can't keep the gate open under stale criteria.
 const PersistedPassSchema = z
   .object({
+    rubricId: z.string(),
+    rubricVersion: z.number().int(),
     lastCheckedText: z.string(),
     lastCheckedDependsOn: z.string().nullable(),
     requiredSatisfied: z.boolean(),
@@ -69,6 +74,8 @@ interface Props {
    *  pass to external context the prompt depends on — e.g. variable symbols
    *  the prompt interpolates. Caller stringifies; no deep equality. */
   dependsOn?: string;
+  /** SEN accommodation — propagated to the textarea to bypass paste-block. */
+  allowPaste?: boolean;
   /** Test-injection seam. Defaults to a module-level HttpEmbedder pointed at
    *  the local dev server (no embed server in production → embedder-down
    *  banner is the expected path; gate stays closed). */
@@ -87,6 +94,7 @@ export function RubricResponse({
   embedderDownMessage,
   bonusPanelTitle,
   dependsOn,
+  allowPaste,
   embedder = defaultEmbedder,
 }: Props) {
   const { state, setWidgetValue, incrementRubricTier } = useRunner();
@@ -95,9 +103,19 @@ export function RubricResponse({
   const dependsOnNorm = dependsOn ?? null;
 
   const persistedKey = `${id}:result`;
-  const persisted = readPersisted(state.widgetValues[persistedKey]);
+  const persistedRaw = readPersisted(state.widgetValues[persistedKey]);
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
+  // Ignore the persisted record if it was written against a different rubric
+  // (different id) or an older version — stale criteria must not keep the
+  // gate open after the author edits the rubric JSON.
+  const persisted =
+    persistedRaw &&
+    parsed.ok &&
+    persistedRaw.rubricId === parsed.rubric.id &&
+    persistedRaw.rubricVersion === parsed.rubric.version
+      ? persistedRaw
+      : null;
   // Surface parse failures in the dev console — author sees them on page load.
   useEffect(() => {
     if (!parsed.ok) {
@@ -183,6 +201,8 @@ export function RubricResponse({
         // Persist the minimal pass record alongside the live result. React
         // batches the dispatch + setResult so the next render sees both.
         const record: PersistedPass = {
+          rubricId: parsed.rubric.id,
+          rubricVersion: parsed.rubric.version,
           lastCheckedText: snapshotText,
           lastCheckedDependsOn: snapshotDependsOn,
           requiredSatisfied: r.requiredSatisfied,
@@ -316,6 +336,7 @@ export function RubricResponse({
         placeholder={placeholder ?? strings.widgets.rubric.placeholder}
         aria-describedby={helpId}
         aria-invalid={tooShort || undefined}
+        allowPaste={allowPaste}
         onChange={(e) => onTextChange(e.target.value)}
       />
       <div id={helpId} aria-live="polite" className="contents">

@@ -21,6 +21,27 @@ const AUTHORABLE_GATE_KINDS: ReadonlySet<Gate['type']> = new Set(
   GATE_KINDS.filter((k) => !(SIM_DRIVEN_GATE_KINDS as readonly Gate['type'][]).includes(k)),
 );
 
+/**
+ * Gate kinds that are only safe in `devOnly: true` (or `tags: ['test']`) labs:
+ *   - `rubric-required` depends on the local embed server, which is not shipped
+ *     in production builds — a non-devOnly lab using it would silently lock.
+ *   - `all-validated` works correctly, but the per-cell error visuals are
+ *     intentionally deferred; without them students see only a generic footer
+ *     message. Restricted until the visuals land.
+ * The `test` tag still short-circuits the validator entirely (see top of
+ * `validateAuthorableGates`); devOnly labs are accepted here.
+ */
+const DEV_ONLY_GATE_KINDS: ReadonlySet<Gate['type']> = new Set<Gate['type']>([
+  'rubric-required',
+  'all-validated',
+]);
+
+const DEV_ONLY_GATE_REASONS: Record<string, string> = {
+  'rubric-required': 'requires the local embed server, which is not shipped in production',
+  'all-validated':
+    'per-cell error visuals not yet implemented — students would see only a generic lock message',
+};
+
 const CANONICAL_PHASE_ID_SET: ReadonlySet<string> = new Set(CANONICAL_PHASE_IDS);
 
 /** A lab tagged `devOnly: true` is unreachable in the production build — used
@@ -61,6 +82,12 @@ export function validateAuthorableGates(
       if (!allowedKinds.has(phase.gate.type)) {
         throw new Error(
           `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" uses gate kind "${phase.gate.type}", which requires sim wiring not yet implemented in this build. Supported kinds: ${supported}.`,
+        );
+      }
+      if (DEV_ONLY_GATE_KINDS.has(phase.gate.type) && !fm.devOnly) {
+        const reason = DEV_ONLY_GATE_REASONS[phase.gate.type] ?? 'dev-only feature';
+        throw new Error(
+          `[content] ${ctx.topic}/${ctx.slug} mode "${modeName}" phase "${phase.id}" uses gate kind "${phase.gate.type}", which ${reason}. Set \`devOnly: true\` in frontmatter until a production path lands.`,
         );
       }
       if (!CANONICAL_PHASE_ID_SET.has(phase.id)) {

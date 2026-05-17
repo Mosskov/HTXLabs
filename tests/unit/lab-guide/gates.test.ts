@@ -550,10 +550,8 @@ describe('all-satisfied gate', () => {
     expect(isGateSatisfied(allSatGate, makeState(), undefined, ctx, PHASE)).toBe(false);
   });
 
-  it('gateMessage names the participating widget ids', () => {
-    expect(gateMessage(allSatGate)).toBe(
-      'Fuldfør alle delopgaver for at fortsætte (variables, hypotese).',
-    );
+  it('gateMessage returns a generic lock string (no raw widget ids in student copy)', () => {
+    expect(gateMessage(allSatGate)).toBe('Fuldfør alle delopgaver for at fortsætte.');
   });
 
   it('open mode bypasses without satisfied widgets', () => {

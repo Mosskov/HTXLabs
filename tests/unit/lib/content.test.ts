@@ -56,7 +56,6 @@ describe('validateAuthorableGates', () => {
       { type: 'keyword-count', widgetId: 'a', min: 'all' },
       { type: 'keyword-count', widgetId: 'a', min: 3 },
       { type: 'all-satisfied', widgetIds: ['a', 'b'] },
-      { type: 'all-validated', widgetIds: ['a'] },
     ];
     for (const gate of supported) {
       it(`accepts ${gate.type}${'min' in gate ? ` (min=${String(gate.min)})` : ''}`, () => {
@@ -197,6 +196,36 @@ describe('validateAuthorableGates', () => {
       expect(() => validateAuthorableGates(fm, ctx)).toThrow(/phase "first-bad"/);
       expect(() => validateAuthorableGates(fm, ctx)).not.toThrow(/phase "second-bad"/);
     });
+  });
+
+  describe('dev-only gate kinds (rubric-required, all-validated)', () => {
+    const devOnlyGates: Gate[] = [
+      { type: 'rubric-required', widgetIds: ['hypotese'] },
+      { type: 'all-validated', widgetIds: ['variables'] },
+    ];
+
+    for (const gate of devOnlyGates) {
+      it(`rejects ${gate.type} on a non-devOnly lab`, () => {
+        const fm = makeFrontmatter({ guided: [makePhase('planlaeg', gate)] });
+        expect(() => validateAuthorableGates(fm, ctx)).toThrow(
+          new RegExp(
+            `phase "planlaeg" uses gate kind "${gate.type}".*Set \\\`devOnly: true\\\``,
+          ),
+        );
+      });
+
+      it(`accepts ${gate.type} on a devOnly lab`, () => {
+        const fm = makeFrontmatter({ guided: [makePhase('planlaeg', gate)] });
+        fm.devOnly = true;
+        expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
+      });
+
+      it(`accepts ${gate.type} on a test-tagged lab (testbed escape hatch)`, () => {
+        const fm = makeFrontmatter({ guided: [makePhase('planlaeg', gate)] });
+        fm.tags = ['test'];
+        expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
+      });
+    }
   });
 
   describe('canonical phase id soft warn', () => {

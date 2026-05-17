@@ -183,8 +183,7 @@ export const strings = {
     keywordCountAll: 'Brug nøgleord fra alle krav for at fortsætte.',
     predicate: 'Forsøget skal opfylde et bestemt kriterium for at fortsætte.',
     rubricRequired: 'Skriv et svar og tryk Tjek mit svar — alle krav skal være opfyldt.',
-    /** Vars: {ids} = comma-separated list of participating widget ids. */
-    allSatisfied: 'Fuldfør alle delopgaver for at fortsætte ({ids}).',
+    allSatisfied: 'Fuldfør alle delopgaver for at fortsætte.',
     allValidated: 'Udfyld alle felter korrekt for at fortsætte.',
   },
   errors: {

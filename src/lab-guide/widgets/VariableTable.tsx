@@ -55,6 +55,8 @@ interface Props {
   symbolHeader?: string;
   unitHeader?: string;
   addConstantLabel?: string;
+  /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
+  allowPaste?: boolean;
 }
 
 const EMPTY: VariableEntry = { name: '', symbol: '', unit: '' };
@@ -89,6 +91,7 @@ export function VariableTable({
   symbolHeader,
   unitHeader,
   addConstantLabel,
+  allowPaste,
 }: Props) {
   const { state, setWidgetValue } = useRunner();
   const values = readValues(state.widgetValues[id]);
@@ -169,6 +172,7 @@ export function VariableTable({
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
+        allowPaste={allowPaste}
       />
       <VariableSection
         id={`${id}-dv`}
@@ -178,6 +182,7 @@ export function VariableTable({
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
+        allowPaste={allowPaste}
       />
       <div className="rounded-md border border-slate-200 p-3">
         <div className="mb-2 text-sm font-medium text-slate-800">
@@ -188,6 +193,7 @@ export function VariableTable({
             // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a constants row
             key={i}
             id={`${id}-c${i}`}
+            rowIndex={i}
             entry={c}
             onChange={(field, next) => updateConstant(i, field, next)}
             onRemove={() => removeConstant(i)}
@@ -195,6 +201,7 @@ export function VariableTable({
             symbolHeader={symbolH}
             unitHeader={unitH}
             showHeaders={i === 0}
+            allowPaste={allowPaste}
           />
         ))}
         <button
@@ -217,6 +224,7 @@ interface SectionProps {
   nameHeader: string;
   symbolHeader: string;
   unitHeader: string;
+  allowPaste?: boolean;
 }
 
 function VariableSection({
@@ -227,6 +235,7 @@ function VariableSection({
   nameHeader,
   symbolHeader,
   unitHeader,
+  allowPaste,
 }: SectionProps) {
   return (
     <div className="rounded-md border border-slate-200 p-3">
@@ -237,18 +246,21 @@ function VariableSection({
           label={nameHeader}
           value={entry.name}
           onChange={(v) => onChange('name', v)}
+          allowPaste={allowPaste}
         />
         <Field
           id={`${id}-symbol`}
           label={symbolHeader}
           value={entry.symbol}
           onChange={(v) => onChange('symbol', v)}
+          allowPaste={allowPaste}
         />
         <Field
           id={`${id}-unit`}
           label={unitHeader}
           value={entry.unit}
           onChange={(v) => onChange('unit', v)}
+          allowPaste={allowPaste}
         />
       </div>
     </div>
@@ -257,6 +269,7 @@ function VariableSection({
 
 interface ConstantRowProps {
   id: string;
+  rowIndex: number;
   entry: VariableEntry;
   onChange: (field: keyof VariableEntry, next: string) => void;
   onRemove: () => void;
@@ -264,10 +277,12 @@ interface ConstantRowProps {
   symbolHeader: string;
   unitHeader: string;
   showHeaders: boolean;
+  allowPaste?: boolean;
 }
 
 function ConstantRow({
   id,
+  rowIndex,
   entry,
   onChange,
   onRemove,
@@ -275,26 +290,36 @@ function ConstantRow({
   symbolHeader,
   unitHeader,
   showHeaders,
+  allowPaste,
 }: ConstantRowProps) {
+  // When headers are hidden (rows 2+), each input still needs a programmatic
+  // label so screen readers don't announce three anonymous text fields.
+  const rowAria = (header: string) => `Konstant ${rowIndex + 1}, ${header}`;
   return (
     <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
       <Field
         id={`${id}-name`}
         label={showHeaders ? nameHeader : undefined}
+        ariaLabel={showHeaders ? undefined : rowAria(nameHeader)}
         value={entry.name}
         onChange={(v) => onChange('name', v)}
+        allowPaste={allowPaste}
       />
       <Field
         id={`${id}-symbol`}
         label={showHeaders ? symbolHeader : undefined}
+        ariaLabel={showHeaders ? undefined : rowAria(symbolHeader)}
         value={entry.symbol}
         onChange={(v) => onChange('symbol', v)}
+        allowPaste={allowPaste}
       />
       <Field
         id={`${id}-unit`}
         label={showHeaders ? unitHeader : undefined}
+        ariaLabel={showHeaders ? undefined : rowAria(unitHeader)}
         value={entry.unit}
         onChange={(v) => onChange('unit', v)}
+        allowPaste={allowPaste}
       />
       <button
         type="button"
@@ -311,11 +336,16 @@ function ConstantRow({
 interface FieldProps {
   id: string;
   label?: string;
+  /** Programmatic label used when no visual `label` is rendered (repeated
+   *  constant rows). Either `label` or `ariaLabel` should be set so the input
+   *  is never anonymous to assistive tech. */
+  ariaLabel?: string;
   value: string;
   onChange: (next: string) => void;
+  allowPaste?: boolean;
 }
 
-function Field({ id, label, value, onChange }: FieldProps) {
+function Field({ id, label, ariaLabel, value, onChange, allowPaste }: FieldProps) {
   return (
     <div>
       {label && (
@@ -327,6 +357,8 @@ function Field({ id, label, value, onChange }: FieldProps) {
         id={id}
         type="text"
         value={value}
+        aria-label={ariaLabel}
+        allowPaste={allowPaste}
         onChange={(e) => onChange(e.target.value)}
         className="w-full"
       />
