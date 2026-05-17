@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { isVisibleInEnv, validateAuthorableGates, validateSimGateRefs } from '@/lib/content';
+import {
+  findLabsUsingRubricWidget,
+  isVisibleInEnv,
+  validateAuthorableGates,
+  validateProductionSafeWidgets,
+  validateSimGateRefs,
+} from '@/lib/content';
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { Gate, Phase } from '@/lib/schema';
 import type { SimulationMeta } from '@/sim-contract';
@@ -340,6 +346,102 @@ describe('validateSimGateRefs', () => {
     expect(() => validateSimGateRefs(fm, makeMeta(['m1']), ctx)).toThrow(
       /mode "semi-guided".*"bogus"/,
     );
+  });
+});
+
+describe('validateProductionSafeWidgets', () => {
+  // The gate-kind validator can only see frontmatter, but `<RubricResponse>`
+  // can be smuggled into production via gates like `all-satisfied` that wrap
+  // arbitrary widget ids. This validator closes that hole by scanning raw
+  // MDX bodies upstream (in content.ts) and rejecting non-devOnly labs that
+  // embed the widget regardless of gate kind.
+  it('throws when a non-devOnly lab uses RubricResponse', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'all-satisfied', widgetIds: ['a', 'b'] })],
+    });
+    expect(() => validateProductionSafeWidgets(fm, true, ctx)).toThrow(
+      /uses <RubricResponse>.*Set `devOnly: true`/,
+    );
+  });
+
+  it('accepts when the lab is devOnly', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'all-satisfied', widgetIds: ['a', 'b'] })],
+    });
+    fm.devOnly = true;
+    expect(() => validateProductionSafeWidgets(fm, true, ctx)).not.toThrow();
+  });
+
+  it('accepts when the lab is tagged "test" (testbed escape hatch)', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'all-satisfied', widgetIds: ['a', 'b'] })],
+    });
+    fm.tags = ['test'];
+    expect(() => validateProductionSafeWidgets(fm, true, ctx)).not.toThrow();
+  });
+
+  it('is a no-op when the lab does not use RubricResponse', () => {
+    const fm = makeFrontmatter({
+      guided: [makePhase('planlaeg', { type: 'all-filled', widgetIds: ['a'] })],
+    });
+    expect(() => validateProductionSafeWidgets(fm, false, ctx)).not.toThrow();
+  });
+});
+
+describe('findLabsUsingRubricWidget', () => {
+  // The scanner is the upstream half of the rubric production-safety guard:
+  // it walks raw experiment-local sources and flags labs that reference the
+  // widget. Coverage matters here because a missed source type lets a
+  // non-devOnly lab smuggle <RubricResponse> past validateProductionSafeWidgets.
+  it('detects <RubricResponse> in an MDX phase body', () => {
+    const labs = findLabsUsingRubricWidget({
+      '../content/experiments/mekanik/demo/phase-planlaeg.mdx':
+        'Some prose.\n\n<RubricResponse id="x" rubric={r} prompt="..." />',
+    });
+    expect(labs.has('mekanik/demo')).toBe(true);
+  });
+
+  it('detects <RubricResponse> in a sibling TSX wrapper co-located with the lab', () => {
+    // The bypass C2 caught: MDX phase imports a local TSX component that
+    // renders the widget. With only .mdx scanned the lab would slip past.
+    const labs = findLabsUsingRubricWidget({
+      '../content/experiments/mekanik/demo/Wrapper.tsx':
+        'export function Wrapper() { return <RubricResponse id="x" rubric={r} />; }',
+      '../content/experiments/mekanik/demo/phase-planlaeg.mdx':
+        'import { Wrapper } from "./Wrapper";\n\n<Wrapper rubric={r} />',
+    });
+    expect(labs.has('mekanik/demo')).toBe(true);
+  });
+
+  it('matches both self-closing and open-tag JSX', () => {
+    const labs = findLabsUsingRubricWidget({
+      '../content/experiments/a/lab1/phase.mdx': '<RubricResponse/>',
+      '../content/experiments/a/lab2/phase.mdx': '<RubricResponse id="x">child</RubricResponse>',
+    });
+    expect(labs.has('a/lab1')).toBe(true);
+    expect(labs.has('a/lab2')).toBe(true);
+  });
+
+  it('does not match prefixed identifiers like <RubricResponseFoo', () => {
+    const labs = findLabsUsingRubricWidget({
+      '../content/experiments/a/lab/phase.mdx': '<RubricResponseHelper id="x" />',
+    });
+    expect(labs.size).toBe(0);
+  });
+
+  it('skips paths outside experiments/<topic>/<slug>/', () => {
+    const labs = findLabsUsingRubricWidget({
+      '../content/topics/mekanik.ts': '<RubricResponse />',
+    });
+    expect(labs.size).toBe(0);
+  });
+
+  it('returns an empty set for sources without the widget', () => {
+    const labs = findLabsUsingRubricWidget({
+      '../content/experiments/a/lab/phase.mdx': '<DataTable id="d" />',
+      '../content/experiments/a/lab/Helper.tsx': 'export const Helper = () => null;',
+    });
+    expect(labs.size).toBe(0);
   });
 });
 

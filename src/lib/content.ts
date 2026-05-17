@@ -42,6 +42,11 @@ const DEV_ONLY_GATE_REASONS: Record<string, string> = {
     'per-cell error visuals not yet implemented — students would see only a generic lock message',
 };
 
+/** Pattern matches `<RubricResponse ...>` and `<RubricResponse/>` openings in
+ *  raw MDX. JSX requires the component reference to appear by name at every
+ *  call site, so a substring scan is sufficient — no MDX parser needed. */
+const RUBRIC_WIDGET_PATTERN = /<RubricResponse(\s|\/|>)/;
+
 const CANONICAL_PHASE_ID_SET: ReadonlySet<string> = new Set(CANONICAL_PHASE_IDS);
 
 /** A lab tagged `devOnly: true` is unreachable in the production build — used
@@ -97,6 +102,49 @@ export function validateAuthorableGates(
       }
     }
   }
+}
+
+/** Production-safety check for widgets whose runtime depends on dev-only
+ *  infrastructure. Currently only `<RubricResponse>` qualifies: it talks to
+ *  the local embed server, which isn't shipped in production. A non-devOnly
+ *  lab using the widget would render with `embedderDown: true` and silently
+ *  lock any gate (rubric-required, all-satisfied, etc.) that depends on its
+ *  `satisfied` bit — exactly the failure mode that `DEV_ONLY_GATE_KINDS`
+ *  prevents for the direct `rubric-required` gate. We do this by raw-scanning
+ *  MDX phase bodies plus sibling TSX wrappers under `<topic>/<slug>/` (a real
+ *  lab can render the widget through a co-located helper component) because
+ *  the gate-kind validator can't distinguish which widget an
+ *  `all-satisfied`/`all-validated` `widgetIds` entry points to. */
+export function validateProductionSafeWidgets(
+  fm: ExperimentFrontmatter,
+  usesRubricWidget: boolean,
+  ctx: { topic: string; slug: string },
+): void {
+  if (fm.tags?.includes('test')) return;
+  if (!usesRubricWidget || fm.devOnly) return;
+  throw new Error(
+    `[content] ${ctx.topic}/${ctx.slug} uses <RubricResponse>, which ${DEV_ONLY_GATE_REASONS['rubric-required']}. Set \`devOnly: true\` in frontmatter until a production path lands.`,
+  );
+}
+
+/** Scan raw experiment-local sources for `<RubricResponse>` usage and return
+ *  the set of `${topic}/${slug}` keys that reference the widget. Inputs are
+ *  paths under `../content/experiments/<topic>/<slug>/` (MDX phase bodies
+ *  plus sibling TSX wrappers — both can render the widget directly) keyed
+ *  to their raw source. Exported for unit testing; the production call wires
+ *  in `import.meta.glob`. */
+export function findLabsUsingRubricWidget(sources: Record<string, string>): Set<string> {
+  const labs = new Set<string>();
+  for (const [path, source] of Object.entries(sources)) {
+    const match = path.match(/experiments\/([^/]+)\/([^/]+)\//);
+    if (!match) continue;
+    const [, topicSlug, experimentSlug] = match;
+    if (!topicSlug || !experimentSlug) continue;
+    if (RUBRIC_WIDGET_PATTERN.test(source)) {
+      labs.add(`${topicSlug}/${experimentSlug}`);
+    }
+  }
+  return labs;
 }
 
 /** Cross-check that every `milestone` gate references an id the resolved sim
@@ -170,6 +218,24 @@ for (const mod of Object.values(simMetaModules)) {
   if (mod.meta?.id) simMetasById.set(mod.meta.id, mod.meta);
 }
 
+/** Raw content source per `<topic>/<slug>`, used by
+ *  `validateProductionSafeWidgets` to detect `<RubricResponse>` usage that
+ *  the frontmatter-only gate-kind validator can't see (e.g. when wrapped in
+ *  `all-satisfied`). We scan both `.mdx` phase bodies and sibling `.tsx`
+ *  files under the same `<topic>/<slug>/` folder — a co-located TSX wrapper
+ *  imported from MDX would otherwise let a lab smuggle the widget into a
+ *  non-devOnly build. The `?raw` query bypasses the MDX/TS rollup plugins
+ *  so we get the source string, not the compiled component. */
+const rawSourceModules = import.meta.glob<{ default: string }>(
+  '../content/experiments/*/*/*.{mdx,tsx}',
+  { eager: true, query: '?raw' },
+);
+const rawSources: Record<string, string> = {};
+for (const [path, mod] of Object.entries(rawSourceModules)) {
+  rawSources[path] = mod.default;
+}
+const labsUsingRubricWidget = findLabsUsingRubricWidget(rawSources);
+
 type IndexedEntry =
   | {
       ok: true;
@@ -216,6 +282,11 @@ for (const [path, mod] of Object.entries(experimentModules)) {
       topic: topicSlug,
       slug: experimentSlug,
     });
+    validateProductionSafeWidgets(
+      parsed.data,
+      labsUsingRubricWidget.has(`${topicSlug}/${experimentSlug}`),
+      { topic: topicSlug, slug: experimentSlug },
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error(`[content] ${topicSlug}/${experimentSlug} disabled:`, message);
