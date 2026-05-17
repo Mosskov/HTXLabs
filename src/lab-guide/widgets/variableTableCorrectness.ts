@@ -4,7 +4,8 @@
 // structured error payload is opaque (`unknown`) to gates.ts.
 //
 // Matching contract:
-// - Trim leading/trailing whitespace only — no internal-whitespace collapse.
+// - Trim leading/trailing whitespace only — no internal-whitespace collapse
+//   on the primary match (the `whitespace-internal` refinement opts in).
 // - Names: case-insensitive (toLowerCase); plain Danish case-folding suffices.
 // - Symbols/units: case-sensitive; case-only mismatch reported separately.
 // - Constants: order-independent, three sub-passes (full > exact-key partial >
@@ -12,19 +13,55 @@
 //   Matching key is `symbol` if set, else `name`. Malformed entries (neither
 //   set) are silently dropped — never produce `missing`, so a misauthored lab
 //   cannot permanently lock the gate. The widget warns in dev separately.
+//
+// Error precedence (each cell reports its first hit):
+//   1. exact match            → undefined
+//   2. case-mismatch          (symbol/unit only)
+//   3. misplaced              sibling cell of same row matches
+//   4. row-swapped            corresponding cell of OTHER row matches (IV/DV)
+//   5. common-mistake         author-supplied wrong-answer list
+//   6. whitespace-internal    match after collapsing internal whitespace
+//   7. mismatch               fallthrough
+//
+// `evaluateCell` produces only kinds 1, 2, 7 (and `empty`). Refinement into
+// kinds 3–6 happens at the table/constants level via `refineCellError`, where
+// the full row + optional other-row context is available. Direct callers of
+// `evaluateRow` get the raw row result; refinement is applied by
+// `evaluateTable` and inside `evaluateConstants` for partial matches.
 import type { VariableEntry } from './VariableTable';
+
+export type Cell = 'name' | 'symbol' | 'unit';
+
+export interface CommonMistake {
+  wrong: string | string[];
+  kind: string;
+  hint?: string;
+}
+
+export type CommonMistakes = Partial<Record<Cell, CommonMistake[]>>;
 
 export interface ExpectedVariable {
   name?: string | string[];
   symbol?: string | string[];
   unit?: string | string[];
+  commonMistakes?: CommonMistakes;
 }
 
 // Constants must have at least one matching key. TS-level enforcement; the
 // runtime helper still defensively skips malformed entries as a safety net.
 export type ExpectedConstant =
-  | { symbol: string | string[]; name?: string | string[]; unit?: string | string[] }
-  | { name: string | string[]; symbol?: string | string[]; unit?: string | string[] };
+  | {
+      symbol: string | string[];
+      name?: string | string[];
+      unit?: string | string[];
+      commonMistakes?: CommonMistakes;
+    }
+  | {
+      name: string | string[];
+      symbol?: string | string[];
+      unit?: string | string[];
+      commonMistakes?: CommonMistakes;
+    };
 
 export interface ExpectedVariables {
   iv: ExpectedVariable;
@@ -32,7 +69,14 @@ export interface ExpectedVariables {
   constants?: ExpectedConstant[];
 }
 
-export type CellError = { type: 'empty' } | { type: 'mismatch' } | { type: 'case-mismatch' };
+export type CellError =
+  | { type: 'empty' }
+  | { type: 'mismatch' }
+  | { type: 'case-mismatch' }
+  | { type: 'misplaced'; from: Cell }
+  | { type: 'row-swapped'; from: 'iv' | 'dv' }
+  | { type: 'common-mistake'; kind: string; hint?: string }
+  | { type: 'whitespace-internal' };
 
 export interface VariableRowErrors {
   name?: CellError;
@@ -56,8 +100,46 @@ export interface CorrectnessReport {
   constants?: ConstantMatch[];
 }
 
+const CELLS: readonly Cell[] = ['name', 'symbol', 'unit'];
+
 export function asArray(v: string | string[]): string[] {
   return Array.isArray(v) ? v : [v];
+}
+
+function isCaseSensitive(cell: Cell): boolean {
+  return cell !== 'name';
+}
+
+function cellAccepted(exp: ExpectedVariable | ExpectedConstant, cell: Cell): string[] | undefined {
+  const v = exp[cell];
+  return v !== undefined ? asArray(v) : undefined;
+}
+
+/** True iff `value` (trimmed) matches any accepted form using the given
+ *  case rule. Each accepted form is also trimmed. */
+function valueMatches(value: string, accepted: string[], caseSensitive: boolean): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  if (caseSensitive) return accepted.some((a) => a.trim() === trimmed);
+  const lower = trimmed.toLowerCase();
+  return accepted.some((a) => a.trim().toLowerCase() === lower);
+}
+
+/** True iff `value` matches any accepted form after collapsing internal
+ *  whitespace on both sides. Used for the `whitespace-internal` refinement
+ *  (e.g. student typed `m / s²` for `m/s²`). */
+function valueMatchesAfterCollapse(
+  value: string,
+  accepted: string[],
+  caseSensitive: boolean,
+): boolean {
+  const collapsed = value.trim().replace(/\s+/g, '');
+  if (collapsed.length === 0) return false;
+  if (caseSensitive) {
+    return accepted.some((a) => a.trim().replace(/\s+/g, '') === collapsed);
+  }
+  const lower = collapsed.toLowerCase();
+  return accepted.some((a) => a.trim().replace(/\s+/g, '').toLowerCase() === lower);
 }
 
 /** Returns undefined when the cell is not under check (accepted=undefined),
@@ -83,6 +165,97 @@ export function evaluateCell(
   const lower = trimmed.toLowerCase();
   if (accepted.some((a) => a.trim().toLowerCase() === lower)) return undefined;
   return { type: 'mismatch' };
+}
+
+export interface RefineContext {
+  cell: Cell;
+  rowExpected: ExpectedVariable | ExpectedConstant;
+  /** When set, enables `row-swapped` detection against the other row. */
+  otherRowExpected?: ExpectedVariable;
+  /** Label of the other row, used in the `row-swapped` payload. */
+  otherRowLabel?: 'iv' | 'dv';
+  /** Pre-resolved common-mistakes list for this cell. */
+  commonMistakes?: CommonMistake[];
+}
+
+/** Refine a raw `mismatch` into the most specific kind that fits. Returns the
+ *  input unchanged when it is not `mismatch`. Pure. Precedence follows the
+ *  module-header chain. */
+export function refineCellError(
+  current: CellError | undefined,
+  value: string,
+  ctx: RefineContext,
+): CellError | undefined {
+  if (current?.type !== 'mismatch') return current;
+
+  // 3. misplaced — value matches a *sibling* cell of the same row.
+  for (const sibling of CELLS) {
+    if (sibling === ctx.cell) continue;
+    const accepted = cellAccepted(ctx.rowExpected, sibling);
+    if (accepted === undefined) continue;
+    if (valueMatches(value, accepted, isCaseSensitive(sibling))) {
+      return { type: 'misplaced', from: sibling };
+    }
+  }
+
+  // 4. row-swapped — value matches the *corresponding* cell of the other row.
+  if (ctx.otherRowExpected !== undefined && ctx.otherRowLabel !== undefined) {
+    const accepted = cellAccepted(ctx.otherRowExpected, ctx.cell);
+    if (accepted !== undefined && valueMatches(value, accepted, isCaseSensitive(ctx.cell))) {
+      return { type: 'row-swapped', from: ctx.otherRowLabel };
+    }
+  }
+
+  // 5. common-mistake — author-supplied wrong-answer list.
+  if (ctx.commonMistakes !== undefined) {
+    for (const cm of ctx.commonMistakes) {
+      const wrongs = asArray(cm.wrong);
+      if (valueMatches(value, wrongs, isCaseSensitive(ctx.cell))) {
+        return cm.hint !== undefined
+          ? { type: 'common-mistake', kind: cm.kind, hint: cm.hint }
+          : { type: 'common-mistake', kind: cm.kind };
+      }
+    }
+  }
+
+  // 6. whitespace-internal — match after collapsing internal whitespace.
+  const ownAccepted = cellAccepted(ctx.rowExpected, ctx.cell);
+  if (
+    ownAccepted !== undefined &&
+    valueMatchesAfterCollapse(value, ownAccepted, isCaseSensitive(ctx.cell))
+  ) {
+    return { type: 'whitespace-internal' };
+  }
+
+  // 7. fallthrough — keep original mismatch.
+  return current;
+}
+
+/** Apply `refineCellError` to each cell of a row. Mutates `errors` in place
+ *  and returns it for chaining. */
+function refineRow(
+  errors: VariableRowErrors,
+  entry: VariableEntry,
+  rowExpected: ExpectedVariable | ExpectedConstant,
+  otherRowExpected: ExpectedVariable | undefined,
+  otherRowLabel: 'iv' | 'dv' | undefined,
+): VariableRowErrors {
+  const commonMistakes = rowExpected.commonMistakes;
+  for (const cell of CELLS) {
+    const refined = refineCellError(errors[cell], entry[cell], {
+      cell,
+      rowExpected,
+      otherRowExpected,
+      otherRowLabel,
+      commonMistakes: commonMistakes?.[cell],
+    });
+    if (refined === undefined) {
+      delete errors[cell];
+    } else {
+      errors[cell] = refined;
+    }
+  }
+  return errors;
 }
 
 export function hasNoRowErrors(errors: VariableRowErrors): boolean {
@@ -174,7 +347,7 @@ export function evaluateConstants(
           status: 'partial',
           expectedIndex: idx,
           studentIndex: s,
-          errors: evaluateRow(row, exp),
+          errors: refineRow(evaluateRow(row, exp), row, exp, undefined, undefined),
         });
         used.add(s);
         remaining.delete(idx);
@@ -196,7 +369,7 @@ export function evaluateConstants(
           status: 'partial',
           expectedIndex: idx,
           studentIndex: s,
-          errors: evaluateRow(row, exp),
+          errors: refineRow(evaluateRow(row, exp), row, exp, undefined, undefined),
         });
         used.add(s);
         remaining.delete(idx);
@@ -221,10 +394,21 @@ export function evaluateTable(
   values: { iv: VariableEntry; dv: VariableEntry; constants: VariableEntry[] },
   expected: ExpectedVariables,
 ): CorrectnessReport {
-  const report: CorrectnessReport = {
-    iv: evaluateRow(values.iv, expected.iv),
-    dv: evaluateRow(values.dv, expected.dv),
-  };
+  const ivErrors = refineRow(
+    evaluateRow(values.iv, expected.iv),
+    values.iv,
+    expected.iv,
+    expected.dv,
+    'dv',
+  );
+  const dvErrors = refineRow(
+    evaluateRow(values.dv, expected.dv),
+    values.dv,
+    expected.dv,
+    expected.iv,
+    'iv',
+  );
+  const report: CorrectnessReport = { iv: ivErrors, dv: dvErrors };
   if (expected.constants !== undefined) {
     report.constants = evaluateConstants(values.constants, expected.constants);
   }

@@ -29,6 +29,14 @@ function cellTag(err: CellError | undefined): { text: string; tone: 'ok' | 'warn
       return { text: 'forkert', tone: 'bad' };
     case 'case-mismatch':
       return { text: 'case-fejl', tone: 'warn' };
+    case 'misplaced':
+      return { text: `misplaced (fra ${err.from})`, tone: 'warn' };
+    case 'row-swapped':
+      return { text: `byttet (med ${err.from})`, tone: 'warn' };
+    case 'common-mistake':
+      return { text: `common: ${err.kind}`, tone: 'warn' };
+    case 'whitespace-internal':
+      return { text: 'mellemrum', tone: 'warn' };
   }
 }
 
