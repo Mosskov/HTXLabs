@@ -668,6 +668,57 @@ describe('canAdvanceTo', () => {
   });
 });
 
+describe('all-satisfied gate with strict:true flag', () => {
+  it('passes when kind:filled widget has filled:true and correct:true', () => {
+    const gate: Gate = { type: 'all-satisfied', strict: true, widgetIds: ['vt', 'hyp'] };
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: true },
+      hyp: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('fails when kind:filled widget has filled:true but correct:false', () => {
+    const gate: Gate = { type: 'all-satisfied', strict: true, widgetIds: ['vt', 'hyp'] };
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: false },
+      hyp: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('fails strict when correct is undefined (no expected configured)', () => {
+    // No silent degrade — strict refuses to accept presence-only widgets.
+    const gate: Gate = { type: 'all-satisfied', strict: true, widgetIds: ['vt', 'hyp'] };
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true },
+      hyp: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(false);
+  });
+
+  it('heterogeneous strict: filled-strict + rubric works', () => {
+    // The flag only affects kind:filled projection; rubric still reads
+    // satisfied as before.
+    const gate: Gate = { type: 'all-satisfied', strict: true, widgetIds: ['vt', 'hyp'] };
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: true },
+      hyp: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+
+  it('without strict flag, the same widget set with correct:false still passes', () => {
+    // Sanity: presence-only is the default; strict is opt-in.
+    const gate: Gate = { type: 'all-satisfied', widgetIds: ['vt', 'hyp'] };
+    const ctx = makeCtx({
+      vt: { kind: 'filled', filled: true, correct: false },
+      hyp: { kind: 'rubric', satisfied: true },
+    });
+    expect(isGateSatisfied(gate, makeState(), undefined, ctx, PHASE)).toBe(true);
+  });
+});
+
 describe('all-validated gate', () => {
   const validatedGate: Gate = { type: 'all-validated', widgetIds: ['vt'] };
 

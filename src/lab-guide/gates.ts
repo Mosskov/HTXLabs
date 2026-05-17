@@ -150,9 +150,13 @@ const GATE_HANDLERS: GateHandlerMap = {
   // widget to a single satisfaction bit; an absent registration counts as
   // unsatisfied. The lock message is intentionally generic — internal widget
   // ids are not student-facing copy.
+  //
+  // Opt-in `strict: true` flips the `'filled'` projection to require
+  // `correct === true` (silent absence of `correct` fails strict). Other
+  // widget kinds are unaffected.
   'all-satisfied': {
     check: (gate, _state, _module, ctx) =>
-      gate.widgetIds.every((id) => widgetSatisfied(ctx.widgets[id])),
+      gate.widgetIds.every((id) => widgetSatisfied(ctx.widgets[id], gate.strict)),
     message: () => strings.gates.allSatisfied,
   },
   // Widget-agnostic correctness gate — reads `correct: true` from any widget
@@ -176,10 +180,14 @@ const GATE_HANDLERS: GateHandlerMap = {
  *  consumers must agree on what "satisfied" means per kind. An absent
  *  registration counts as unsatisfied. Keep this in lock-step with WidgetState.
  *
- *  Note: for `kind: 'filled'`, this projects `w.filled` regardless of `correct`.
- *  Correctness gating is opt-in via the `all-validated` gate kind — adding
- *  `expected` to a widget never silently re-locks an `all-satisfied` gate. */
-export function widgetSatisfied(w: WidgetState | undefined): boolean {
+ *  Default (`strict !== true`): for `kind: 'filled'`, projects `w.filled`
+ *  regardless of `correct`. Adding `expected` to a widget never silently
+ *  re-locks an `all-satisfied` gate or `RevealWhen` block.
+ *
+ *  Opt-in `strict: true`: for `kind: 'filled'`, requires
+ *  `w.filled && w.correct === true`. A widget without `correct` (no `expected`
+ *  configured) fails strict — no silent degrade. Other kinds are unaffected. */
+export function widgetSatisfied(w: WidgetState | undefined, strict?: boolean): boolean {
   if (!w) return false;
   switch (w.kind) {
     case 'correct':
@@ -187,7 +195,7 @@ export function widgetSatisfied(w: WidgetState | undefined): boolean {
     case 'checked':
       return w.allChecked;
     case 'filled':
-      return w.filled;
+      return strict ? w.filled && w.correct === true : w.filled;
     case 'rubric':
       return w.satisfied;
     case 'keywords':

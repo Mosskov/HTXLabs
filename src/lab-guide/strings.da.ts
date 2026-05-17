@@ -145,24 +145,83 @@ export const strings = {
       unitHeader: 'Enhed',
       addConstantLabel: '+ Tilføj konstant',
       removeConstantAriaLabel: 'Fjern konstant',
-      /** Per-cell hint strings keyed by `CellError.type` values so the future
-       *  visuals renderer can do `hints[cell][error.type]` directly. Cell
-       *  kinds (name/symbol/unit) carry different hints because the error
-       *  meaning differs (e.g., case matters on units but not names). */
+      checkLabel: 'Tjek mine variable',
+      status: {
+        idle: 'Ikke tjekket endnu',
+        checked: 'Godkendt',
+        checkedWithErrors: 'Tjekket — se tips',
+        dirty: 'Ændret siden tjek',
+      },
+      /** Per-cell tiered hint ladders keyed by `CellError.type` values. Each
+       *  entry is a `string[]` — index `0` is tier 1, index `1` is tier 2, …
+       *  The renderer indexes by `Math.min(tier - 1, ladder.length - 1)`,
+       *  clamping at the last entry. Author-supplied per-cell `hints` and
+       *  `commonMistake.hint` extend / replace tiers — see
+       *  variableTableCorrectness.ts `resolveLadder`. Tier-3 entries are
+       *  reserved for author overrides; the generic ladder stops at tier 2
+       *  to avoid handing students the answer. */
       hints: {
         name: {
-          empty: 'Skriv navnet på variablen.',
-          mismatch: 'Det navn passer ikke — tjek teorien.',
+          empty: ['Dette felt er tomt.'],
+          mismatch: [
+            'Tjek navnet på den fysiske størrelse.',
+            'Brug navnet teorien introducerer — ikke et generelt ord som "ting" eller "variabel".',
+          ],
+          misplaced: [
+            'Dette navn passer til et andet felt i samme række.',
+            'Tjek om du har byttet om på Navn og Symbol (eller Enhed).',
+          ],
+          'row-swapped': [
+            'Dette navn hører til den anden variabel.',
+            'Tjek om du har byttet om på den uafhængige og afhængige variabel.',
+          ],
+          'whitespace-internal': [
+            'Navnet er korrekt, men der er et ekstra mellemrum indeni.',
+            'Fjern mellemrummet inde i navnet.',
+          ],
         },
         symbol: {
-          empty: 'Indsæt et symbol for variablen.',
-          mismatch: 'Det symbol passer ikke — tjek teorien.',
-          'case-mismatch': 'Tjek brugen af store og små bogstaver.',
+          empty: ['Dette felt er tomt.'],
+          mismatch: [
+            'Tjek dit symbol.',
+            'Brug det symbol teorien introducerer for denne størrelse.',
+          ],
+          'case-mismatch': [
+            'Tjek dette symbol — er stort/lille bogstav rigtigt?',
+            'Brug samme store/små bogstav som i teorien.',
+          ],
+          misplaced: [
+            'Dette symbol passer til et andet felt i samme række.',
+            'Tjek om du har byttet om på Symbol og Enhed (eller Navn).',
+          ],
+          'row-swapped': [
+            'Dette symbol hører til den anden variabel.',
+            'Tjek om du har byttet om på den uafhængige og afhængige variabel.',
+          ],
+          'whitespace-internal': [
+            'Symbolet er korrekt, men der er et ekstra mellemrum indeni.',
+            'Fjern mellemrummet inde i symbolet.',
+          ],
         },
         unit: {
-          empty: 'Skriv en enhed for variablen.',
-          mismatch: 'Den enhed passer ikke — tjek SI-enheder.',
-          'case-mismatch': 'SI-enheder skelner mellem store og små bogstaver (fx m ≠ M).',
+          empty: ['Dette felt er tomt.'],
+          mismatch: ['Tjek enheden.', 'Brug SI-enheden teorien introducerer for denne størrelse.'],
+          'case-mismatch': [
+            'Tjek enheden — er stort/lille bogstav rigtigt?',
+            'SI-symboler afledt af personnavne starter med stort (N, Pa, J); grundenheder med lille (m, s, kg).',
+          ],
+          misplaced: [
+            'Denne enhed passer til et andet felt i samme række.',
+            'Tjek om du har byttet om på Enhed og Symbol (eller Navn).',
+          ],
+          'row-swapped': [
+            'Denne enhed hører til den anden variabel.',
+            'Tjek om du har byttet om på den uafhængige og afhængige variabel.',
+          ],
+          'whitespace-internal': [
+            'Enheden er korrekt, men der er et ekstra mellemrum indeni.',
+            'Fjern mellemrummet inde i enheden.',
+          ],
         },
         /** Vars: {name}, {symbol}, {unit} — renderer pre-resolves to the
          *  first synonym from each expected.constants[i] accepted-array via

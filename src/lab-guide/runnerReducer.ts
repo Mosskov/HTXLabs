@@ -2,6 +2,7 @@
 // localStorage) live in RunnerContext.tsx; the reducer only produces state.
 
 import type { DataRow, LabMode, Mode, RunnerState } from './runner';
+import type { VariableTableValues } from './widgets/VariableTable';
 
 export type RunnerAction =
   | { type: 'SET_CURRENT_PHASE'; id: string }
@@ -14,6 +15,8 @@ export type RunnerAction =
   | { type: 'INCREMENT_DATA_POINTS'; count: number }
   | { type: 'SET_SIMULATION_STATE'; state: unknown }
   | { type: 'INCREMENT_RUBRIC_TIER'; widgetId: string; criterionId: string; cap: number }
+  | { type: 'INCREMENT_VARIABLE_TABLE_TIER'; widgetId: string; cellKey: string; cap: number }
+  | { type: 'SET_VARIABLE_TABLE_LAST_CHECKED'; widgetId: string; values: VariableTableValues }
   | { type: 'RESET'; nextState: RunnerState };
 
 export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerState {
@@ -88,6 +91,29 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
         },
       };
     }
+    case 'INCREMENT_VARIABLE_TABLE_TIER': {
+      // Mirror of INCREMENT_RUBRIC_TIER for VariableTable per-cell ladders.
+      // Capped + idempotent at cap.
+      const widgetBucket = state.variableTableHintTiers[action.widgetId] ?? {};
+      const prev = widgetBucket[action.cellKey] ?? 0;
+      const next = Math.min(action.cap, prev + 1);
+      if (next === prev) return state;
+      return {
+        ...state,
+        variableTableHintTiers: {
+          ...state.variableTableHintTiers,
+          [action.widgetId]: { ...widgetBucket, [action.cellKey]: next },
+        },
+      };
+    }
+    case 'SET_VARIABLE_TABLE_LAST_CHECKED':
+      return {
+        ...state,
+        variableTableLastChecked: {
+          ...state.variableTableLastChecked,
+          [action.widgetId]: action.values,
+        },
+      };
     case 'RESET':
       return action.nextState;
   }

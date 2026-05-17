@@ -280,7 +280,7 @@ describe('VariableTable — expected (correctness checking)', () => {
     expect(s.errors?.iv.unit).toEqual({ type: 'empty' });
   });
 
-  it('with expected, all correct: correct=true, errors.iv = {}', async () => {
+  it('with expected, all correct + Tjek click: correct=true, errors.iv = {}', async () => {
     render(
       <Harness experimentId="vt-c/3">
         <VariableTable id="variables" requireUnits expected={fullExpected} />
@@ -291,6 +291,9 @@ describe('VariableTable — expected (correctness checking)', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
     await fillEntry('variables-c0', 'tyngdeacceleration', 'g', 'm/s²');
+    // Snapshot-gated: correct stays false until Tjek is clicked.
+    expect(readState().correct).toBe(false);
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
 
     const s = readState();
     expect(s.correct).toBe(true);
@@ -334,11 +337,12 @@ describe('VariableTable — expected (correctness checking)', () => {
     expect(s.errors?.constants?.[0]).toEqual({ status: 'missing', expectedIndex: 0 });
   });
 
-  it('expected.unit omitted on IV + requireUnits=false: blank unit → correct=true', async () => {
+  it('expected.unit omitted on IV + requireUnits=false: blank unit → correct=true after Tjek', async () => {
     const partial: ExpectedVariables = {
       iv: { name: 'højde', symbol: 'h' }, // no unit
       dv: { name: 'tid', symbol: 't' },
     };
+    const user = userEvent.setup();
     render(
       <Harness experimentId="vt-c/6">
         <VariableTable id="variables" expected={partial} />
@@ -346,6 +350,7 @@ describe('VariableTable — expected (correctness checking)', () => {
     );
     await fillEntry('variables-iv', 'højde', 'h', '');
     await fillEntry('variables-dv', 'tid', 't', '');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     const s = readState();
     expect(s.correct).toBe(true);
   });

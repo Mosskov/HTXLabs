@@ -29,6 +29,7 @@ import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import { ProtectedTextarea } from './ProtectedInput';
+import { TieredHintList } from './TieredHintList';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
@@ -258,7 +259,10 @@ export function RubricResponse({
       ? result.criteria.flatMap((c) =>
           c.misconceptions
             .filter((m) => m.status === VETO_STATUSES.TRIGGERED)
-            .map((m) => ({ criterionId: c.id, hint: m.hint })),
+            .map((m) => ({
+              key: `mis-${c.id}-${m.hint}`,
+              text: m.hint,
+            })),
         )
       : [];
   // Tiered hint stack for failing required criteria. Each criterion contributes
@@ -316,7 +320,6 @@ export function RubricResponse({
     !dirty &&
     !pending &&
     (failedHints.length > 0 || triggeredMisconceptions.length > 0);
-  const showBonusPanel = bonusHints.length > 0;
   const showEmbedderBanner = embedderDown && !dirty;
 
   const tooShort = nonEmpty && !meetsMinWords;
@@ -368,35 +371,12 @@ export function RubricResponse({
         </div>
       )}
 
-      {showHints && (
-        <ul
-          aria-label={strings.widgets.rubric.hintsLabel}
-          aria-live="polite"
-          className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"
-        >
-          {failedHints.map((h) => (
-            <li key={h.key}>{h.text}</li>
-          ))}
-          {triggeredMisconceptions.map((m) => (
-            <li key={`mis-${m.criterionId}-${m.hint}`} className="text-orange-800">
-              {m.hint}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {showBonusPanel && (
-        <div className="mt-3 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-          <h3 className="mb-1 font-semibold text-sm">
-            {bonusPanelTitle ?? strings.widgets.rubric.bonusPanelTitle}
-          </h3>
-          <ul aria-live="polite" className="list-disc space-y-1 pl-5">
-            {bonusHints.map((h) => (
-              <li key={h.key}>{h.text}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <TieredHintList
+        failedHints={showHints ? failedHints : []}
+        misconceptions={showHints ? triggeredMisconceptions : []}
+        bonusHints={bonusHints}
+        bonusTitle={bonusPanelTitle}
+      />
     </div>
   );
 }

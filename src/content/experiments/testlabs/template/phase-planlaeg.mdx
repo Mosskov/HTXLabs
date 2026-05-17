@@ -1,10 +1,56 @@
 import rubric from './rubrics/template-hypothesis.json';
 import { TemplateHypothesisSection } from './TemplateHypothesisSection';
 
+{/* Eksempel på `expected`: validering af symboler + commonMistakes med
+    pædagogiske hints. Erstat X/Y med dine egne symboler når du kopierer
+    template'en. Per-celle `hints: string[]` udvider den generiske
+    hint-ladder med ekstra senere tier-trin (de tilføjes til sidst — de
+    erstatter ikke standard-hintene).
+
+    Når du kopierer template'en til en rigtig lab:
+      - Erstat 'variables' med dit eget VariableTable id (samme id i RevealWhen).
+      - Tilpas hvilke felter TemplateHypothesisSection indlejrer (her: iv.symbol/dv.symbol).
+      - RubricResponse skal have `dependsOn` på symbol-parret, så en
+        ændring i variabler invaliderer en tidligere evalueret hypotese. */}
+export const variablesExpected = {
+  iv: {
+    symbol: {
+      accepted: 'X',
+      hints: [
+        'Tjek dit symbol for den uafhængige variabel.',
+        'Brug det symbol teorien introducerer for "fysisk størrelse 1" (stort bogstav).',
+      ],
+    },
+    commonMistakes: {
+      symbol: [
+        { kind: 'lowercase-x', wrong: 'x',
+          hint: 'Variabel-symboler skrives med stort i denne lab — prøv X.' },
+        { kind: 'algebra-letter', wrong: ['a', 'b'],
+          hint: 'Brug symbolet for selve den fysiske størrelse, ikke et generelt algebrabogstav.' },
+      ],
+    },
+  },
+  dv: {
+    symbol: {
+      accepted: 'Y',
+      hints: [
+        'Tjek dit symbol for den afhængige variabel.',
+        'Brug det symbol teorien introducerer for "fysisk størrelse 2" (stort bogstav).',
+      ],
+    },
+    commonMistakes: {
+      symbol: [
+        { kind: 'lowercase-y', wrong: 'y',
+          hint: 'Variabel-symboler skrives med stort i denne lab — prøv Y.' },
+      ],
+    },
+  },
+};
+
 Inden du går i gang med målingerne: identificér først hvad du arbejder med, og formulér derefter en kort hypotese om sammenhængen.
 
-<VariableTable id="variables" />
+<VariableTable id="variables" expected={variablesExpected} />
 
-<RevealWhen widgetIds={['variables']} clearOnHide={['hypotese']}>
+<RevealWhen widgetIds={['variables']} strict clearOnHide={['hypotese']}>
   <TemplateHypothesisSection rubric={rubric} />
 </RevealWhen>

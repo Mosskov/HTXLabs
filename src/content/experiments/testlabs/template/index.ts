@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 9,
+  version: 10,
   title: 'Template',
   simulationId: 'template-sim',
   learningObjectives: ['Forstå hvordan en generisk lab er opbygget i frameworket'],
@@ -31,7 +31,7 @@ export const frontmatter: ExperimentFrontmatter = {
             'Identificér din uafhængige og afhængige variabel.',
             'Formulér en kort hypotese om sammenhængen.',
           ],
-          gate: { type: 'all-satisfied', widgetIds: ['variables', 'hypotese'] },
+          gate: { type: 'all-satisfied', strict: true, widgetIds: ['variables', 'hypotese'] },
         },
         {
           id: 'opstil',

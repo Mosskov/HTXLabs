@@ -8,19 +8,30 @@
 // committed symbols (the template hypothesis section interpolates them
 // into its rubric prompt). Gate evaluators ignore `values`.
 //
-// Optional `expected` prop opts in to correctness checking: the widget
-// publishes a `correct: boolean` bit + opaque `errors` payload, both
-// consumed by the `all-validated` gate. The matching logic lives in
-// `variableTableCorrectness.ts` so this file stays presentation-focused.
+// Optional `expected` prop opts in to correctness checking + the Tjek
+// flow: the widget publishes a `correct: boolean` bit + opaque `errors`
+// payload, both consumed by the `all-validated` gate. The published
+// `correct` bit is snapshot-gated on the most recent Tjek click — typing
+// correct values without clicking Tjek keeps `correct: false`, and
+// editing any cell after a passing Tjek flips it back to `false`. The
+// matching logic lives in `variableTableCorrectness.ts` so this file
+// stays presentation-focused.
 import { useRunner } from '../RunnerContext';
-import { strings } from '../strings.da';
+import { format, strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import { ProtectedInput } from './ProtectedInput';
+import { TieredHintList } from './TieredHintList';
 import {
+  type Cell,
+  type CellSpec,
   type CorrectnessReport,
   type ExpectedVariables,
+  type VariableRowErrors,
+  cellAcceptedValues,
   evaluateTable,
   isCorrect,
+  maxTierForCell,
+  resolveCellHint,
 } from './variableTableCorrectness';
 
 export interface VariableEntry {
@@ -55,6 +66,15 @@ interface Props {
   symbolHeader?: string;
   unitHeader?: string;
   addConstantLabel?: string;
+  /** Tjek button label override (SPEC §17). Only rendered when `expected`
+   *  is provided. */
+  checkLabel?: string;
+  /** Per-status pill copy overrides (SPEC §17). Only rendered when
+   *  `expected` is provided. */
+  idleStatusLabel?: string;
+  checkedStatusLabel?: string;
+  checkedWithErrorsStatusLabel?: string;
+  dirtyStatusLabel?: string;
   /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
   allowPaste?: boolean;
 }
@@ -80,6 +100,30 @@ function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
   return nameOk && symbolOk && unitOk;
 }
 
+function valuesEqual(a: VariableTableValues, b: VariableTableValues): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Project a row's resolved hint per cell. Returns `null` for any cell
+ *  with no error or no resolvable hint at the current tier. */
+function rowHints(
+  errors: VariableRowErrors | undefined,
+  rowExpected: { name?: CellSpec; symbol?: CellSpec; unit?: CellSpec } | undefined,
+  tierFor: (cellKind: Cell) => number,
+): Record<Cell, string | null> {
+  const result: Record<Cell, string | null> = { name: null, symbol: null, unit: null };
+  if (!errors || !rowExpected) return result;
+  const cells: Cell[] = ['name', 'symbol', 'unit'];
+  for (const c of cells) {
+    const err = errors[c];
+    if (!err) continue;
+    const tier = tierFor(c);
+    if (tier <= 0) continue;
+    result[c] = resolveCellHint(err, tier, rowExpected[c], c);
+  }
+  return result;
+}
+
 export function VariableTable({
   id,
   requireUnits = false,
@@ -91,18 +135,30 @@ export function VariableTable({
   symbolHeader,
   unitHeader,
   addConstantLabel,
+  checkLabel,
+  idleStatusLabel,
+  checkedStatusLabel,
+  checkedWithErrorsStatusLabel,
+  dirtyStatusLabel,
   allowPaste,
 }: Props) {
-  const { state, setWidgetValue } = useRunner();
+  const { state, setWidgetValue, incrementVariableTableTier, setVariableTableLastChecked } =
+    useRunner();
   const values = readValues(state.widgetValues[id]);
   const filled = entryFilled(values.iv, requireUnits) && entryFilled(values.dv, requireUnits);
 
-  // `correct` implies `filled` — a student can't be "correct" if requireUnits
-  // makes them not `filled`, even when expected.unit is omitted.
   const errors: CorrectnessReport | undefined = expected
     ? evaluateTable(values, expected)
     : undefined;
-  const correct = errors !== undefined ? filled && isCorrect(errors) : undefined;
+
+  // Snapshot-gated `correct` (PL8): `correct: true` requires the current
+  // values to deep-equal the last-Tjek snapshot AND to evaluate to no errors.
+  // Without `expected`, `correct` stays undefined (back-compat).
+  const lastChecked = state.variableTableLastChecked[id];
+  const tjekStatus: 'idle' | 'checked' | 'dirty' =
+    lastChecked === undefined ? 'idle' : valuesEqual(lastChecked, values) ? 'checked' : 'dirty';
+  const correct =
+    errors !== undefined ? filled && isCorrect(errors) && tjekStatus === 'checked' : undefined;
 
   // Dev-only author guard: warn if a constant has neither symbol nor name —
   // such an entry is silently skipped by evaluateConstants (never produces
@@ -158,9 +214,102 @@ export function VariableTable({
     setWidgetValue(id, { ...values, constants: values.constants.filter((_, i) => i !== idx) });
   }
 
+  function handleTjek() {
+    if (!expected || !errors) return;
+    setVariableTableLastChecked(id, values);
+    const cells: Cell[] = ['name', 'symbol', 'unit'];
+    const bumpRow = (
+      rowErrors: VariableRowErrors,
+      rowExpected: { name?: CellSpec; symbol?: CellSpec; unit?: CellSpec },
+      keyPrefix: string,
+    ) => {
+      for (const c of cells) {
+        const err = rowErrors[c];
+        if (!err) continue;
+        const cap = maxTierForCell(err, rowExpected[c], c);
+        if (cap <= 0) continue;
+        incrementVariableTableTier(id, `${keyPrefix}.${c}`, cap);
+      }
+    };
+    bumpRow(errors.iv, expected.iv, 'iv');
+    bumpRow(errors.dv, expected.dv, 'dv');
+    if (errors.constants && expected.constants) {
+      for (const cm of errors.constants) {
+        if (cm.status !== 'partial') continue;
+        const rowExpected = expected.constants[cm.expectedIndex];
+        if (!rowExpected) continue;
+        bumpRow(cm.errors, rowExpected, `constants.${cm.expectedIndex}`);
+      }
+    }
+  }
+
+  // Hint resolution per cell — only when `expected` is set and the live
+  // values match the most recent Tjek snapshot (tjekStatus === 'checked').
+  // In `dirty` state, errors are recomputed from live values on every render,
+  // so showing hints would leak answer guidance as the student types between
+  // Tjek clicks. The tier counter survives reload so previously-revealed
+  // hints keep showing after a refresh.
+  const ivTiers = state.variableTableHintTiers[id] ?? {};
+  const showHints = expected !== undefined && tjekStatus === 'checked';
+  const ivHints = showHints
+    ? rowHints(errors?.iv, expected.iv, (c) => ivTiers[`iv.${c}`] ?? 0)
+    : { name: null, symbol: null, unit: null };
+  const dvHints = showHints
+    ? rowHints(errors?.dv, expected.dv, (c) => ivTiers[`dv.${c}`] ?? 0)
+    : { name: null, symbol: null, unit: null };
+  function constantRowHints(studentIndex: number): Record<Cell, string | null> {
+    if (!showHints || !errors?.constants || !expected?.constants) {
+      return { name: null, symbol: null, unit: null };
+    }
+    // Constants are order-independent: a ConstantMatch's expectedIndex and
+    // studentIndex can differ. Hints render on the actual student row, so
+    // look up by studentIndex, then resolve rowExp + tier key from the
+    // match's expectedIndex (the persistent key used by handleTjek).
+    const cm = errors.constants.find(
+      (m) => m.status === 'partial' && m.studentIndex === studentIndex,
+    );
+    if (!cm || cm.status !== 'partial') return { name: null, symbol: null, unit: null };
+    const rowExp = expected.constants[cm.expectedIndex];
+    if (!rowExp) return { name: null, symbol: null, unit: null };
+    return rowHints(cm.errors, rowExp, (c) => ivTiers[`constants.${cm.expectedIndex}.${c}`] ?? 0);
+  }
+
+  // Missing-constants list: one line per expected constant the student has
+  // not added. Only surfaced after a Tjek click (tjekStatus === 'checked')
+  // so the message doesn't appear before the student has asked for feedback.
+  const missingConstantMessages: string[] = [];
+  if (showHints && errors?.constants && expected?.constants) {
+    for (const cm of errors.constants) {
+      if (cm.status !== 'missing') continue;
+      const exp = expected.constants[cm.expectedIndex];
+      if (!exp) continue;
+      missingConstantMessages.push(
+        format(strings.widgets.variableTable.hints.constantMissing, {
+          name: cellAcceptedValues(exp.name)?.[0] ?? '',
+          symbol: cellAcceptedValues(exp.symbol)?.[0] ?? '',
+          unit: cellAcceptedValues(exp.unit)?.[0] ?? '',
+        }),
+      );
+    }
+  }
+
   const nameH = nameHeader ?? strings.widgets.variableTable.nameHeader;
   const symbolH = symbolHeader ?? strings.widgets.variableTable.symbolHeader;
   const unitH = unitHeader ?? strings.widgets.variableTable.unitHeader;
+
+  const pill = expected
+    ? renderPill({
+        status: tjekStatus,
+        allCorrect: errors !== undefined && filled && isCorrect(errors),
+        labels: {
+          idle: idleStatusLabel ?? strings.widgets.variableTable.status.idle,
+          checked: checkedStatusLabel ?? strings.widgets.variableTable.status.checked,
+          checkedWithErrors:
+            checkedWithErrorsStatusLabel ?? strings.widgets.variableTable.status.checkedWithErrors,
+          dirty: dirtyStatusLabel ?? strings.widgets.variableTable.status.dirty,
+        },
+      })
+    : null;
 
   return (
     <div className="my-4 space-y-4">
@@ -172,6 +321,7 @@ export function VariableTable({
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
+        hints={ivHints}
         allowPaste={allowPaste}
       />
       <VariableSection
@@ -182,6 +332,7 @@ export function VariableTable({
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
+        hints={dvHints}
         allowPaste={allowPaste}
       />
       <div className="rounded-md border border-slate-200 p-3">
@@ -201,9 +352,17 @@ export function VariableTable({
             symbolHeader={symbolH}
             unitHeader={unitH}
             showHeaders={i === 0}
+            hints={constantRowHints(i)}
             allowPaste={allowPaste}
           />
         ))}
+        {missingConstantMessages.length > 0 && (
+          <ul className="mb-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+            {missingConstantMessages.map((msg) => (
+              <li key={msg}>{msg}</li>
+            ))}
+          </ul>
+        )}
         <button
           type="button"
           onClick={addConstant}
@@ -212,6 +371,18 @@ export function VariableTable({
           {addConstantLabel ?? strings.widgets.variableTable.addConstantLabel}
         </button>
       </div>
+      {expected && (
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleTjek}
+            className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white"
+          >
+            {checkLabel ?? strings.widgets.variableTable.checkLabel}
+          </button>
+          {pill && <span className={pill.className}>{pill.label}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -224,6 +395,7 @@ interface SectionProps {
   nameHeader: string;
   symbolHeader: string;
   unitHeader: string;
+  hints: Record<Cell, string | null>;
   allowPaste?: boolean;
 }
 
@@ -235,6 +407,7 @@ function VariableSection({
   nameHeader,
   symbolHeader,
   unitHeader,
+  hints,
   allowPaste,
 }: SectionProps) {
   return (
@@ -246,6 +419,7 @@ function VariableSection({
           label={nameHeader}
           value={entry.name}
           onChange={(v) => onChange('name', v)}
+          hint={hints.name}
           allowPaste={allowPaste}
         />
         <Field
@@ -253,6 +427,7 @@ function VariableSection({
           label={symbolHeader}
           value={entry.symbol}
           onChange={(v) => onChange('symbol', v)}
+          hint={hints.symbol}
           allowPaste={allowPaste}
         />
         <Field
@@ -260,6 +435,7 @@ function VariableSection({
           label={unitHeader}
           value={entry.unit}
           onChange={(v) => onChange('unit', v)}
+          hint={hints.unit}
           allowPaste={allowPaste}
         />
       </div>
@@ -277,6 +453,7 @@ interface ConstantRowProps {
   symbolHeader: string;
   unitHeader: string;
   showHeaders: boolean;
+  hints: Record<Cell, string | null>;
   allowPaste?: boolean;
 }
 
@@ -290,6 +467,7 @@ function ConstantRow({
   symbolHeader,
   unitHeader,
   showHeaders,
+  hints,
   allowPaste,
 }: ConstantRowProps) {
   // When headers are hidden (rows 2+), each input still needs a programmatic
@@ -303,6 +481,7 @@ function ConstantRow({
         ariaLabel={showHeaders ? undefined : rowAria(nameHeader)}
         value={entry.name}
         onChange={(v) => onChange('name', v)}
+        hint={hints.name}
         allowPaste={allowPaste}
       />
       <Field
@@ -311,6 +490,7 @@ function ConstantRow({
         ariaLabel={showHeaders ? undefined : rowAria(symbolHeader)}
         value={entry.symbol}
         onChange={(v) => onChange('symbol', v)}
+        hint={hints.symbol}
         allowPaste={allowPaste}
       />
       <Field
@@ -319,6 +499,7 @@ function ConstantRow({
         ariaLabel={showHeaders ? undefined : rowAria(unitHeader)}
         value={entry.unit}
         onChange={(v) => onChange('unit', v)}
+        hint={hints.unit}
         allowPaste={allowPaste}
       />
       <button
@@ -342,10 +523,12 @@ interface FieldProps {
   ariaLabel?: string;
   value: string;
   onChange: (next: string) => void;
+  /** Resolved hint text shown directly below the input. `null` = no hint. */
+  hint: string | null;
   allowPaste?: boolean;
 }
 
-function Field({ id, label, ariaLabel, value, onChange, allowPaste }: FieldProps) {
+function Field({ id, label, ariaLabel, value, onChange, hint, allowPaste }: FieldProps) {
   return (
     <div>
       {label && (
@@ -362,6 +545,30 @@ function Field({ id, label, ariaLabel, value, onChange, allowPaste }: FieldProps
         onChange={(e) => onChange(e.target.value)}
         className="w-full"
       />
+      {hint && (
+        <TieredHintList variant="inline" failedHints={[{ key: `${id}-hint`, text: hint }]} />
+      )}
     </div>
   );
+}
+
+interface PillArgs {
+  status: 'idle' | 'checked' | 'dirty';
+  allCorrect: boolean;
+  labels: { idle: string; checked: string; checkedWithErrors: string; dirty: string };
+}
+
+function renderPill(args: PillArgs): { label: string; className: string } {
+  const base = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium';
+  if (args.status === 'idle') {
+    return { label: args.labels.idle, className: `${base} bg-slate-100 text-slate-600` };
+  }
+  if (args.status === 'dirty') {
+    return { label: args.labels.dirty, className: `${base} bg-amber-100 text-amber-900` };
+  }
+  // 'checked' — green when all correct, amber otherwise.
+  if (args.allCorrect) {
+    return { label: args.labels.checked, className: `${base} bg-green-100 text-green-800` };
+  }
+  return { label: args.labels.checkedWithErrors, className: `${base} bg-amber-100 text-amber-900` };
 }

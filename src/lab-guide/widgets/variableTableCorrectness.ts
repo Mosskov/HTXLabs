@@ -28,6 +28,7 @@
 // the full row + optional other-row context is available. Direct callers of
 // `evaluateRow` get the raw row result; refinement is applied by
 // `evaluateTable` and inside `evaluateConstants` for partial matches.
+import { strings } from '../strings.da';
 import type { VariableEntry } from './VariableTable';
 
 export type Cell = 'name' | 'symbol' | 'unit';
@@ -40,10 +41,16 @@ export interface CommonMistake {
 
 export type CommonMistakes = Partial<Record<Cell, CommonMistake[]>>;
 
+/** Per-cell answer-key form. String-shorthand and array-shorthand keep the
+ *  existing accepted-value behavior; the object form lets the author attach
+ *  per-cell tiered hints that extend the generic ladder (see `resolveLadder`).
+ *  All forms normalize to `{ accepted, hints? }` at evaluation boundaries. */
+export type CellSpec = string | string[] | { accepted: string | string[]; hints?: string[] };
+
 export interface ExpectedVariable {
-  name?: string | string[];
-  symbol?: string | string[];
-  unit?: string | string[];
+  name?: CellSpec;
+  symbol?: CellSpec;
+  unit?: CellSpec;
   commonMistakes?: CommonMistakes;
 }
 
@@ -51,15 +58,15 @@ export interface ExpectedVariable {
 // runtime helper still defensively skips malformed entries as a safety net.
 export type ExpectedConstant =
   | {
-      symbol: string | string[];
-      name?: string | string[];
-      unit?: string | string[];
+      symbol: CellSpec;
+      name?: CellSpec;
+      unit?: CellSpec;
       commonMistakes?: CommonMistakes;
     }
   | {
-      name: string | string[];
-      symbol?: string | string[];
-      unit?: string | string[];
+      name: CellSpec;
+      symbol?: CellSpec;
+      unit?: CellSpec;
       commonMistakes?: CommonMistakes;
     };
 
@@ -106,13 +113,28 @@ export function asArray(v: string | string[]): string[] {
   return Array.isArray(v) ? v : [v];
 }
 
+/** Normalize a CellSpec to its accepted-value array. Handles all three
+ *  shorthand forms (string, string[], { accepted, hints? }). */
+export function cellAcceptedValues(spec: CellSpec | undefined): string[] | undefined {
+  if (spec === undefined) return undefined;
+  if (typeof spec === 'string') return [spec];
+  if (Array.isArray(spec)) return spec;
+  return asArray(spec.accepted);
+}
+
+/** Author-supplied per-cell hints from a CellSpec — empty array for the
+ *  string / string[] shorthand forms. */
+export function cellAuthorHints(spec: CellSpec | undefined): string[] {
+  if (spec === undefined || typeof spec === 'string' || Array.isArray(spec)) return [];
+  return spec.hints ?? [];
+}
+
 function isCaseSensitive(cell: Cell): boolean {
   return cell !== 'name';
 }
 
 function cellAccepted(exp: ExpectedVariable | ExpectedConstant, cell: Cell): string[] | undefined {
-  const v = exp[cell];
-  return v !== undefined ? asArray(v) : undefined;
+  return cellAcceptedValues(exp[cell]);
 }
 
 /** True iff `value` (trimmed) matches any accepted form using the given
@@ -264,23 +286,11 @@ export function hasNoRowErrors(errors: VariableRowErrors): boolean {
 
 export function evaluateRow(entry: VariableEntry, expected: ExpectedVariable): VariableRowErrors {
   const errors: VariableRowErrors = {};
-  const name = evaluateCell(
-    entry.name,
-    expected.name !== undefined ? asArray(expected.name) : undefined,
-    false,
-  );
+  const name = evaluateCell(entry.name, cellAcceptedValues(expected.name), false);
   if (name) errors.name = name;
-  const symbol = evaluateCell(
-    entry.symbol,
-    expected.symbol !== undefined ? asArray(expected.symbol) : undefined,
-    true,
-  );
+  const symbol = evaluateCell(entry.symbol, cellAcceptedValues(expected.symbol), true);
   if (symbol) errors.symbol = symbol;
-  const unit = evaluateCell(
-    entry.unit,
-    expected.unit !== undefined ? asArray(expected.unit) : undefined,
-    true,
-  );
+  const unit = evaluateCell(entry.unit, cellAcceptedValues(expected.unit), true);
   if (unit) errors.unit = unit;
   return errors;
 }
@@ -289,8 +299,8 @@ export function evaluateRow(entry: VariableEntry, expected: ExpectedVariable): V
  *  if set, else name. Returns undefined when neither is set (malformed entry,
  *  filtered out by evaluateConstants). */
 function matchingKey(expected: ExpectedConstant): string[] | undefined {
-  if (expected.symbol !== undefined) return asArray(expected.symbol);
-  if (expected.name !== undefined) return asArray(expected.name);
+  if (expected.symbol !== undefined) return cellAcceptedValues(expected.symbol);
+  if (expected.name !== undefined) return cellAcceptedValues(expected.name);
   return undefined;
 }
 
@@ -424,4 +434,59 @@ export function isCorrect(report: CorrectnessReport): boolean {
     }
   }
   return true;
+}
+
+/** Build the hint ladder for a (cell-kind, error) pair. Order:
+ *    1. Generic ladder from `strings.widgets.variableTable.hints[cellKind][errorType]`.
+ *       For `common-mistake`, the generic source is the `'mismatch'` ladder.
+ *    2. If error is a `common-mistake` and the matched mistake has a `hint`,
+ *       that hint replaces the first generic entry (`[hint, ...generic.slice(1)]`).
+ *    3. Author hints from the CellSpec are appended at the end — they
+ *       extend the ladder, they do not replace generic entries. Skipped for
+ *       `empty` errors: an empty cell needs "type something here", not three
+ *       levels of nuance about which value to type.
+ *  An empty ladder is legal and means "no hint to surface for this cell". */
+export function resolveLadder(
+  error: CellError,
+  cellSpec: CellSpec | undefined,
+  cellKind: Cell,
+): string[] {
+  const tableHints = strings.widgets.variableTable.hints[cellKind] as
+    | Record<string, readonly string[] | undefined>
+    | undefined;
+  const genericKey = error.type === 'common-mistake' ? 'mismatch' : error.type;
+  const generic: readonly string[] = tableHints?.[genericKey] ?? [];
+  const author = error.type === 'empty' ? [] : cellAuthorHints(cellSpec);
+
+  let base: string[] = [...generic];
+  if (error.type === 'common-mistake' && error.hint !== undefined) {
+    base = base.length > 0 ? [error.hint, ...base.slice(1)] : [error.hint];
+  }
+  return [...base, ...author];
+}
+
+/** Return the hint at `tier` (1-indexed) on the (cell-kind, error) ladder.
+ *  Tier 0 → null (no hint surfaced yet). Tier beyond the ladder clamps to
+ *  the last entry. Empty ladder → null at any tier. */
+export function resolveCellHint(
+  error: CellError,
+  tier: number,
+  cellSpec: CellSpec | undefined,
+  cellKind: Cell,
+): string | null {
+  if (tier <= 0) return null;
+  const ladder = resolveLadder(error, cellSpec, cellKind);
+  if (ladder.length === 0) return null;
+  return ladder[Math.min(tier - 1, ladder.length - 1)] ?? null;
+}
+
+/** Length of the resolved ladder — i.e. the maximum useful tier for this
+ *  cell+error pair. The Tjek-button increment caps the tier counter at this
+ *  value so the reducer stays idempotent once the ladder is exhausted. */
+export function maxTierForCell(
+  error: CellError,
+  cellSpec: CellSpec | undefined,
+  cellKind: Cell,
+): number {
+  return resolveLadder(error, cellSpec, cellKind).length;
 }

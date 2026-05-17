@@ -25,6 +25,7 @@ import {
   wipe,
 } from './runner';
 import { runnerReducer } from './runnerReducer';
+import type { VariableTableValues } from './widgets/VariableTable';
 
 interface RunnerApi {
   state: RunnerState;
@@ -43,6 +44,13 @@ interface RunnerApi {
   /** Bump the tier counter for a RubricResponse widget's failing criterion.
    *  Capped at `cap` (the criterion's `hints.length`). Idempotent at cap. */
   incrementRubricTier: (widgetId: string, criterionId: string, cap: number) => void;
+  /** Bump the tier counter for a VariableTable widget's failing cell. Capped
+   *  at `cap` (the cell's resolved hint-ladder length). Idempotent at cap.
+   *  `cellKey` is a dot-path like `iv.symbol` / `constants.0.unit`. */
+  incrementVariableTableTier: (widgetId: string, cellKey: string, cap: number) => void;
+  /** Snapshot the current VariableTable values as the most recent Tjek
+   *  result. Overwrites any prior snapshot for that widget id. */
+  setVariableTableLastChecked: (widgetId: string, values: VariableTableValues) => void;
   onSimulationProgress: (e: ProgressEvent) => void;
   setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
@@ -152,6 +160,20 @@ export function RunnerProvider({
     dispatch({ type: 'INCREMENT_RUBRIC_TIER', widgetId, criterionId, cap });
   }, []);
 
+  const incrementVariableTableTier = useCallback(
+    (widgetId: string, cellKey: string, cap: number) => {
+      dispatch({ type: 'INCREMENT_VARIABLE_TABLE_TIER', widgetId, cellKey, cap });
+    },
+    [],
+  );
+
+  const setVariableTableLastChecked = useCallback(
+    (widgetId: string, values: VariableTableValues) => {
+      dispatch({ type: 'SET_VARIABLE_TABLE_LAST_CHECKED', widgetId, values });
+    },
+    [],
+  );
+
   const onSimulationProgress = useCallback((e: ProgressEvent) => {
     switch (e.type) {
       case 'milestone':
@@ -248,6 +270,8 @@ export function RunnerProvider({
     bumpAttempts,
     fireMilestone,
     incrementRubricTier,
+    incrementVariableTableTier,
+    setVariableTableLastChecked,
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,

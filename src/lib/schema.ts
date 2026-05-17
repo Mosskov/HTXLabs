@@ -53,6 +53,12 @@ export const Gate = z.discriminatedUnion('type', [
      *  covered by the kind-specific gates (`all-filled`, `rubric-required`,
      *  …); a singleton would just be a less-specific version. */
     widgetIds: z.array(z.string()).min(2),
+    /** Opt-in correctness requirement for `kind: 'filled'` widgets in the
+     *  list. When true, `widgetSatisfied` requires `filled && correct === true`
+     *  for those widgets (other kinds are unaffected). A widget that publishes
+     *  `kind: 'filled'` without `correct` (no `expected` configured) fails
+     *  strict — strict refuses to silently accept presence as correctness. */
+    strict: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('all-validated'),

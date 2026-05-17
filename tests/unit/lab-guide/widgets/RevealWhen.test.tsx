@@ -191,4 +191,61 @@ describe('RevealWhen', () => {
     );
     expect(screen.getByTestId('child')).toBeInTheDocument();
   });
+
+  it('strict mode: does NOT reveal when filled:true but correct:false', () => {
+    function FakeWidgetWithCorrect({ id, correct }: { id: string; correct: boolean }) {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        registerWidgetState(id, { kind: 'filled', filled: true, correct });
+      }, [id, correct, registerWidgetState]);
+      return null;
+    }
+    render(
+      <Harness experimentId="rw/9">
+        <FakeWidgetWithCorrect id="variables" correct={false} />
+        <RevealWhen widgetIds={['variables']} strict>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+
+  it('strict mode: reveals when filled:true AND correct:true', () => {
+    function FakeWidgetWithCorrect({ id }: { id: string }) {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        registerWidgetState(id, { kind: 'filled', filled: true, correct: true });
+      }, [id, registerWidgetState]);
+      return null;
+    }
+    render(
+      <Harness experimentId="rw/10">
+        <FakeWidgetWithCorrect id="variables" />
+        <RevealWhen widgetIds={['variables']} strict>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+  });
+
+  it('strict mode: fails when correct is undefined (no expected configured)', () => {
+    function FakeWidgetWithoutCorrect({ id }: { id: string }) {
+      const { registerWidgetState } = useRunner();
+      useEffect(() => {
+        registerWidgetState(id, { kind: 'filled', filled: true });
+      }, [id, registerWidgetState]);
+      return null;
+    }
+    render(
+      <Harness experimentId="rw/11">
+        <FakeWidgetWithoutCorrect id="variables" />
+        <RevealWhen widgetIds={['variables']} strict>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>,
+    );
+    expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
 });

@@ -204,11 +204,8 @@ describe('validateAuthorableGates', () => {
     });
   });
 
-  describe('dev-only gate kinds (rubric-required, all-validated)', () => {
-    const devOnlyGates: Gate[] = [
-      { type: 'rubric-required', widgetIds: ['hypotese'] },
-      { type: 'all-validated', widgetIds: ['variables'] },
-    ];
+  describe('dev-only gate kinds (rubric-required)', () => {
+    const devOnlyGates: Gate[] = [{ type: 'rubric-required', widgetIds: ['hypotese'] }];
 
     for (const gate of devOnlyGates) {
       it(`rejects ${gate.type} on a non-devOnly lab`, () => {
@@ -232,6 +229,15 @@ describe('validateAuthorableGates', () => {
         expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
       });
     }
+
+    it('accepts all-validated on a non-devOnly lab (promoted out of dev-only)', () => {
+      const fm = makeFrontmatter({
+        guided: [
+          makePhase('planlaeg', { type: 'all-validated', widgetIds: ['variables'] }),
+        ],
+      });
+      expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
+    });
   });
 
   describe('canonical phase id soft warn', () => {

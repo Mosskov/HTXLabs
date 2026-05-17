@@ -1,5 +1,6 @@
 // Persistent runner state: shape, defaults, localStorage save/load, version compatibility.
 import type { LabMode, Mode, Phase } from '@/lib/schema';
+import type { VariableTableValues } from './widgets/VariableTable';
 
 export type { LabMode, Mode };
 
@@ -41,6 +42,15 @@ export interface RunnerState {
    *  surfaced yet; widget reveals hints[0..tier]. Incremented post-resolve
    *  in the widget for criteria still failing in the latest result. */
   rubricHintTiers: Record<string, Record<string, number>>;
+  /** Tier reached per VariableTable widget per cell (dot-path key like
+   *  `iv.symbol`). Mirrors `rubricHintTiers`. Incremented on Tjek click for
+   *  cells that still have an error in the just-snapshotted values. */
+  variableTableHintTiers: Record<string, Record<string, number>>;
+  /** Snapshot of the values committed at the most recent Tjek per
+   *  VariableTable widget. Absence means the widget has never been Tjek'd;
+   *  the widget derives both `tjekStatus` and the published `correct` bit
+   *  from this snapshot so reload preserves the checked state. */
+  variableTableLastChecked: Record<string, VariableTableValues>;
 }
 
 interface SerializedRunnerState {
@@ -57,6 +67,8 @@ interface SerializedRunnerState {
   attemptCounts: Record<string, number>;
   simulationState: unknown;
   rubricHintTiers: Record<string, Record<string, number>>;
+  variableTableHintTiers: Record<string, Record<string, number>>;
+  variableTableLastChecked: Record<string, VariableTableValues>;
 }
 
 const storageKey = (experimentId: string) => `htxlabs:state:${experimentId}`;
@@ -83,6 +95,8 @@ export function emptyState(
     attemptCounts: {},
     simulationState: null,
     rubricHintTiers: {},
+    variableTableHintTiers: {},
+    variableTableLastChecked: {},
   };
 }
 
@@ -113,6 +127,8 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     attemptCounts: raw.attemptCounts ?? {},
     simulationState: raw.simulationState ?? null,
     rubricHintTiers: raw.rubricHintTiers ?? {},
+    variableTableHintTiers: raw.variableTableHintTiers ?? {},
+    variableTableLastChecked: raw.variableTableLastChecked ?? {},
   };
 }
 

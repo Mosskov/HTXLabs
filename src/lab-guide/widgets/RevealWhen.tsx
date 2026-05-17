@@ -20,12 +20,17 @@ interface Props {
    *  counting after the section disappears. Idempotent — clearing an
    *  already-absent id is a no-op. */
   clearOnHide?: string[];
+  /** Opt-in correctness requirement. When true, the reveal projects
+   *  `kind: 'filled'` widgets as `filled && correct === true` instead of
+   *  presence-only. Same semantics as the `all-satisfied` gate's `strict`
+   *  flag — see `widgetSatisfied`. */
+  strict?: boolean;
   children: ReactNode;
 }
 
-export function RevealWhen({ widgetIds, clearOnHide, children }: Props) {
+export function RevealWhen({ widgetIds, clearOnHide, strict, children }: Props) {
   const { gateCtx, registerWidgetState } = useRunner();
-  const visible = widgetIds.every((id) => widgetSatisfied(gateCtx.widgets[id]));
+  const visible = widgetIds.every((id) => widgetSatisfied(gateCtx.widgets[id], strict));
 
   // Track the previous visibility so we can detect the visible→hidden edge
   // and clear dependent widget state once per transition, not on every
