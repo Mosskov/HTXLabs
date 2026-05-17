@@ -20,9 +20,11 @@ coverage
 !.agents/prompts/*.md
 !.agents/reviews/
 .agents/reviews/*.md
+.agents/reviews/**/*.md
 !.agents/reviews/.gitkeep
 !.agents/plans/
 .agents/plans/*.md
+.agents/plans/**/*.md
 !.agents/plans/.gitkeep
 .codex/
 tsconfig.tsbuildinfo

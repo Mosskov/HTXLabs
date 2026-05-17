@@ -4,6 +4,13 @@ Your job is to draft an implementation plan, not to implement it yet.
 
 Use this workflow for medium or large tasks where a second-agent plan review is worth the overhead. Skip the workflow (and say so) for tasks that match all of these: three or fewer file touches, no new architecture seam, no new widget or simulation, no frontmatter schema change, no SPEC behavior change. Trivial copy edits, narrow bug fixes, and one-file mechanical changes fall under this skip rule unless the user explicitly asks for the workflow.
 
+## Interview first
+
+Before drafting anything to disk, interview the user until none of these are ambiguous: goal, scope boundary, constraints, stakeholder, success criterion, affected architecture seams. Ask in batches via AskUserQuestion when you have 2–4 discrete options; use plain-text questions for open-ended cases. Do not guess. Stop and ask if any of: the task description is unclear about what "done" looks like, multiple plausible implementations exist, a constraint isn't named, or you'd otherwise be filling in details from assumption.
+
+Output paths in this prompt are templated:
+- `${PLAN_PATH}` — where the plan is written (defaults to `.agents/plans/<slug>/plan.md` when invoked by `/agent-draft-plan`; paste-driven callers should hand-substitute).
+
 Before drafting the plan:
 - read CLAUDE.md
 - read AGENTS.md
@@ -16,7 +23,7 @@ If product behavior is ambiguous, SPEC.md wins over both CLAUDE.md and AGENTS.md
 
 Do not edit source files, tests, or product documentation while drafting the plan.
 Write only the plan artifact:
-.agents/plans/current-plan.md
+${PLAN_PATH}
 
 The plan must be concrete enough for another agent to review. Always include:
 - title
@@ -52,4 +59,4 @@ Keep the plan surgical:
 
 If the task cannot be planned safely without a user decision, write the partial plan with the blocking question clearly marked under "Open questions" and stop.
 
-End by telling the user where the plan was written and that it is ready for Codex plan review.
+End by telling the user where the plan was written and that it is ready for Codex plan review (run `/agent-plan-loop` from the same project).
