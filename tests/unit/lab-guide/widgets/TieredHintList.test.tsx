@@ -78,12 +78,7 @@ describe('TieredHintList — list variant (default)', () => {
 
 describe('TieredHintList — inline variant', () => {
   it('renders the first hint as a paragraph (no <ul>)', () => {
-    render(
-      <TieredHintList
-        variant="inline"
-        failedHints={[{ key: 'a', text: 'inline tip' }]}
-      />,
-    );
+    render(<TieredHintList variant="inline" failedHints={[{ key: 'a', text: 'inline tip' }]} />);
     const p = screen.getByText('inline tip');
     expect(p.tagName).toBe('P');
     expect(p.className).toContain('text-slate-600');

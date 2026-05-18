@@ -22,19 +22,39 @@ describe('template-sim physics', () => {
     });
 
     it('false when only low values present', () => {
-      expect(coverWideRange([{ x: 1, y: 0 }, { x: 2, y: 0 }])).toBe(false);
+      expect(
+        coverWideRange([
+          { x: 1, y: 0 },
+          { x: 2, y: 0 },
+        ]),
+      ).toBe(false);
     });
 
     it('false when only high values present', () => {
-      expect(coverWideRange([{ x: 8, y: 0 }, { x: 9, y: 0 }])).toBe(false);
+      expect(
+        coverWideRange([
+          { x: 8, y: 0 },
+          { x: 9, y: 0 },
+        ]),
+      ).toBe(false);
     });
 
     it('false at the boundary (X exactly 3 or 7 is not enough)', () => {
-      expect(coverWideRange([{ x: 3, y: 0 }, { x: 7, y: 0 }])).toBe(false);
+      expect(
+        coverWideRange([
+          { x: 3, y: 0 },
+          { x: 7, y: 0 },
+        ]),
+      ).toBe(false);
     });
 
     it('true once at least one point < 3 and one > 7 exist', () => {
-      expect(coverWideRange([{ x: 2.5, y: 0 }, { x: 7.5, y: 0 }])).toBe(true);
+      expect(
+        coverWideRange([
+          { x: 2.5, y: 0 },
+          { x: 7.5, y: 0 },
+        ]),
+      ).toBe(true);
     });
   });
 });

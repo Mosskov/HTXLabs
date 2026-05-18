@@ -1,10 +1,10 @@
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { useRunner } from '@/lab-guide/RunnerContext';
 import { gateMessage, isGateSatisfied } from '@/lab-guide/gates';
+import { strings } from '@/lab-guide/strings.da';
 import { Checklist } from '@/lab-guide/widgets/Checklist';
 import { FreeTextResponse } from '@/lab-guide/widgets/FreeTextResponse';
 import { Quiz } from '@/lab-guide/widgets/Quiz';
-import { strings } from '@/lab-guide/strings.da';
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import { render, screen } from '@testing-library/react';
@@ -245,11 +245,7 @@ function RunnerActionsProbe() {
   const { fireMilestone, onSimulationProgress, setSimulationState } = useRunner();
   return (
     <div>
-      <button
-        type="button"
-        data-testid="probe-fire-m1"
-        onClick={() => fireMilestone('m1')}
-      >
+      <button type="button" data-testid="probe-fire-m1" onClick={() => fireMilestone('m1')}>
         fire-m1
       </button>
       <button

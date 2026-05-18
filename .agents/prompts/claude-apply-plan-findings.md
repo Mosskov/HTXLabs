@@ -23,7 +23,7 @@ For each Codex plan finding:
 - keep the same finding ID: PL1, PL2, PL3, ...
 - decide whether it is valid
 - if invalid, briefly explain why
-- if valid, make the smallest surgical update to .agents/plans/current-plan.md
+- if valid, make the smallest surgical update to ${PLAN_PATH}
 - do not add speculative behavior
 - do not expand scope beyond the user's request
 - preserve the architecture seams described in CLAUDE.md

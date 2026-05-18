@@ -1,5 +1,5 @@
-import TemplateSim, { gates } from '@/simulations/template-sim';
 import type { ProgressEvent } from '@/sim-contract';
+import TemplateSim, { gates } from '@/simulations/template-sim';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,9 @@ describe('template-sim component', () => {
 
     await user.click(screen.getByRole('button', { name: /tilføj måling/i }));
 
-    const last = onState.mock.calls.at(-1)?.[0] as { measurements: Array<{ x: number; y: number }> };
+    const last = onState.mock.calls.at(-1)?.[0] as {
+      measurements: Array<{ x: number; y: number }>;
+    };
     expect(last.measurements).toHaveLength(1);
     expect(last.measurements[0]).toMatchObject({ x: 5 });
   });
@@ -70,7 +72,14 @@ describe('template-sim gates.wide-range predicate', () => {
   });
 
   it('false when measurements are bunched in the middle', () => {
-    expect(gates['wide-range']({ measurements: [{ x: 5, y: 1 }, { x: 6, y: 2 }] })).toBe(false);
+    expect(
+      gates['wide-range']({
+        measurements: [
+          { x: 5, y: 1 },
+          { x: 6, y: 2 },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it('true when measurements span the slider', () => {

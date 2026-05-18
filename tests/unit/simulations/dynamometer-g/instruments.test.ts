@@ -17,7 +17,9 @@ describe('dynamometer-g instruments', () => {
     });
 
     it.each(allowedIds)('%s spec is internally consistent', (id) => {
-      const spec = (DYNAMOMETERS as Record<string, (typeof DYNAMOMETERS)[keyof typeof DYNAMOMETERS]>)[id];
+      const spec = (
+        DYNAMOMETERS as Record<string, (typeof DYNAMOMETERS)[keyof typeof DYNAMOMETERS]>
+      )[id];
       // scaleMax matches the numeric prefix of the id (e.g. 'dynamometer-10N' -> 10).
       const numFromId = Number(id.replace(/^dynamometer-/, '').replace(/N$/, ''));
       expect(spec.scaleMax).toBe(numFromId);

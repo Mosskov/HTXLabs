@@ -21,6 +21,8 @@ coverage
 !.agents/reviews/
 .agents/reviews/*.md
 .agents/reviews/**/*.md
+.agents/reviews/**/*.txt
+.agents/reviews/**/*.patch
 !.agents/reviews/.gitkeep
 !.agents/plans/
 .agents/plans/*.md

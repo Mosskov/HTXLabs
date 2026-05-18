@@ -71,8 +71,11 @@ For each finding include:
 - why it matters before implementation
 - smallest suggested plan change
 
-Write the complete review to:
-${FINDINGS_PATH}
+Return the complete review as your final assistant message. The
+orchestrating wrapper captures it via `codex.cmd exec -o` and persists
+it to `${FINDINGS_PATH}` outside the sandbox. Do NOT attempt to write
+that file yourself — your sandbox is read-only and the write will fail.
+Do not mention the sandbox or the persistence mechanism in your output.
 
 Do not edit the plan, source files, tests, or project documentation.
 Do not suggest broad refactors.

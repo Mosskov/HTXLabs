@@ -101,12 +101,7 @@ describe('RubricResponse', () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="rr/3">
-        <RubricResponse
-          id="hypotese"
-          prompt="?"
-          rubric={passingRubric}
-          embedder={mockEmbedder()}
-        />
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={mockEmbedder()} />
       </Harness>,
     );
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
@@ -120,12 +115,7 @@ describe('RubricResponse', () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="rr/4">
-        <RubricResponse
-          id="hypotese"
-          prompt="?"
-          rubric={passingRubric}
-          embedder={mockEmbedder()}
-        />
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={mockEmbedder()} />
       </Harness>,
     );
     await user.type(screen.getByRole('textbox'), passingText);
@@ -151,12 +141,7 @@ describe('RubricResponse', () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="rr/5">
-        <RubricResponse
-          id="hypotese"
-          prompt="?"
-          rubric={passingRubric}
-          embedder={flakyEmbedder}
-        />
+        <RubricResponse id="hypotese" prompt="?" rubric={passingRubric} embedder={flakyEmbedder} />
       </Harness>,
     );
     await user.type(screen.getByRole('textbox'), passingText);
@@ -307,10 +292,7 @@ describe('RubricResponse — tiered hints', () => {
         <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
       </Harness>,
     );
-    await user.type(
-      screen.getByRole('textbox'),
-      'min uafhængig og min afhængig variabel er klare',
-    );
+    await user.type(screen.getByRole('textbox'), 'min uafhængig og min afhængig variabel er klare');
     await user.click(screen.getByRole('button', { name: /tjek/i }));
     expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
     expect(screen.getByText(/vil du gøre svaret stærkere/i)).toBeInTheDocument();

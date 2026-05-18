@@ -158,9 +158,7 @@ describe('validateAuthorableGates', () => {
         guided: [makePhase('maal', { type: 'data-points', min: 5 })],
       });
       // simulationId already '__none' by default — guard fires.
-      expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-        /uses gate kind "data-points"/,
-      );
+      expect(() => validateAuthorableGates(fm, ctx)).toThrow(/uses gate kind "data-points"/);
     });
 
     it('accepts all-satisfied on a theory-only lab (flat, widget-driven only)', () => {
@@ -211,9 +209,7 @@ describe('validateAuthorableGates', () => {
       it(`rejects ${gate.type} on a non-devOnly lab`, () => {
         const fm = makeFrontmatter({ guided: [makePhase('planlaeg', gate)] });
         expect(() => validateAuthorableGates(fm, ctx)).toThrow(
-          new RegExp(
-            `phase "planlaeg" uses gate kind "${gate.type}".*Set \\\`devOnly: true\\\``,
-          ),
+          new RegExp(`phase "planlaeg" uses gate kind "${gate.type}".*Set \\\`devOnly: true\\\``),
         );
       });
 
@@ -232,9 +228,7 @@ describe('validateAuthorableGates', () => {
 
     it('accepts all-validated on a non-devOnly lab (promoted out of dev-only)', () => {
       const fm = makeFrontmatter({
-        guided: [
-          makePhase('planlaeg', { type: 'all-validated', widgetIds: ['variables'] }),
-        ],
+        guided: [makePhase('planlaeg', { type: 'all-validated', widgetIds: ['variables'] })],
       });
       expect(() => validateAuthorableGates(fm, ctx)).not.toThrow();
     });

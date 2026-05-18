@@ -108,9 +108,7 @@ describe('ModePicker — mode-switch semantics', () => {
         onSelect={onSelect}
       />,
     );
-    await user.click(
-      screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
-    );
+    await user.click(screen.getByRole('button', { name: strings.landing.modeCards.open.title }));
 
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('open');
@@ -135,9 +133,7 @@ describe('ModePicker — mode-switch semantics', () => {
         onSelect={onSelect}
       />,
     );
-    await user.click(
-      screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
-    );
+    await user.click(screen.getByRole('button', { name: strings.landing.modeCards.open.title }));
 
     expect(onSelect).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
@@ -161,9 +157,7 @@ describe('ModePicker — mode-switch semantics', () => {
         onSelect={onSelect}
       />,
     );
-    await user.click(
-      screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
-    );
+    await user.click(screen.getByRole('button', { name: strings.landing.modeCards.open.title }));
 
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(onSelect).toHaveBeenCalledWith('open');
@@ -189,9 +183,7 @@ describe('ModePicker — mode-switch semantics', () => {
         onSelect={onSelect}
       />,
     );
-    await user.click(
-      screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
-    );
+    await user.click(screen.getByRole('button', { name: strings.landing.modeCards.open.title }));
 
     expect(confirmSpy).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith('open');
@@ -251,9 +243,7 @@ describe('ModePicker — mode-switch semantics', () => {
         onSelect={onSelect}
       />,
     );
-    await user.click(
-      screen.getByRole('button', { name: strings.landing.modeCards.open.title }),
-    );
+    await user.click(screen.getByRole('button', { name: strings.landing.modeCards.open.title }));
 
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(onSelect).toHaveBeenCalledWith('open');

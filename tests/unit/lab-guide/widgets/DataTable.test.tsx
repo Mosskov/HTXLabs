@@ -261,7 +261,12 @@ describe('DataTable', () => {
       const { rerender } = render(
         <SimHarness
           experimentId="dt/sim-data-points-2"
-          simState={{ measurements: [{ x: 1, y: 1 }, { x: 2, y: 2 }] }}
+          simState={{
+            measurements: [
+              { x: 1, y: 1 },
+              { x: 2, y: 2 },
+            ],
+          }}
         >
           <DataTable id="m" columns={xyCols} source="sim" simDataPath="measurements" />
           <DpProbe />

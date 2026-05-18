@@ -368,9 +368,9 @@ describe("keyword-count gate (min: 'all' — every group required)", () => {
   });
 
   it('open mode bypasses without any keywords', () => {
-    expect(
-      isGateSatisfied(allGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE),
-    ).toBe(true);
+    expect(isGateSatisfied(allGate, makeState({ mode: 'open' }), undefined, makeCtx(), PHASE)).toBe(
+      true,
+    );
   });
 });
 

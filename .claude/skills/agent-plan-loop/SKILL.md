@@ -16,7 +16,7 @@ The user types `/agent-plan-loop [<slug>]`. Slug is optional.
 ## Slug resolution
 
 - **If arg given**: use it. If `.agents/plans/<slug>/plan.md` doesn't exist, print "No plan found at `.agents/plans/<slug>/plan.md`. Try `/agent-draft-plan` first." and exit.
-- **If arg omitted**: scan `.agents/plans/*/plan.md`. Filter to **incomplete plans** — those whose `claude-plan-response.md` either doesn't exist or doesn't contain a `<!-- converged -->` marker.
+- **If arg omitted**: scan `.agents/plans/*/plan.md`. Filter to **incomplete plans** — those whose `claude-plan-response.md` either doesn't exist or contains neither `<!-- converged -->` nor `<!-- signed-off -->`.
   - If exactly one match: use it. Print the slug being used so the user can correct.
   - If zero: print "No in-progress plans found. Try `/agent-draft-plan` first." and exit.
   - If multiple: list them with their titles + last-modified times and use `AskUserQuestion` to pick.
@@ -98,7 +98,7 @@ Copy-Item .agents/plans/<slug>/claude-plan-response.md .agents/plans/<slug>/roun
 ### 8. Stop check
 
 - If `openP0P1Count == 0` AND `newIdsVsLastRound == 0` AND `changedTextUnderOldId == 0` AND `N > 1` → **converged**. Append `<!-- converged -->` to `.agents/plans/<slug>/claude-plan-response.md`. Go to exit summary.
-- If `N == 4` → **iteration cap reached**. Do NOT append converged marker. Go to exit summary with the remaining open findings listed by severity.
+- If `N == 4` → **iteration cap reached**. Do NOT append `<!-- converged -->`. Go to exit summary, which uses `AskUserQuestion` to decide whether to append `<!-- signed-off -->`.
 - Else → continue to round `N+1`.
 
 ## Exit summary
@@ -107,7 +107,22 @@ Print one paragraph:
 
 - Slug, iteration count, convergence status (converged / iteration-cap).
 - For converged: link to `.agents/plans/<slug>/claude-plan-response.md` and prompt the user: "Reply `approve <slug>` to proceed to implementation, or revise the plan first."
-- For iteration-cap: list the remaining open P0/P1 (and P2/P3 if any) so the user can decide whether to push another loop manually, sign off with caveats, or revise the plan.
+- For iteration-cap: list the remaining open P0/P1 (and P2/P3 if any), then use `AskUserQuestion` to record the decision in the audit trail:
+
+  > Iteration cap reached for slug=`<slug>` without convergence. Remaining: `<short summary, e.g. "2 P2, 1 P3, no P0/P1">`. How do you want to exit?
+  >
+  > - **Sign off with caveats** — append `<!-- signed-off -->` to `claude-plan-response.md` with a one-line note (date + remaining-findings summary). This unblocks `/agent-review-loop`.
+  > - **Push another manual round** — exit without a marker; user re-runs `/agent-plan-loop <slug>` to push round 5+.
+  > - **Revise plan** — exit without a marker; user edits `plan.md` directly before any further loop.
+
+  On "sign off with caveats", append to `.agents/plans/<slug>/claude-plan-response.md` — the bare marker first (so a literal substring check matches), then a separate annotation comment on the next line:
+
+  ```
+  <!-- signed-off -->
+  <!-- signed-off context: <YYYY-MM-DD> after iteration cap. Remaining: <summary>. -->
+  ```
+
+  Do NOT append `<!-- converged -->` in this path — the two markers are semantically distinct (`converged` = loop reached zero open findings + no drift; `signed-off` = user accepted caveats past the cap). Both unlock `/agent-review-loop`; keeping them distinct preserves the audit trail.
 
 ## What NOT to do
 

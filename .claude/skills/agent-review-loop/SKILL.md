@@ -15,8 +15,8 @@ The user types `/agent-review-loop [<slug>]`. Slug is optional.
 
 ## Slug resolution
 
-- **If arg given**: use it. The plan at `.agents/plans/<slug>/plan.md` must exist AND `.agents/plans/<slug>/claude-plan-response.md` must contain `<!-- converged -->`. If not, print "Plan for slug=<slug> hasn't converged via `/agent-plan-loop` yet. Iterate the plan first." and exit.
-- **If arg omitted**: scan `.agents/plans/*/claude-plan-response.md` for plans with `<!-- converged -->` marker. Filter to those whose `.agents/reviews/<slug>/claude-response.md` either doesn't exist or doesn't have `<!-- converged -->`.
+- **If arg given**: use it. The plan at `.agents/plans/<slug>/plan.md` must exist AND `.agents/plans/<slug>/claude-plan-response.md` must contain `<!-- converged -->` or `<!-- signed-off -->`. If not, print "Plan for slug=<slug> hasn't been signed off via `/agent-plan-loop` yet (no `<!-- converged -->` or `<!-- signed-off -->` marker). Iterate the plan first, or re-run `/agent-plan-loop <slug>` and choose 'Sign off with caveats' at the cap-exit." and exit. If the marker is `<!-- signed-off -->`, print a heads-up: "Note: plan was signed off past iteration cap (not auto-converged). Remaining caveats are in the plan response."
+- **If arg omitted**: scan `.agents/plans/*/claude-plan-response.md` for plans with either `<!-- converged -->` or `<!-- signed-off -->`. Filter to those whose `.agents/reviews/<slug>/claude-response.md` either doesn't exist or doesn't have `<!-- converged -->`.
   - If exactly one match: use it.
   - If zero: print "No converged plans awaiting code review. Either run `/agent-plan-loop <slug>` first, or pass an explicit slug." and exit.
   - If multiple: list and use `AskUserQuestion` to pick.
@@ -25,7 +25,7 @@ Create `.agents/reviews/<slug>/` via `New-Item -ItemType Directory -Force` if it
 
 ## Pre-flight: source-file collision check
 
-Read the plan's "Likely affected files" section (or "Files to create/update" — look for a markdown table or list near the top) and collect the file paths into a `touchedFiles` set. If the plan has no such section, run `git diff --name-only HEAD` and use that.
+Read the plan's "Likely affected files" section (or "Files to create/update" — look for a markdown table or list near the top) and collect the file paths into a `touchedFiles` set. If the plan has no such section, fall back to the working-tree set: `git diff --name-only HEAD` **plus** `git ls-files --others --exclude-standard` (the latter so untracked new files aren't dropped from the audit trail).
 
 Run `git status --porcelain` and parse the modified-files list. For each modified file NOT in `touchedFiles`, flag it as a potential collision with another active task.
 
@@ -57,6 +57,16 @@ The loop runs inside this skill body. For iteration `N` from 1 to 4:
 ### 1. Snapshot current diff
 
 `git diff HEAD > .agents/reviews/<slug>/round-N/diff.before.patch` (create round folder via `New-Item -ItemType Directory -Force`).
+
+`git diff HEAD` omits untracked files. Append a no-index diff for each so the audit trail captures the full state of new files:
+
+```pwsh
+foreach ($f in (git ls-files --others --exclude-standard)) {
+  git --no-pager diff --no-index /dev/null -- $f 2>$null | Add-Content .agents/reviews/<slug>/round-N/diff.before.patch
+}
+```
+
+(Same treatment for `diff.after.patch` after step 6.)
 
 ### 2. Render the Codex prompt
 
@@ -123,13 +133,14 @@ Copy-Item .agents/reviews/<slug>/claude-response.md .agents/reviews/<slug>/round
 
 ## Convergence exit
 
-1. Append `<!-- converged -->` to `.agents/reviews/<slug>/claude-response.md`.
-2. Run the deferred full verify: `npm run verify`. Capture pass/fail.
+1. Run the deferred full verify **first**: `npm run verify`. Capture pass/fail.
+2. **Only on pass**, append `<!-- converged -->` to `.agents/reviews/<slug>/claude-response.md`. On fail, do NOT append the marker — the slug must remain discoverable for the next `/agent-review-loop` scan so the failure can be addressed.
 3. Print summary:
    - Slug, iteration count, converged.
    - Touched files (from `touched.txt`).
-   - `npm run verify` result (pass / fail with first failure surfaced).
-   - "Diff is ready for review. Run `git diff` to inspect, then `git commit` + `git push` when satisfied. **This skill never pushes.**"
+   - `npm run verify` result.
+   - On pass: "Diff is ready for review. Run `git diff` to inspect, then `git commit` + `git push` when satisfied. **This skill never pushes.**"
+   - On fail: surface the first failing command + output, and print: "Convergence reached on findings, but `npm run verify` failed. Marker not written. Fix the failure manually or re-run `/agent-review-loop <slug>` after a fix attempt."
 
 ## Cap exit
 

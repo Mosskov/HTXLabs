@@ -64,8 +64,11 @@ For each finding include:
 - why it matters
 - smallest suggested fix
 
-Write the complete review to:
-${FINDINGS_PATH}
+Return the complete review as your final assistant message. The
+orchestrating wrapper captures it via `codex.cmd exec -o` and persists
+it to `${FINDINGS_PATH}` outside the sandbox. Do NOT attempt to write
+that file yourself — your sandbox is read-only and the write will fail.
+Do not mention the sandbox or the persistence mechanism in your output.
 
 Do not edit source files or project files other than that review artifact.
 Do not suggest broad refactors.

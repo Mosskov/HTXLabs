@@ -44,7 +44,12 @@ function buildTestRubric(): Rubric {
           { kind: 'literal', terms: ['iv-keyword'] },
         ],
         misconceptions: [
-          { kind: 'regex', pattern: 'tungere.+hurtigere', flags: 'i', hint: 'Massen påvirker ikke.' },
+          {
+            kind: 'regex',
+            pattern: 'tungere.+hurtigere',
+            flags: 'i',
+            hint: 'Massen påvirker ikke.',
+          },
         ],
       },
       {
@@ -204,11 +209,7 @@ describe('evaluateRubric — invariants', () => {
         throw new Error('boom');
       },
     } as unknown as MockEmbedder;
-    const r = await evaluateRubric(
-      'iv-keyword dv-keyword rel-keyword er sand',
-      rubric,
-      broken,
-    );
+    const r = await evaluateRubric('iv-keyword dv-keyword rel-keyword er sand', rubric, broken);
 
     const relation = findCriterion(r, 'relation'); // semantic-only
     expect(relation.checks[0].status).toBe('skipped-embedder');
@@ -328,9 +329,7 @@ describe('evaluateRubric — invariants', () => {
       id: 't',
       version: 1,
       title: 'T',
-      criteria: [
-        { id: 'c', label: 'c', any: [{ kind: 'literal', terms: ['snorlængde'] }] },
-      ],
+      criteria: [{ id: 'c', label: 'c', any: [{ kind: 'literal', terms: ['snorlængde'] }] }],
     };
     const parsed = parseRubric(raw);
     expect(parsed.ok).toBe(true);
@@ -393,11 +392,7 @@ describe('literal matching is whole-word (Unicode-aware)', () => {
   });
 
   it('treats hyphen as a non-letter boundary', async () => {
-    const r = await evaluateRubric(
-      'X-afhængig størrelse',
-      singleLiteral(['afhængig']),
-      embedder,
-    );
+    const r = await evaluateRubric('X-afhængig størrelse', singleLiteral(['afhængig']), embedder);
     expect(r.criteria[0].satisfied).toBe(true);
   });
 
