@@ -61,29 +61,34 @@ async function fillVariables(values: { ivSymbol: string; dvSymbol: string }) {
   // The VariableTable widget uses the id `variables` per the template MDX —
   // so cell ids are stable. With per-section config, row indices live in
   // the cell id (`variables-iv0-*`, `variables-c0-*`).
-  await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'Force');
+  // Phase 1 now validates name + symbol + unit on every IV/DV/constant row
+  // (requireUnits + expected.{name,symbol,unit} for IV/DV) and uses the
+  // linear-equation example: IV/DV are generic xvar/yvar with uppercase
+  // X/Y symbols, constants are hældning/skæringspunkt with lowercase a/b.
+  await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'xvar');
   await user.type(
     document.getElementById('variables-iv0-symbol') as HTMLInputElement,
     values.ivSymbol,
   );
-  await user.type(
-    document.getElementById('variables-dv0-name') as HTMLInputElement,
-    'Acceleration',
-  );
+  await user.type(document.getElementById('variables-iv0-unit') as HTMLInputElement, 'ux');
+  await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 'yvar');
   await user.type(
     document.getElementById('variables-dv0-symbol') as HTMLInputElement,
     values.dvSymbol,
   );
-  // Phase 1 now requires the student to identify two constants too.
+  await user.type(document.getElementById('variables-dv0-unit') as HTMLInputElement, 'uy');
   await user.type(
     document.getElementById('variables-c0-name') as HTMLInputElement,
-    'tyngdeacceleration',
+    'hældning',
   );
-  await user.type(document.getElementById('variables-c0-symbol') as HTMLInputElement, 'g');
-  await user.type(document.getElementById('variables-c0-unit') as HTMLInputElement, 'm/s²');
-  await user.type(document.getElementById('variables-c1-name') as HTMLInputElement, 'masse');
-  await user.type(document.getElementById('variables-c1-symbol') as HTMLInputElement, 'm');
-  await user.type(document.getElementById('variables-c1-unit') as HTMLInputElement, 'kg');
+  await user.type(document.getElementById('variables-c0-symbol') as HTMLInputElement, 'a');
+  await user.type(document.getElementById('variables-c0-unit') as HTMLInputElement, 'ua');
+  await user.type(
+    document.getElementById('variables-c1-name') as HTMLInputElement,
+    'skæringspunkt',
+  );
+  await user.type(document.getElementById('variables-c1-symbol') as HTMLInputElement, 'b');
+  await user.type(document.getElementById('variables-c1-unit') as HTMLInputElement, 'ub');
 }
 
 function nextButton() {
@@ -128,14 +133,14 @@ describe('template phase 1 — happy path', () => {
 });
 
 describe('template phase 1 — negative paths', () => {
-  it('lowercase symbols: Tjek shows commonMistake hints, hypothesis stays hidden', async () => {
+  it('lowercase symbols: Tjek shows case-mismatch hints, hypothesis stays hidden', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/lowercase');
 
+    // Canonical IV/DV symbols are uppercase X/Y; lowercase x/y trips the
+    // case-mismatch ladder (precedence wins over the lowercase commonMistake).
     await fillVariables({ ivSymbol: 'x', dvSymbol: 'y' });
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Generic case-mismatch hint for lowercase letters (since case-mismatch
-    // wins over common-mistake refinement, the case-mismatch ladder fires).
     expect(
       screen.getAllByText(/tjek dette symbol — er stort\/lille bogstav rigtigt\?/i).length,
     ).toBeGreaterThanOrEqual(1);
