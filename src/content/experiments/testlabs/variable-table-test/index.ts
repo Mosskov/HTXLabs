@@ -6,12 +6,13 @@
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
 import PhaseDiagnostik from './phase-diagnostik.mdx';
+import PhaseFlerdimensional from './phase-flerdimensional.mdx';
 import PhasePlanlaeg from './phase-planlaeg.mdx';
 import PhaseTjek from './phase-tjek.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 3,
+  version: 4,
   title: 'VariableTable — widget-test',
   simulationId: '__none',
   learningObjectives: [
@@ -46,6 +47,15 @@ export const frontmatter: ExperimentFrontmatter = {
           },
         },
         {
+          id: 'flerdimensional',
+          title: 'Flerdimensional',
+          steps: ['Udforsk fast antal og student-valgt antal rækker i alle tre sektioner.'],
+          gate: {
+            type: 'all-validated',
+            widgetIds: ['multi-iv-fixed', 'ranged-constants'],
+          },
+        },
+        {
           id: 'diagnostik',
           title: 'Diagnostik — fejlflagning',
           steps: [
@@ -67,5 +77,6 @@ export { Theory };
 export const phaseBodies: Record<string, ComponentType> = {
   planlaeg: PhasePlanlaeg,
   tjek: PhaseTjek,
+  flerdimensional: PhaseFlerdimensional,
   diagnostik: PhaseDiagnostik,
 };

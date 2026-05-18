@@ -43,8 +43,9 @@ export interface RunnerState {
    *  in the widget for criteria still failing in the latest result. */
   rubricHintTiers: Record<string, Record<string, number>>;
   /** Tier reached per VariableTable widget per cell (dot-path key like
-   *  `iv.symbol`). Mirrors `rubricHintTiers`. Incremented on Tjek click for
-   *  cells that still have an error in the just-snapshotted values. */
+   *  `iv.<expectedIndex>.<cell>` — e.g. `iv.0.symbol`, `dv.1.unit`,
+   *  `constants.0.name`). Mirrors `rubricHintTiers`. Incremented on Tjek
+   *  click for cells that still have an error in the just-snapshotted values. */
   variableTableHintTiers: Record<string, Record<string, number>>;
   /** Snapshot of the values committed at the most recent Tjek per
    *  VariableTable widget. Absence means the widget has never been Tjek'd;

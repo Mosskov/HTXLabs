@@ -18,6 +18,8 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     attemptCounts: {},
     simulationState: null,
     rubricHintTiers: {},
+    variableTableHintTiers: {},
+    variableTableLastChecked: {},
     ...overrides,
   };
 }
@@ -270,6 +272,90 @@ describe('runnerReducer', () => {
         w1: { iv: 1, dv: 1 },
         w2: { iv: 1 },
       });
+    });
+  });
+
+  describe('INCREMENT_VARIABLE_TABLE_TIER', () => {
+    it('bumps a per-cell tier counter using array-shaped keys', () => {
+      let s = makeState();
+      s = runnerReducer(s, {
+        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+        widgetId: 'vars',
+        cellKey: 'iv.0.symbol',
+        cap: 3,
+      });
+      s = runnerReducer(s, {
+        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+        widgetId: 'vars',
+        cellKey: 'iv.0.symbol',
+        cap: 3,
+      });
+      expect(s.variableTableHintTiers.vars?.['iv.0.symbol']).toBe(2);
+    });
+
+    it('caps at the supplied limit (idempotent at cap)', () => {
+      let s = makeState();
+      for (let i = 0; i < 5; i++) {
+        s = runnerReducer(s, {
+          type: 'INCREMENT_VARIABLE_TABLE_TIER',
+          widgetId: 'vars',
+          cellKey: 'dv.1.unit',
+          cap: 2,
+        });
+      }
+      expect(s.variableTableHintTiers.vars?.['dv.1.unit']).toBe(2);
+    });
+
+    it('tracks independent counters per cell key', () => {
+      let s = makeState();
+      s = runnerReducer(s, {
+        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+        widgetId: 'vars',
+        cellKey: 'iv.0.symbol',
+        cap: 3,
+      });
+      s = runnerReducer(s, {
+        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+        widgetId: 'vars',
+        cellKey: 'constants.0.name',
+        cap: 3,
+      });
+      expect(s.variableTableHintTiers.vars).toEqual({
+        'iv.0.symbol': 1,
+        'constants.0.name': 1,
+      });
+    });
+  });
+
+  describe('SET_VARIABLE_TABLE_LAST_CHECKED', () => {
+    it('stores the array-shaped values snapshot for the widget', () => {
+      const snapshot = {
+        iv: [{ name: 'højde', symbol: 'h', unit: 'm' }],
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
+        constants: [{ name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' }],
+      };
+      const next = runnerReducer(makeState(), {
+        type: 'SET_VARIABLE_TABLE_LAST_CHECKED',
+        widgetId: 'vars',
+        values: snapshot,
+      });
+      expect(next.variableTableLastChecked.vars).toEqual(snapshot);
+    });
+
+    it('overwrites the prior snapshot for the same widget id', () => {
+      const v1 = { iv: [{ name: 'a', symbol: 'a', unit: '' }], dv: [], constants: [] };
+      const v2 = { iv: [{ name: 'b', symbol: 'b', unit: '' }], dv: [], constants: [] };
+      let s = runnerReducer(makeState(), {
+        type: 'SET_VARIABLE_TABLE_LAST_CHECKED',
+        widgetId: 'vars',
+        values: v1,
+      });
+      s = runnerReducer(s, {
+        type: 'SET_VARIABLE_TABLE_LAST_CHECKED',
+        widgetId: 'vars',
+        values: v2,
+      });
+      expect(s.variableTableLastChecked.vars).toEqual(v2);
     });
   });
 });

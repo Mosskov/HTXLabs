@@ -88,10 +88,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'X');
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     // Snapshot not taken → correct stays false, pill stays idle.
     expect(readCorrect()).toBe(false);
     expect(screen.getByText(/ikke tjekket endnu/i)).toBeInTheDocument();
@@ -104,10 +104,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'X');
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(readCorrect()).toBe(true);
     expect(screen.getByText('Godkendt')).toBeInTheDocument();
@@ -120,15 +120,15 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'X');
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(readCorrect()).toBe(true);
 
     // Edit any cell — even with a still-valid value — must flip correct back.
-    await typeInto('variables-iv-name', 'X');
+    await typeInto('variables-iv0-name', 'X');
     expect(readCorrect()).toBe(false);
     expect(screen.getByText(/ændret siden tjek/i)).toBeInTheDocument();
   });
@@ -140,10 +140,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'Q'); // matches commonMistake.wrong
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Q'); // matches commonMistake.wrong
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('wrong-letter mistake hint')).toBeInTheDocument();
     expect(screen.getByText(/tjekket — se tips/i)).toBeInTheDocument();
@@ -156,10 +156,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'Z'); // not a commonMistake, just wrong — uses generic mismatch ladder
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z'); // not a commonMistake, just wrong — uses generic mismatch ladder
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
 
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     // First tier of generic symbol/mismatch ladder ("Tjek dit symbol.")
@@ -179,10 +179,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
+    await typeInto('variables-iv0-name', 'Force');
     // Leave IV symbol empty.
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
 
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Dette felt er tomt.')).toBeInTheDocument();
@@ -199,10 +199,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'Z'); // generic mismatch — ladder length 2
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z'); // generic mismatch — ladder length 2
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
 
     // Tjek 1 → tier 1 (generic[0])
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
@@ -224,12 +224,12 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" requireUnits expected={expectedWithUnits} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'højde');
-    await typeInto('variables-iv-symbol', 'h');
-    await typeInto('variables-iv-unit', 'm/s²'); // belongs to DV
-    await typeInto('variables-dv-name', 'acceleration');
-    await typeInto('variables-dv-symbol', 'a');
-    await typeInto('variables-dv-unit', 'm'); // belongs to IV
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-iv0-unit', 'm/s²'); // belongs to DV
+    await typeInto('variables-dv0-name', 'acceleration');
+    await typeInto('variables-dv0-symbol', 'a');
+    await typeInto('variables-dv0-unit', 'm'); // belongs to IV
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     // Both IV and DV units are row-swapped → expect the hint to surface twice.
     expect(screen.getAllByText('Denne enhed hører til den anden variabel.')).toHaveLength(2);
@@ -246,12 +246,12 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" requireUnits expected={expectedWithUnit} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'højde');
-    await typeInto('variables-iv-symbol', 'h');
-    await typeInto('variables-iv-unit', 'm');
-    await typeInto('variables-dv-name', 'acceleration');
-    await typeInto('variables-dv-symbol', 'a');
-    await typeInto('variables-dv-unit', 'm / s²'); // internal whitespace
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-iv0-unit', 'm');
+    await typeInto('variables-dv0-name', 'acceleration');
+    await typeInto('variables-dv0-symbol', 'a');
+    await typeInto('variables-dv0-unit', 'm / s²'); // internal whitespace
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(
       screen.getByText('Enheden er korrekt, men der er et ekstra mellemrum indeni.'),
@@ -265,16 +265,16 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'Z'); // wrong → mismatch
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong → mismatch
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
 
     // Editing any cell flips status to dirty → hints should vanish until
     // the student clicks Tjek again, so live error guidance doesn't leak.
-    await typeInto('variables-dv-name', 'x');
+    await typeInto('variables-dv0-name', 'x');
     expect(screen.queryByText('Tjek dit symbol.')).not.toBeInTheDocument();
   });
 
@@ -290,10 +290,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedWithConstant} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'højde');
-    await typeInto('variables-iv-symbol', 'h');
-    await typeInto('variables-dv-name', 'tid');
-    await typeInto('variables-dv-symbol', 't');
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-dv0-name', 'tid');
+    await typeInto('variables-dv0-symbol', 't');
     // No constants added.
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(
@@ -320,10 +320,10 @@ describe('VariableTable Tjek flow', () => {
         <VariableTable id="variables" expected={expectedTwoConstants} />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'højde');
-    await typeInto('variables-iv-symbol', 'h');
-    await typeInto('variables-dv-name', 'tid');
-    await typeInto('variables-dv-symbol', 't');
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-dv0-name', 'tid');
+    await typeInto('variables-dv0-symbol', 't');
 
     // Add two constant rows.
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
@@ -361,12 +361,62 @@ describe('VariableTable Tjek flow', () => {
         />
       </Harness>,
     );
-    await typeInto('variables-iv-name', 'Force');
-    await typeInto('variables-iv-symbol', 'Z');
-    await typeInto('variables-dv-name', 'Acceleration');
-    await typeInto('variables-dv-symbol', 'Y');
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Tjek igen')).toBeInTheDocument();
     expect(screen.queryByText(/tjekket — se tips/i)).not.toBeInTheDocument();
+  });
+
+  it('array expected.iv: order-independent matching pairs by symbol key', async () => {
+    const expectedArr: import('@/lab-guide/widgets/variableTableCorrectness').ExpectedVariables = {
+      iv: [
+        { name: 'højde', symbol: 'h', unit: 'm' },
+        { name: 'tid', symbol: 't', unit: 's' },
+      ],
+      dv: { name: 'fart', symbol: 'v', unit: 'm/s' },
+    };
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj/array-iv">
+        <VariableTable id="variables" iv={{ count: 2 }} requireUnits expected={expectedArr} />
+      </Harness>,
+    );
+    // Student enters IVs in reversed order — order-independent matcher pairs by symbol.
+    await typeInto('variables-iv0-name', 'tid');
+    await typeInto('variables-iv0-symbol', 't');
+    await typeInto('variables-iv0-unit', 's');
+    await typeInto('variables-iv1-name', 'højde');
+    await typeInto('variables-iv1-symbol', 'h');
+    await typeInto('variables-iv1-unit', 'm');
+    await typeInto('variables-dv0-name', 'fart');
+    await typeInto('variables-dv0-symbol', 'v');
+    await typeInto('variables-dv0-unit', 'm/s');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(screen.getByText('Godkendt')).toBeInTheDocument();
+  });
+
+  it('tier keys for array IV use iv.<expectedIndex>.<cell>', async () => {
+    const expectedArr: import('@/lab-guide/widgets/variableTableCorrectness').ExpectedVariables = {
+      iv: [{ symbol: 'h' }, { symbol: 't' }],
+      dv: { symbol: 'v' },
+    };
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj/array-iv-tier">
+        <VariableTable id="variables" iv={{ count: 2 }} expected={expectedArr} />
+      </Harness>,
+    );
+    // Row 0 (positional → expectedIndex 0) has wrong symbol; row 1 has correct.
+    await typeInto('variables-iv0-name', 'a');
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong → mismatch
+    await typeInto('variables-iv1-name', 'b');
+    await typeInto('variables-iv1-symbol', 't');
+    await typeInto('variables-dv0-name', 'c');
+    await typeInto('variables-dv0-symbol', 'v');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
   });
 });

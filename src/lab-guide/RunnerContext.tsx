@@ -46,7 +46,8 @@ interface RunnerApi {
   incrementRubricTier: (widgetId: string, criterionId: string, cap: number) => void;
   /** Bump the tier counter for a VariableTable widget's failing cell. Capped
    *  at `cap` (the cell's resolved hint-ladder length). Idempotent at cap.
-   *  `cellKey` is a dot-path like `iv.symbol` / `constants.0.unit`. */
+   *  `cellKey` is a uniform dot-path `<section>.<expectedIndex>.<cell>` —
+   *  e.g. `iv.0.symbol`, `dv.1.unit`, `constants.0.name`. */
   incrementVariableTableTier: (widgetId: string, cellKey: string, cap: number) => void;
   /** Snapshot the current VariableTable values as the most recent Tjek
    *  result. Overwrites any prior snapshot for that widget id. */

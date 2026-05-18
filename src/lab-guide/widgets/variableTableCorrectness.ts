@@ -8,26 +8,33 @@
 //   on the primary match (the `whitespace-internal` refinement opts in).
 // - Names: case-insensitive (toLowerCase); plain Danish case-folding suffices.
 // - Symbols/units: case-sensitive; case-only mismatch reported separately.
-// - Constants: order-independent, three sub-passes (full > exact-key partial >
-//   case-insensitive-key partial); each student row used at most once.
-//   Matching key is `symbol` if set, else `name`. Malformed entries (neither
-//   set) are silently dropped — never produce `missing`, so a misauthored lab
-//   cannot permanently lock the gate. The widget warns in dev separately.
+// - All three sections (IV, DV, constants) match order-independently via the
+//   shared `evaluateRowGroup` helper. Four sub-passes per section: full match
+//   > exact-key partial > case-insensitive-key partial > positional fallback
+//   (pair the unpaired student row at index i with the unpaired expected at
+//   the next-by-index slot). The positional fallback preserves the legacy
+//   single-row-IV/DV behaviour where an unfilled student row produces per-cell
+//   empty/mismatch errors instead of degrading to `missing`. Each student row
+//   is used at most once. Matching key is `symbol` if set, else `name`.
+//   Malformed entries (neither set) are silently dropped — never produce
+//   `missing`, so a misauthored lab cannot permanently lock the gate. The
+//   widget warns in dev separately.
 //
 // Error precedence (each cell reports its first hit):
 //   1. exact match            → undefined
 //   2. case-mismatch          (symbol/unit only)
 //   3. misplaced              sibling cell of same row matches
-//   4. row-swapped            corresponding cell of OTHER row matches (IV/DV)
+//   4. row-swapped            corresponding cell of OPPOSITE section matches (IV↔DV)
 //   5. common-mistake         author-supplied wrong-answer list
 //   6. whitespace-internal    match after collapsing internal whitespace
 //   7. mismatch               fallthrough
 //
 // `evaluateCell` produces only kinds 1, 2, 7 (and `empty`). Refinement into
-// kinds 3–6 happens at the table/constants level via `refineCellError`, where
-// the full row + optional other-row context is available. Direct callers of
-// `evaluateRow` get the raw row result; refinement is applied by
-// `evaluateTable` and inside `evaluateConstants` for partial matches.
+// kinds 3–6 happens at the row-group level via `refineCellError`, where the
+// full row + opposite-section expected context is available. Cross-section
+// row-swap detection (kind 4) considers every opposite-section expected
+// entry's corresponding cell — for arrays-on-both-sides, any opposite match
+// triggers the flag.
 import { strings } from '../strings.da';
 import type { VariableEntry } from './VariableTable';
 
@@ -70,9 +77,11 @@ export type ExpectedConstant =
       commonMistakes?: CommonMistakes;
     };
 
+/** Author-side spec for one of the three sections. IV/DV accept a single-
+ *  object shorthand or an array; constants is always an array. */
 export interface ExpectedVariables {
-  iv: ExpectedVariable;
-  dv: ExpectedVariable;
+  iv?: ExpectedVariable | ExpectedVariable[];
+  dv?: ExpectedVariable | ExpectedVariable[];
   constants?: ExpectedConstant[];
 }
 
@@ -91,7 +100,10 @@ export interface VariableRowErrors {
   unit?: CellError;
 }
 
-export type ConstantMatch =
+/** One match result inside an `evaluateRowGroup` output array. Uniform across
+ *  IV, DV, and constants sections. `ConstantMatch` is retained as an alias for
+ *  external callers (the ErrorInspector consumes it). */
+export type RowMatch =
   | { status: 'missing'; expectedIndex: number }
   | { status: 'matched'; expectedIndex: number; studentIndex: number }
   | {
@@ -101,16 +113,26 @@ export type ConstantMatch =
       errors: VariableRowErrors;
     };
 
+/** Back-compat alias — same shape as RowMatch. */
+export type ConstantMatch = RowMatch;
+
 export interface CorrectnessReport {
-  iv: VariableRowErrors;
-  dv: VariableRowErrors;
-  constants?: ConstantMatch[];
+  iv: RowMatch[];
+  dv: RowMatch[];
+  constants?: RowMatch[];
 }
 
 const CELLS: readonly Cell[] = ['name', 'symbol', 'unit'];
 
 export function asArray(v: string | string[]): string[] {
   return Array.isArray(v) ? v : [v];
+}
+
+/** Normalize an `iv` / `dv` / `constants` author-spec to an array. Returns
+ *  `[]` for undefined, `[spec]` for a single object, or `spec` for an array. */
+export function asExpectedArray<T>(spec: T | T[] | undefined): T[] {
+  if (spec === undefined) return [];
+  return Array.isArray(spec) ? spec : [spec];
 }
 
 /** Normalize a CellSpec to its accepted-value array. Handles all three
@@ -192,9 +214,11 @@ export function evaluateCell(
 export interface RefineContext {
   cell: Cell;
   rowExpected: ExpectedVariable | ExpectedConstant;
-  /** When set, enables `row-swapped` detection against the other row. */
-  otherRowExpected?: ExpectedVariable;
-  /** Label of the other row, used in the `row-swapped` payload. */
+  /** Opposite-section expected entries for cross-row swap detection. For IV
+   *  refinement, these are the DV expected entries (and vice versa). Empty /
+   *  undefined disables row-swap detection (constants case). */
+  otherRowExpecteds?: ReadonlyArray<ExpectedVariable | ExpectedConstant>;
+  /** Label of the opposite section, used in the `row-swapped` payload. */
   otherRowLabel?: 'iv' | 'dv';
   /** Pre-resolved common-mistakes list for this cell. */
   commonMistakes?: CommonMistake[];
@@ -220,11 +244,20 @@ export function refineCellError(
     }
   }
 
-  // 4. row-swapped — value matches the *corresponding* cell of the other row.
-  if (ctx.otherRowExpected !== undefined && ctx.otherRowLabel !== undefined) {
-    const accepted = cellAccepted(ctx.otherRowExpected, ctx.cell);
-    if (accepted !== undefined && valueMatches(value, accepted, isCaseSensitive(ctx.cell))) {
-      return { type: 'row-swapped', from: ctx.otherRowLabel };
+  // 4. row-swapped — value matches the *corresponding* cell of any expected
+  // entry in the opposite section. With arrays on both sides, any opposite
+  // match triggers the flag.
+  if (
+    ctx.otherRowExpecteds !== undefined &&
+    ctx.otherRowExpecteds.length > 0 &&
+    ctx.otherRowLabel !== undefined
+  ) {
+    for (const otherExp of ctx.otherRowExpecteds) {
+      const accepted = cellAccepted(otherExp, ctx.cell);
+      if (accepted === undefined) continue;
+      if (valueMatches(value, accepted, isCaseSensitive(ctx.cell))) {
+        return { type: 'row-swapped', from: ctx.otherRowLabel };
+      }
     }
   }
 
@@ -259,7 +292,7 @@ function refineRow(
   errors: VariableRowErrors,
   entry: VariableEntry,
   rowExpected: ExpectedVariable | ExpectedConstant,
-  otherRowExpected: ExpectedVariable | undefined,
+  otherRowExpecteds: ReadonlyArray<ExpectedVariable | ExpectedConstant> | undefined,
   otherRowLabel: 'iv' | 'dv' | undefined,
 ): VariableRowErrors {
   const commonMistakes = rowExpected.commonMistakes;
@@ -267,7 +300,7 @@ function refineRow(
     const refined = refineCellError(errors[cell], entry[cell], {
       cell,
       rowExpected,
-      otherRowExpected,
+      otherRowExpecteds,
       otherRowLabel,
       commonMistakes: commonMistakes?.[cell],
     });
@@ -295,10 +328,10 @@ export function evaluateRow(entry: VariableEntry, expected: ExpectedVariable): V
   return errors;
 }
 
-/** Returns the matching-key accepted values for an expected constant — symbol
+/** Returns the matching-key accepted values for an expected entry — symbol
  *  if set, else name. Returns undefined when neither is set (malformed entry,
- *  filtered out by evaluateConstants). */
-function matchingKey(expected: ExpectedConstant): string[] | undefined {
+ *  filtered out by evaluateRowGroup). */
+function matchingKey(expected: ExpectedVariable | ExpectedConstant): string[] | undefined {
   if (expected.symbol !== undefined) return cellAcceptedValues(expected.symbol);
   if (expected.name !== undefined) return cellAcceptedValues(expected.name);
   return undefined;
@@ -306,17 +339,34 @@ function matchingKey(expected: ExpectedConstant): string[] | undefined {
 
 /** Returns the student entry's value for the matching key (symbol if expected
  *  has symbol set; else name). */
-function studentKey(entry: VariableEntry, expected: ExpectedConstant): string {
+function studentKey(entry: VariableEntry, expected: ExpectedVariable | ExpectedConstant): string {
   return expected.symbol !== undefined ? entry.symbol : entry.name;
 }
 
-export function evaluateConstants(
+export interface RowGroupOpts {
+  /** Opposite-section expected entries for cross-row swap detection in IV/DV
+   *  refinement. Pass `undefined` for the constants section. */
+  opposite?: ReadonlyArray<ExpectedVariable | ExpectedConstant>;
+  oppositeLabel?: 'iv' | 'dv';
+}
+
+/** Match a list of student rows against a list of expected entries. Four
+ *  passes: full → exact-key → case-insensitive-key → positional fallback.
+ *  The positional fallback preserves the legacy single-row case (an unfilled
+ *  student row pairs with its position-matching expected entry so per-cell
+ *  empty/mismatch errors surface instead of degrading to `missing`). */
+export function evaluateRowGroup(
   student: VariableEntry[],
-  expected: ExpectedConstant[],
-): ConstantMatch[] {
-  // Build the work list: { expectedIndex, expected } for entries with a
-  // matching key. Malformed entries (neither symbol nor name set) drop out.
-  const work: Array<{ idx: number; exp: ExpectedConstant; key: string[] }> = [];
+  expected: ReadonlyArray<ExpectedVariable | ExpectedConstant>,
+  opts: RowGroupOpts = {},
+): RowMatch[] {
+  // Work list: entries with a matching key. Malformed entries (neither symbol
+  // nor name) drop out — they never produce `missing` and never pair.
+  const work: Array<{
+    idx: number;
+    exp: ExpectedVariable | ExpectedConstant;
+    key: string[];
+  }> = [];
   for (let i = 0; i < expected.length; i++) {
     const exp = expected[i];
     if (exp === undefined) continue;
@@ -326,8 +376,8 @@ export function evaluateConstants(
   }
 
   const used = new Set<number>();
-  const result: ConstantMatch[] = [];
   const remaining = new Set(work.map((w) => w.idx));
+  const result: RowMatch[] = [];
 
   // Pass 1 — full match: student row evaluates with no errors.
   for (const { idx, exp } of work) {
@@ -335,7 +385,7 @@ export function evaluateConstants(
       if (used.has(s)) continue;
       const row = student[s];
       if (row === undefined) continue;
-      if (hasNoRowErrors(evaluateRow(row, exp))) {
+      if (hasNoRowErrors(evaluateRow(row, exp as ExpectedVariable))) {
         result.push({ status: 'matched', expectedIndex: idx, studentIndex: s });
         used.add(s);
         remaining.delete(idx);
@@ -357,7 +407,13 @@ export function evaluateConstants(
           status: 'partial',
           expectedIndex: idx,
           studentIndex: s,
-          errors: refineRow(evaluateRow(row, exp), row, exp, undefined, undefined),
+          errors: refineRow(
+            evaluateRow(row, exp as ExpectedVariable),
+            row,
+            exp,
+            opts.opposite,
+            opts.oppositeLabel,
+          ),
         });
         used.add(s);
         remaining.delete(idx);
@@ -379,13 +435,54 @@ export function evaluateConstants(
           status: 'partial',
           expectedIndex: idx,
           studentIndex: s,
-          errors: refineRow(evaluateRow(row, exp), row, exp, undefined, undefined),
+          errors: refineRow(
+            evaluateRow(row, exp as ExpectedVariable),
+            row,
+            exp,
+            opts.opposite,
+            opts.oppositeLabel,
+          ),
         });
         used.add(s);
         remaining.delete(idx);
         break;
       }
     }
+  }
+
+  // Pass 3 — positional fallback: pair each remaining student row (in order)
+  // with the next remaining expected entry (in order). This is what preserves
+  // the legacy single-IV/DV behaviour where an empty student row still emits
+  // per-cell empty errors instead of degrading to `missing`. With arrays on
+  // both sides, this also catches unpaired student rows whose values matched
+  // nothing — they're surfaced via cell-level errors (and row-swapped
+  // refinement when opts.opposite is set), not silently dropped.
+  for (let s = 0; s < student.length; s++) {
+    if (used.has(s)) continue;
+    const row = student[s];
+    if (row === undefined) continue;
+    let next: { idx: number; exp: ExpectedVariable | ExpectedConstant } | undefined;
+    for (const w of work) {
+      if (remaining.has(w.idx)) {
+        next = { idx: w.idx, exp: w.exp };
+        break;
+      }
+    }
+    if (!next) break;
+    result.push({
+      status: 'partial',
+      expectedIndex: next.idx,
+      studentIndex: s,
+      errors: refineRow(
+        evaluateRow(row, next.exp as ExpectedVariable),
+        row,
+        next.exp,
+        opts.opposite,
+        opts.oppositeLabel,
+      ),
+    });
+    used.add(s);
+    remaining.delete(next.idx);
   }
 
   // Whatever's still in remaining → missing.
@@ -400,34 +497,46 @@ export function evaluateConstants(
   return result;
 }
 
-export function evaluateTable(
-  values: { iv: VariableEntry; dv: VariableEntry; constants: VariableEntry[] },
-  expected: ExpectedVariables,
-): CorrectnessReport {
-  const ivErrors = refineRow(
-    evaluateRow(values.iv, expected.iv),
-    values.iv,
-    expected.iv,
-    expected.dv,
-    'dv',
-  );
-  const dvErrors = refineRow(
-    evaluateRow(values.dv, expected.dv),
-    values.dv,
-    expected.dv,
-    expected.iv,
-    'iv',
-  );
-  const report: CorrectnessReport = { iv: ivErrors, dv: dvErrors };
+/** Back-compat alias for the constants section's matcher. */
+export function evaluateConstants(
+  student: VariableEntry[],
+  expected: ExpectedConstant[],
+): RowMatch[] {
+  return evaluateRowGroup(student, expected);
+}
+
+export interface TableValues {
+  iv: VariableEntry[];
+  dv: VariableEntry[];
+  constants: VariableEntry[];
+}
+
+export function evaluateTable(values: TableValues, expected: ExpectedVariables): CorrectnessReport {
+  const ivExpected = asExpectedArray(expected.iv);
+  const dvExpected = asExpectedArray(expected.dv);
+  const report: CorrectnessReport = {
+    iv: evaluateRowGroup(values.iv, ivExpected, {
+      opposite: dvExpected,
+      oppositeLabel: 'dv',
+    }),
+    dv: evaluateRowGroup(values.dv, dvExpected, {
+      opposite: ivExpected,
+      oppositeLabel: 'iv',
+    }),
+  };
   if (expected.constants !== undefined) {
-    report.constants = evaluateConstants(values.constants, expected.constants);
+    report.constants = evaluateRowGroup(values.constants, expected.constants);
   }
   return report;
 }
 
 export function isCorrect(report: CorrectnessReport): boolean {
-  if (!hasNoRowErrors(report.iv)) return false;
-  if (!hasNoRowErrors(report.dv)) return false;
+  for (const m of report.iv) {
+    if (m.status !== 'matched') return false;
+  }
+  for (const m of report.dv) {
+    if (m.status !== 'matched') return false;
+  }
   if (report.constants) {
     for (const c of report.constants) {
       if (c.status !== 'matched') return false;

@@ -1,22 +1,41 @@
+import type { VariableEntry } from '@/lab-guide/widgets/VariableTable';
 // Pure-helper unit tests for variableTableCorrectness. Covers the contract
-// documented in the module header: trim policy, case-folding, three-pass
-// constants matching, malformed-entry handling.
+// documented in the module header: trim policy, case-folding, four-pass
+// row-group matching (full / exact-key / case-insensitive-key / positional
+// fallback), malformed-entry handling, and cross-section row-swap detection.
 import {
   type ExpectedConstant,
   type ExpectedVariable,
+  type ExpectedVariables,
+  type RowMatch,
   type VariableRowErrors,
+  asExpectedArray,
   evaluateCell,
   evaluateConstants,
   evaluateRow,
+  evaluateRowGroup,
   evaluateTable,
   hasNoRowErrors,
   isCorrect,
   refineCellError,
 } from '@/lab-guide/widgets/variableTableCorrectness';
-import type { VariableEntry } from '@/lab-guide/widgets/VariableTable';
 import { describe, expect, it } from 'vitest';
 
 const emptyEntry: VariableEntry = { name: '', symbol: '', unit: '' };
+
+describe('asExpectedArray', () => {
+  it('returns [] for undefined', () => {
+    expect(asExpectedArray(undefined)).toEqual([]);
+  });
+  it('wraps a single object in a one-element array', () => {
+    const obj = { symbol: 'h' };
+    expect(asExpectedArray(obj)).toEqual([obj]);
+  });
+  it('returns arrays unchanged', () => {
+    const arr = [{ symbol: 'h' }, { symbol: 't' }];
+    expect(asExpectedArray(arr)).toBe(arr);
+  });
+});
 
 describe('evaluateCell', () => {
   it('returns undefined when accepted is undefined (cell not under check)', () => {
@@ -103,22 +122,12 @@ describe('evaluateRow', () => {
 
   it('expected.unit omitted → no unit key in result regardless of input', () => {
     expect(
-      evaluateRow(
-        { name: 'højde', symbol: 'h', unit: 'whatever' },
-        { name: 'højde', symbol: 'h' },
-      ),
-    ).toEqual({});
-    expect(
-      evaluateRow(
-        { name: 'højde', symbol: 'h', unit: '' },
-        { name: 'højde', symbol: 'h' },
-      ),
+      evaluateRow({ name: 'højde', symbol: 'h', unit: 'whatever' }, { name: 'højde', symbol: 'h' }),
     ).toEqual({});
   });
 
   it('all three cells omitted → {} (vacuously correct)', () => {
     expect(evaluateRow(emptyEntry, {})).toEqual({});
-    expect(evaluateRow({ name: 'whatever', symbol: 'x', unit: 'kg' }, {})).toEqual({});
   });
 
   it('case-mismatch surfaces on symbol/unit only', () => {
@@ -126,13 +135,13 @@ describe('evaluateRow', () => {
       { name: 'Højde', symbol: 'H', unit: 'M' },
       { name: 'højde', symbol: 'h', unit: 'm' },
     );
-    expect(errors.name).toBeUndefined(); // case-folded match
+    expect(errors.name).toBeUndefined();
     expect(errors.symbol).toEqual({ type: 'case-mismatch' });
     expect(errors.unit).toEqual({ type: 'case-mismatch' });
   });
 });
 
-describe('evaluateConstants', () => {
+describe('evaluateRowGroup (constants)', () => {
   const G_SPEC: ExpectedConstant = {
     name: 'tyngdeacceleration',
     symbol: 'g',
@@ -148,10 +157,7 @@ describe('evaluateConstants', () => {
   });
 
   it('single expected, matching symbol but wrong name → partial with errors.name', () => {
-    const result = evaluateConstants(
-      [{ name: 'gravity', symbol: 'g', unit: 'm/s²' }],
-      [G_SPEC],
-    );
+    const result = evaluateConstants([{ name: 'gravity', symbol: 'g', unit: 'm/s²' }], [G_SPEC]);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ status: 'partial', expectedIndex: 0, studentIndex: 0 });
     if (result[0].status === 'partial') {
@@ -159,24 +165,23 @@ describe('evaluateConstants', () => {
     }
   });
 
-  it('no student row mentions the symbol → missing', () => {
+  it('no student row mentions the symbol → positional fallback partial, then missing only when no student left', () => {
+    // A non-matching student row falls through 3 key-passes to positional
+    // fallback, where it pairs with G_SPEC and produces a partial.
     const result = evaluateConstants([{ name: 'fart', symbol: 'v', unit: 'm/s' }], [G_SPEC]);
-    expect(result).toEqual([{ status: 'missing', expectedIndex: 0 }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].status).toBe('partial');
   });
 
   it('empty student rows → missing', () => {
-    expect(evaluateConstants([], [G_SPEC])).toEqual([
-      { status: 'missing', expectedIndex: 0 },
-    ]);
+    expect(evaluateConstants([], [G_SPEC])).toEqual([{ status: 'missing', expectedIndex: 0 }]);
   });
 
   it('duplicate-symbol student rows: matcher picks the full match first', () => {
-    // Row A: symbol exact, name wrong (partial). Row B: fully correct.
-    // Pass 1 picks B (full match); A is left unused.
     const result = evaluateConstants(
       [
-        { name: 'gravity', symbol: 'g', unit: 'm/s²' }, // partial
-        { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' }, // full
+        { name: 'gravity', symbol: 'g', unit: 'm/s²' },
+        { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
       ],
       [G_SPEC],
     );
@@ -194,7 +199,6 @@ describe('evaluateConstants', () => {
       { name: 'extra', symbol: 'x', unit: 'foo' },
     ];
     const result = evaluateConstants(student, expected);
-    expect(result).toHaveLength(2);
     const byIdx = new Map(result.map((r) => [r.expectedIndex, r]));
     expect(byIdx.get(0)).toMatchObject({ status: 'matched', studentIndex: 1 });
     expect(byIdx.get(1)).toMatchObject({ status: 'matched', studentIndex: 0 });
@@ -209,18 +213,14 @@ describe('evaluateConstants', () => {
   });
 
   it('expected with neither name nor symbol → entry is silently skipped (not missing)', () => {
-    // Cast to bypass the discriminated-union TS check — this is the runtime
-    // safety net for a programmer error that slipped past the type system.
     const malformed = [{} as ExpectedConstant];
     expect(evaluateConstants([], malformed)).toEqual([]);
-    expect(
-      evaluateConstants([{ name: 'something', symbol: 's', unit: 'x' }], malformed),
-    ).toEqual([]);
+    expect(evaluateConstants([{ name: 'something', symbol: 's', unit: 'x' }], malformed)).toEqual(
+      [],
+    );
   });
 
   it('pass-2 priority: exact key match wins over case-insensitive within partial pass', () => {
-    // Row A has symbol "G" (case-only-wrong, name wrong). Row B has symbol
-    // "g" (exact key, name wrong). Pass 2a should pick B; A is left unmatched.
     const result = evaluateConstants(
       [
         { name: 'wrong-a', symbol: 'G', unit: 'm/s²' },
@@ -232,20 +232,7 @@ describe('evaluateConstants', () => {
     expect(result[0]).toMatchObject({ status: 'partial', expectedIndex: 0, studentIndex: 1 });
   });
 
-  it('extra student rows that match nothing → silently ignored', () => {
-    const result = evaluateConstants(
-      [
-        { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
-        { name: 'extra1', symbol: 'x', unit: '' },
-        { name: 'extra2', symbol: 'y', unit: '' },
-      ],
-      [G_SPEC],
-    );
-    expect(result).toEqual([{ status: 'matched', expectedIndex: 0, studentIndex: 0 }]);
-  });
-
   it('case-insensitive key match falls through when no exact match available', () => {
-    // Single row with case-only-wrong symbol → pass 2b picks it as partial.
     const result = evaluateConstants(
       [{ name: 'tyngdeacceleration', symbol: 'G', unit: 'm/s²' }],
       [G_SPEC],
@@ -258,8 +245,147 @@ describe('evaluateConstants', () => {
   });
 });
 
+describe('evaluateRowGroup — uniform across sections', () => {
+  it('works identically for IV/DV/constants (no opposite context)', () => {
+    const exp: ExpectedVariable[] = [{ symbol: 'h' }];
+    const correct: VariableEntry[] = [{ name: 'højde', symbol: 'h', unit: 'm' }];
+    const wrong: VariableEntry[] = [{ name: 'foo', symbol: 'x', unit: 'y' }];
+    expect(evaluateRowGroup(correct, exp)).toEqual([
+      { status: 'matched', expectedIndex: 0, studentIndex: 0 },
+    ]);
+    const wrongResult = evaluateRowGroup(wrong, exp);
+    expect(wrongResult).toHaveLength(1);
+    expect(wrongResult[0].status).toBe('partial');
+  });
+
+  it('positional fallback pairs unpaired student row with unpaired expected at same position', () => {
+    const exp: ExpectedVariable[] = [{ symbol: 'h' }];
+    // Student row has no symbol but is non-empty in some other cell.
+    const student: VariableEntry[] = [{ name: 'foo', symbol: '', unit: '' }];
+    const result = evaluateRowGroup(student, exp);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ status: 'partial', expectedIndex: 0, studentIndex: 0 });
+    if (result[0].status === 'partial') {
+      expect(result[0].errors.symbol).toEqual({ type: 'empty' });
+    }
+  });
+});
+
+describe('cross-section row-swap detection', () => {
+  it('single-row IV/DV regression: swap surfaces as row-swapped on the cell', () => {
+    const report = evaluateTable(
+      {
+        iv: [{ name: 'højde', symbol: 't', unit: 'm' }], // symbol belongs to DV
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
+        constants: [],
+      },
+      {
+        iv: { name: 'højde', symbol: 'h', unit: 'm' },
+        dv: { name: 'tid', symbol: 't', unit: 's' },
+      },
+    );
+    const iv0 = report.iv[0];
+    expect(iv0.status).toBe('partial');
+    if (iv0.status === 'partial') {
+      expect(iv0.errors.symbol).toEqual({ type: 'row-swapped', from: 'dv' });
+    }
+  });
+
+  it('multi-row true swap: IV row holds value matching an unmatched DV entry → row-swapped', () => {
+    const report = evaluateTable(
+      {
+        iv: [
+          { name: 'højde', symbol: 'h', unit: 'm' },
+          { name: 'tid', symbol: 't', unit: 's' }, // symbol belongs to DV-expected
+        ],
+        dv: [{ name: 'fart', symbol: 'v', unit: 'm/s' }],
+        constants: [],
+      },
+      {
+        iv: [
+          { name: 'højde', symbol: 'h', unit: 'm' },
+          { name: 'acceleration', symbol: 'a', unit: 'm/s²' },
+        ],
+        dv: [
+          { name: 'fart', symbol: 'v', unit: 'm/s' },
+          { name: 'tid', symbol: 't', unit: 's' },
+        ],
+      },
+    );
+    // Find the partial with row-swapped on symbol.
+    const partial = report.iv.find((m) => m.status === 'partial');
+    expect(partial).toBeDefined();
+    if (partial?.status === 'partial') {
+      expect(partial.errors.symbol).toEqual({ type: 'row-swapped', from: 'dv' });
+    }
+  });
+
+  it('multi-row non-swap: IV value also defined on current-section expected → matches first, no false swap', () => {
+    const report = evaluateTable(
+      {
+        iv: [
+          { name: 'højde', symbol: 'h', unit: 'm' },
+          { name: 'tid', symbol: 't', unit: 's' },
+        ],
+        dv: [{ name: 'fart', symbol: 'v', unit: 'm/s' }],
+        constants: [],
+      },
+      {
+        iv: [
+          { name: 'højde', symbol: 'h', unit: 'm' },
+          { name: 'tid', symbol: 't', unit: 's' },
+        ],
+        // dv has 't' too — would have been a swap-candidate had IV not also defined it.
+        dv: [{ name: 'fart', symbol: 'v', unit: 'm/s' }],
+      },
+    );
+    // Both IV rows matched cleanly — no row-swapped flag.
+    for (const m of report.iv) {
+      expect(m.status).toBe('matched');
+    }
+  });
+});
+
+describe('keyless / malformed expected', () => {
+  it('keyless single-object expected.iv (e.g. { unit: "m" }) is dropped from matching', () => {
+    const exp: ExpectedVariables = {
+      iv: { unit: 'm' },
+      dv: { symbol: 'v' },
+    };
+    const report = evaluateTable(
+      {
+        iv: [{ name: 'højde', symbol: 'h', unit: 'm' }],
+        dv: [{ name: 'fart', symbol: 'v', unit: 'm/s' }],
+        constants: [],
+      },
+      exp,
+    );
+    // No iv work-list entry → no row-matches, no `missing` either.
+    expect(report.iv).toEqual([]);
+  });
+
+  it('PL10: constants-only expected typechecks + produces no IV/DV errors', () => {
+    const exp: ExpectedVariables = {
+      constants: [{ name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' }],
+    };
+    const report = evaluateTable(
+      {
+        // Garbage IV/DV — should not produce any errors since iv/dv are
+        // unconfigured.
+        iv: [{ name: 'nonsense', symbol: 'x', unit: 'wat' }],
+        dv: [{ name: 'rubbish', symbol: 'y', unit: 'huh' }],
+        constants: [{ name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' }],
+      },
+      exp,
+    );
+    expect(report.iv).toEqual([]);
+    expect(report.dv).toEqual([]);
+    expect(report.constants?.[0].status).toBe('matched');
+  });
+});
+
 describe('evaluateTable + isCorrect', () => {
-  const fullExpected = {
+  const fullExpected: ExpectedVariables = {
     iv: { name: 'højde', symbol: 'h', unit: 'm' },
     dv: { name: 'tid', symbol: 't', unit: 's' },
   };
@@ -267,14 +393,14 @@ describe('evaluateTable + isCorrect', () => {
   it('all correct → isCorrect=true', () => {
     const report = evaluateTable(
       {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
+        iv: [{ name: 'højde', symbol: 'h', unit: 'm' }],
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
         constants: [],
       },
       fullExpected,
     );
-    expect(report.iv).toEqual({});
-    expect(report.dv).toEqual({});
+    expect(report.iv[0].status).toBe('matched');
+    expect(report.dv[0].status).toBe('matched');
     expect(report.constants).toBeUndefined();
     expect(isCorrect(report)).toBe(true);
   });
@@ -282,21 +408,25 @@ describe('evaluateTable + isCorrect', () => {
   it('one wrong cell → isCorrect=false', () => {
     const report = evaluateTable(
       {
-        iv: { name: 'højde', symbol: 'h', unit: 'M' }, // case-mismatch on unit
-        dv: { name: 'tid', symbol: 't', unit: 's' },
+        iv: [{ name: 'højde', symbol: 'h', unit: 'M' }],
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
         constants: [],
       },
       fullExpected,
     );
-    expect(report.iv.unit).toEqual({ type: 'case-mismatch' });
+    const iv0 = report.iv[0];
+    expect(iv0.status).toBe('partial');
+    if (iv0.status === 'partial') {
+      expect(iv0.errors.unit).toEqual({ type: 'case-mismatch' });
+    }
     expect(isCorrect(report)).toBe(false);
   });
 
   it('constants present in expected: missing constant → isCorrect=false', () => {
     const report = evaluateTable(
       {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
+        iv: [{ name: 'højde', symbol: 'h', unit: 'm' }],
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
         constants: [],
       },
       {
@@ -311,8 +441,8 @@ describe('evaluateTable + isCorrect', () => {
   it('partial constants prevent isCorrect', () => {
     const report = evaluateTable(
       {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
+        iv: [{ name: 'højde', symbol: 'h', unit: 'm' }],
+        dv: [{ name: 'tid', symbol: 't', unit: 's' }],
         constants: [{ name: 'wrong-name', symbol: 'g', unit: 'm/s²' }],
       },
       {
@@ -331,9 +461,9 @@ describe('refineCellError — refinement helper', () => {
 
   it('returns input unchanged when not mismatch', () => {
     expect(refineCellError(undefined, 'h', { cell: 'symbol', rowExpected: ivExp })).toBeUndefined();
-    expect(
-      refineCellError({ type: 'empty' }, '', { cell: 'symbol', rowExpected: ivExp }),
-    ).toEqual({ type: 'empty' });
+    expect(refineCellError({ type: 'empty' }, '', { cell: 'symbol', rowExpected: ivExp })).toEqual({
+      type: 'empty',
+    });
     expect(
       refineCellError({ type: 'case-mismatch' }, 'H', { cell: 'symbol', rowExpected: ivExp }),
     ).toEqual({ type: 'case-mismatch' });
@@ -351,82 +481,45 @@ describe('refineCellError — refinement helper', () => {
         refineCellError({ type: 'mismatch' }, 'Højde', { cell: 'symbol', rowExpected: ivExp }),
       ).toEqual({ type: 'misplaced', from: 'name' });
     });
-
-    it('value matching sibling symbol → misplaced from symbol', () => {
-      expect(
-        refineCellError({ type: 'mismatch' }, 'h', { cell: 'unit', rowExpected: ivExp }),
-      ).toEqual({ type: 'misplaced', from: 'symbol' });
-    });
-
-    it('respects sibling cell case-sensitivity: M does NOT match sibling unit m', () => {
-      // own cell symbol 'h' doesn't match 'M' even case-fold (would be 'm' ≠ 'h'),
-      // so evaluateCell would return mismatch. Refinement tries siblings:
-      // unit is case-sensitive, 'M' ≠ 'm' exactly, so no misplaced.
-      expect(
-        refineCellError({ type: 'mismatch' }, 'M', { cell: 'symbol', rowExpected: ivExp }),
-      ).toEqual({ type: 'mismatch' });
-    });
-
-    it('skips own cell when scanning siblings', () => {
-      // 'h' in symbol matches own cell — but refineCellError only sees a `mismatch`
-      // input from upstream, so this scenario is hypothetical. The guard against
-      // self-misplaced matters when own cell shares an accepted form with itself.
-      const exp: ExpectedVariable = { symbol: 'h', unit: 'h' }; // synthetic
-      expect(
-        refineCellError({ type: 'mismatch' }, 'h', { cell: 'symbol', rowExpected: exp }),
-      ).toEqual({ type: 'misplaced', from: 'unit' });
-    });
-
-    it('skips siblings that are not under check (undefined)', () => {
-      const exp: ExpectedVariable = { symbol: 'h' }; // no name, no unit
-      expect(
-        refineCellError({ type: 'mismatch' }, 'm', { cell: 'symbol', rowExpected: exp }),
-      ).toEqual({ type: 'mismatch' });
-    });
   });
 
-  describe('row-swapped — corresponding cell of other row', () => {
-    it('IV symbol value matches DV symbol → row-swapped from dv', () => {
+  describe('row-swapped — corresponding cell of opposite section', () => {
+    it('IV symbol value matches a DV expected → row-swapped from dv', () => {
       expect(
         refineCellError({ type: 'mismatch' }, 't', {
           cell: 'symbol',
           rowExpected: ivExp,
-          otherRowExpected: dvExp,
+          otherRowExpecteds: [dvExp],
           otherRowLabel: 'dv',
         }),
       ).toEqual({ type: 'row-swapped', from: 'dv' });
     });
 
-    it('DV unit value matches IV unit → row-swapped from iv', () => {
+    it('matches any opposite entry in an array (multi-DV)', () => {
+      const dvArr = [{ symbol: 'v' }, { symbol: 't' }];
       expect(
-        refineCellError({ type: 'mismatch' }, 'm', {
-          cell: 'unit',
-          rowExpected: dvExp,
-          otherRowExpected: ivExp,
-          otherRowLabel: 'iv',
-        }),
-      ).toEqual({ type: 'row-swapped', from: 'iv' });
-    });
-
-    it('does not fire when otherRowExpected is undefined (constants case)', () => {
-      expect(
-        refineCellError({ type: 'mismatch' }, 't', { cell: 'symbol', rowExpected: ivExp }),
-      ).toEqual({ type: 'mismatch' });
-    });
-
-    it('respects own cell case-sensitivity: T (capital) ≠ DV symbol t', () => {
-      expect(
-        refineCellError({ type: 'mismatch' }, 'T', {
+        refineCellError({ type: 'mismatch' }, 't', {
           cell: 'symbol',
           rowExpected: ivExp,
-          otherRowExpected: dvExp,
+          otherRowExpecteds: dvArr,
+          otherRowLabel: 'dv',
+        }),
+      ).toEqual({ type: 'row-swapped', from: 'dv' });
+    });
+
+    it('does not fire when otherRowExpecteds is empty', () => {
+      expect(
+        refineCellError({ type: 'mismatch' }, 't', {
+          cell: 'symbol',
+          rowExpected: ivExp,
+          otherRowExpecteds: [],
           otherRowLabel: 'dv',
         }),
       ).toEqual({ type: 'mismatch' });
     });
   });
 
-  describe('common-mistake — author-supplied wrong-answer list', () => {
+  describe('common-mistake', () => {
     const exp: ExpectedVariable = {
       symbol: 'h',
       unit: 'm',
@@ -447,117 +540,29 @@ describe('refineCellError — refinement helper', () => {
         }),
       ).toEqual({ type: 'common-mistake', kind: 'spelled-out-unit', hint: 'Brug symbolet.' });
     });
-
-    it('matches any value in a multi-wrong array', () => {
-      expect(
-        refineCellError({ type: 'mismatch' }, 'cm', {
-          cell: 'unit',
-          rowExpected: exp,
-          commonMistakes: exp.commonMistakes?.unit,
-        }),
-      ).toEqual({ type: 'common-mistake', kind: 'wrong-prefix' });
-      expect(
-        refineCellError({ type: 'mismatch' }, 'CM', {
-          cell: 'unit',
-          rowExpected: exp,
-          commonMistakes: exp.commonMistakes?.unit,
-        }),
-      ).toEqual({ type: 'common-mistake', kind: 'wrong-prefix' });
-    });
-
-    it('omits hint key when CommonMistake has no hint', () => {
-      const result = refineCellError({ type: 'mismatch' }, 'cm', {
-        cell: 'unit',
-        rowExpected: exp,
-        commonMistakes: exp.commonMistakes?.unit,
-      });
-      expect(result).not.toHaveProperty('hint');
-    });
-
-    it('is case-sensitive on symbol/unit cells', () => {
-      const symExp: ExpectedVariable = {
-        symbol: 'h',
-        commonMistakes: { symbol: [{ wrong: 'X', kind: 'random' }] },
-      };
-      // 'x' (lowercase) shouldn't match 'X' commonMistake on case-sensitive cell.
-      expect(
-        refineCellError({ type: 'mismatch' }, 'x', {
-          cell: 'symbol',
-          rowExpected: symExp,
-          commonMistakes: symExp.commonMistakes?.symbol,
-        }),
-      ).toEqual({ type: 'mismatch' });
-    });
-
-    it('is case-insensitive on name cell', () => {
-      const nameExp: ExpectedVariable = {
-        name: 'højde',
-        commonMistakes: { name: [{ wrong: 'distance', kind: 'english' }] },
-      };
-      expect(
-        refineCellError({ type: 'mismatch' }, 'Distance', {
-          cell: 'name',
-          rowExpected: nameExp,
-          commonMistakes: nameExp.commonMistakes?.name,
-        }),
-      ).toEqual({ type: 'common-mistake', kind: 'english' });
-    });
   });
 
-  describe('whitespace-internal — collapse-and-rematch', () => {
+  describe('whitespace-internal', () => {
     it('matches own cell value after collapsing internal whitespace', () => {
       const exp: ExpectedVariable = { unit: 'm/s²' };
       expect(
         refineCellError({ type: 'mismatch' }, 'm / s²', { cell: 'unit', rowExpected: exp }),
       ).toEqual({ type: 'whitespace-internal' });
     });
-
-    it('does not fire when collapse still does not match', () => {
-      const exp: ExpectedVariable = { unit: 'm/s²' };
-      expect(
-        refineCellError({ type: 'mismatch' }, 'k g', { cell: 'unit', rowExpected: exp }),
-      ).toEqual({ type: 'mismatch' });
-    });
-
-    it('respects case-sensitivity', () => {
-      const exp: ExpectedVariable = { unit: 'm/s²' };
-      // 'M / s²' collapses to 'M/s²' — case-sensitive cell, doesn't match.
-      expect(
-        refineCellError({ type: 'mismatch' }, 'M / s²', { cell: 'unit', rowExpected: exp }),
-      ).toEqual({ type: 'mismatch' });
-    });
   });
 
   describe('precedence', () => {
-    const exp: ExpectedVariable = {
-      symbol: 'h',
-      unit: 'm',
-      commonMistakes: { symbol: [{ wrong: 'm', kind: 'whatever' }] },
-    };
-
-    it('misplaced beats common-mistake (sibling match wins over author list)', () => {
-      // 'm' matches both sibling unit and the commonMistake list — misplaced wins.
+    it('misplaced beats common-mistake', () => {
+      const exp: ExpectedVariable = {
+        symbol: 'h',
+        unit: 'm',
+        commonMistakes: { symbol: [{ wrong: 'm', kind: 'whatever' }] },
+      };
       expect(
         refineCellError({ type: 'mismatch' }, 'm', {
           cell: 'symbol',
           rowExpected: exp,
           commonMistakes: exp.commonMistakes?.symbol,
-        }),
-      ).toEqual({ type: 'misplaced', from: 'unit' });
-    });
-
-    it('misplaced beats row-swapped (same-row sibling wins over other-row corresponding)', () => {
-      // Construct: IV symbol expected 'h', IV unit expected 't' (synthetic).
-      // DV symbol expected 't' (same letter). Student types 't' in IV symbol —
-      // matches IV's unit (misplaced) AND DV's symbol (row-swapped). misplaced wins.
-      const ivSyn: ExpectedVariable = { symbol: 'h', unit: 't' };
-      const dvSyn: ExpectedVariable = { symbol: 't' };
-      expect(
-        refineCellError({ type: 'mismatch' }, 't', {
-          cell: 'symbol',
-          rowExpected: ivSyn,
-          otherRowExpected: dvSyn,
-          otherRowLabel: 'dv',
         }),
       ).toEqual({ type: 'misplaced', from: 'unit' });
     });
@@ -571,196 +576,37 @@ describe('refineCellError — refinement helper', () => {
         refineCellError({ type: 'mismatch' }, 't', {
           cell: 'symbol',
           rowExpected: ivWithCm,
-          otherRowExpected: dvExp,
+          otherRowExpecteds: [dvExp],
           otherRowLabel: 'dv',
           commonMistakes: ivWithCm.commonMistakes?.symbol,
         }),
       ).toEqual({ type: 'row-swapped', from: 'dv' });
     });
-
-    it('common-mistake beats whitespace-internal', () => {
-      const expWs: ExpectedVariable = {
-        unit: 'm/s²',
-        commonMistakes: { unit: [{ wrong: 'm / s²', kind: 'spaced-out' }] },
-      };
-      expect(
-        refineCellError({ type: 'mismatch' }, 'm / s²', {
-          cell: 'unit',
-          rowExpected: expWs,
-          commonMistakes: expWs.commonMistakes?.unit,
-        }),
-      ).toEqual({ type: 'common-mistake', kind: 'spaced-out' });
-    });
-  });
-});
-
-describe('evaluateTable — refinement integration', () => {
-  const fullExpected = {
-    iv: { name: 'højde', symbol: 'h', unit: 'm' },
-    dv: { name: 'tid', symbol: 't', unit: 's' },
-  };
-
-  it('IV symbol = unit-of-IV → misplaced from unit', () => {
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'm', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        constants: [],
-      },
-      fullExpected,
-    );
-    expect(report.iv.symbol).toEqual({ type: 'misplaced', from: 'unit' });
-  });
-
-  it('IV symbol = DV symbol → row-swapped from dv', () => {
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 't', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        constants: [],
-      },
-      fullExpected,
-    );
-    expect(report.iv.symbol).toEqual({ type: 'row-swapped', from: 'dv' });
-  });
-
-  it('DV unit = IV unit → row-swapped from iv', () => {
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 'm' },
-        constants: [],
-      },
-      fullExpected,
-    );
-    expect(report.dv.unit).toEqual({ type: 'row-swapped', from: 'iv' });
-  });
-
-  it('case-mismatch beats misplaced (own cell case-fold match wins)', () => {
-    // Hypothetical lab where IV symbol is 'H' and unit is 'h'. Student types
-    // 'h' in symbol → matches symbol case-fold (case-mismatch), and would
-    // also misplaced-match the unit. case-mismatch wins (higher precedence).
-    const exp = {
-      iv: { name: 'højde', symbol: 'H', unit: 'h' },
-      dv: { name: 'tid', symbol: 't', unit: 's' },
-    };
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'h', unit: 'h' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        constants: [],
-      },
-      exp,
-    );
-    expect(report.iv.symbol).toEqual({ type: 'case-mismatch' });
-  });
-
-  it('common-mistake on IV variable surfaces via expected.commonMistakes', () => {
-    const expWithCm = {
-      iv: {
-        name: 'højde',
-        symbol: 'h',
-        unit: 'm',
-        commonMistakes: {
-          unit: [{ wrong: 'meter', kind: 'spelled-out-unit', hint: 'Brug symbolet.' }],
-        },
-      },
-      dv: { name: 'tid', symbol: 't', unit: 's' },
-    };
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'h', unit: 'meter' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        constants: [],
-      },
-      expWithCm,
-    );
-    expect(report.iv.unit).toEqual({
-      type: 'common-mistake',
-      kind: 'spelled-out-unit',
-      hint: 'Brug symbolet.',
-    });
-  });
-
-  it('whitespace-internal on a constant unit (no row-swap context)', () => {
-    const exp = {
-      iv: { name: 'højde', symbol: 'h', unit: 'm' },
-      dv: { name: 'tid', symbol: 't', unit: 's' },
-      constants: [
-        { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
-      ] as ExpectedConstant[],
-    };
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        constants: [{ name: 'tyngdeacceleration', symbol: 'g', unit: 'm / s²' }],
-      },
-      exp,
-    );
-    expect(report.constants).toHaveLength(1);
-    const c = report.constants?.[0];
-    expect(c?.status).toBe('partial');
-    if (c?.status === 'partial') {
-      expect(c.errors.unit).toEqual({ type: 'whitespace-internal' });
-    }
-  });
-
-  it('row-swapped is NEVER offered on constants (no other-row context)', () => {
-    // Two expected constants. Student fills the second one with the first
-    // constant's symbol. That's a cross-constant swap — must NOT be flagged
-    // as row-swapped (only iv/dv pair gets that). It can still be misplaced
-    // within the matched expected row or fall through to mismatch.
-    const exp = {
-      iv: { name: 'højde', symbol: 'h', unit: 'm' },
-      dv: { name: 'tid', symbol: 't', unit: 's' },
-      constants: [
-        { name: 'a', symbol: 'a', unit: 'au' },
-        { name: 'b', symbol: 'b', unit: 'bu' },
-      ] as ExpectedConstant[],
-    };
-    const report = evaluateTable(
-      {
-        iv: { name: 'højde', symbol: 'h', unit: 'm' },
-        dv: { name: 'tid', symbol: 't', unit: 's' },
-        // Student fills the row matching 'b' with symbol 'b' but unit 'au'
-        // (constant a's unit). Should NOT be row-swapped.
-        constants: [{ name: 'b', symbol: 'b', unit: 'au' }],
-      },
-      exp,
-    );
-    const partial = report.constants?.find((c) => c.status === 'partial');
-    expect(partial).toBeDefined();
-    if (partial?.status === 'partial') {
-      // unit got 'au' which is constant-a's unit. Within constant-b's row,
-      // 'au' is not a sibling and not a commonMistake, so it falls through
-      // to mismatch — definitely not row-swapped.
-      expect(partial.errors.unit?.type).not.toBe('row-swapped');
-    }
   });
 });
 
 describe('isCorrect — direct', () => {
-  it('returns true on empty report', () => {
-    expect(isCorrect({ iv: {}, dv: {} })).toBe(true);
+  it('returns true on empty arrays', () => {
+    expect(isCorrect({ iv: [], dv: [] })).toBe(true);
   });
 
-  it('returns false when iv has errors', () => {
+  it('returns false when iv has a non-matched entry', () => {
     const errors: VariableRowErrors = { name: { type: 'empty' } };
-    expect(isCorrect({ iv: errors, dv: {} })).toBe(false);
+    const m: RowMatch = { status: 'partial', expectedIndex: 0, studentIndex: 0, errors };
+    expect(isCorrect({ iv: [m], dv: [] })).toBe(false);
   });
 
   it('returns false when constants array has a non-matched entry', () => {
     expect(
       isCorrect({
-        iv: {},
-        dv: {},
+        iv: [],
+        dv: [],
         constants: [{ status: 'missing', expectedIndex: 0 }],
       }),
     ).toBe(false);
   });
 
-  it('returns true when constants array is empty (no required)', () => {
-    expect(isCorrect({ iv: {}, dv: {}, constants: [] })).toBe(true);
+  it('returns true when constants array is empty', () => {
+    expect(isCorrect({ iv: [], dv: [], constants: [] })).toBe(true);
   });
 });

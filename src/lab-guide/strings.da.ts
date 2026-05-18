@@ -144,7 +144,18 @@ export const strings = {
       symbolHeader: 'Symbol',
       unitHeader: 'Enhed',
       addConstantLabel: '+ Tilføj konstant',
-      removeConstantAriaLabel: 'Fjern konstant',
+      addIvLabel: '+ Tilføj uafhængig variabel',
+      addDvLabel: '+ Tilføj afhængig variabel',
+      /** Aria labels for the per-row remove (×) button. Vars: {n} = 1-based row
+       *  index, so screen readers can distinguish which row a button removes. */
+      removeConstantAriaLabel: 'Fjern konstant {n}',
+      removeIvAriaLabel: 'Fjern uafhængig variabel {n}',
+      removeDvAriaLabel: 'Fjern afhængig variabel {n}',
+      /** Repeated-row aria labels. Vars: {n} = 1-based row index, {field} =
+       *  nameHeader/symbolHeader/unitHeader. */
+      constantRowAriaLabel: 'Konstant {n}, {field}',
+      ivRowAriaLabel: 'Uafhængig variabel {n}, {field}',
+      dvRowAriaLabel: 'Afhængig variabel {n}, {field}',
       checkLabel: 'Tjek mine variable',
       status: {
         idle: 'Ikke tjekket endnu',
@@ -227,6 +238,10 @@ export const strings = {
          *  first synonym from each expected.constants[i] accepted-array via
          *  asArray(...)[0]. */
         constantMissing: 'Du mangler en konstant: {name} ({symbol}, {unit}).',
+        /** Variants of constantMissing for IV/DV sections, surfaced when a
+         *  section's expected entry has no matching student row. */
+        ivMissing: 'Du mangler en uafhængig variabel: {name} ({symbol}, {unit}).',
+        dvMissing: 'Du mangler en afhængig variabel: {name} ({symbol}, {unit}).',
       },
     },
   },

@@ -9,7 +9,7 @@ import { TemplateHypothesisSection } from './TemplateHypothesisSection';
 
     Når du kopierer template'en til en rigtig lab:
       - Erstat 'variables' med dit eget VariableTable id (samme id i RevealWhen).
-      - Tilpas hvilke felter TemplateHypothesisSection indlejrer (her: iv.symbol/dv.symbol).
+      - Tilpas hvilke felter TemplateHypothesisSection indlejrer (her: første IV-/DV-rækkes symbol).
       - RubricResponse skal have `dependsOn` på symbol-parret, så en
         ændring i variabler invaliderer en tidligere evalueret hypotese. */}
 export const variablesExpected = {
@@ -45,11 +45,21 @@ export const variablesExpected = {
       ],
     },
   },
+  constants: [
+    { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
+    { name: 'masse', symbol: 'm', unit: 'kg' },
+  ],
 };
 
 Inden du går i gang med målingerne: identificér først hvad du arbejder med, og formulér derefter en kort hypotese om sammenhængen.
 
-<VariableTable id="variables" expected={variablesExpected} />
+<VariableTable
+  id="variables"
+  iv={{ count: 1 }}
+  dv={{ count: 1 }}
+  constants={{ count: 2 }}
+  expected={variablesExpected}
+/>
 
 <RevealWhen widgetIds={['variables']} strict clearOnHide={['hypotese']}>
   <TemplateHypothesisSection rubric={rubric} />

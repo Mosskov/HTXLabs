@@ -1,21 +1,27 @@
 // Student-facing variable identification widget: three sections (IV, DV,
-// constants) × three cells (name, symbol, unit). Reactive — registers a
-// `filled` widget state whenever IV+DV name+symbol cells are non-empty
-// (and unit cells too, when `requireUnits` is true). Constants are
-// repeatable and never required.
+// constants), each independently configurable. By default IV and DV are
+// single fixed rows and constants are 0..∞ student-added rows; authors can
+// override per-section with `{ count: N }` for a fixed row count, or
+// `{ min, max }` to let the student pick. The widget registers a `filled`
+// widget state whenever every visible IV/DV cell is non-empty (and unit
+// cells too when `requireUnits` is true), the row-count for each section
+// falls in `[min, max]`, and — when the author set the `constants` prop —
+// every visible constant row is filled.
 //
-// The `values` facet on the registration lets sibling widgets read the
-// committed symbols (the template hypothesis section interpolates them
-// into its rubric prompt). Gate evaluators ignore `values`.
+// The `values` facet on the registration publishes a uniform array shape
+// `{ iv: VariableEntry[], dv: VariableEntry[], constants: VariableEntry[] }`
+// so sibling widgets (e.g. the template's hypothesis section) can read it
+// the same way regardless of section count. Gate evaluators ignore `values`.
 //
-// Optional `expected` prop opts in to correctness checking + the Tjek
-// flow: the widget publishes a `correct: boolean` bit + opaque `errors`
-// payload, both consumed by the `all-validated` gate. The published
-// `correct` bit is snapshot-gated on the most recent Tjek click — typing
-// correct values without clicking Tjek keeps `correct: false`, and
-// editing any cell after a passing Tjek flips it back to `false`. The
-// matching logic lives in `variableTableCorrectness.ts` so this file
-// stays presentation-focused.
+// Optional `expected` prop opts in to correctness checking + the Tjek flow:
+// the widget publishes a `correct: boolean` + opaque `errors` payload, both
+// consumed by the `all-validated` gate. `expected.iv` / `expected.dv` accept
+// either a single shorthand object (back-compat) OR an array; both normalise
+// to an array internally and feed the same order-independent matcher used
+// for constants. The published `correct` bit is snapshot-gated on the most
+// recent Tjek click — typing correct values without clicking Tjek keeps
+// `correct: false`, and editing any cell after a passing Tjek flips it back
+// to `false`. The matching logic lives in `variableTableCorrectness.ts`.
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
@@ -26,7 +32,9 @@ import {
   type CellSpec,
   type CorrectnessReport,
   type ExpectedVariables,
+  type RowMatch,
   type VariableRowErrors,
+  asExpectedArray,
   cellAcceptedValues,
   evaluateTable,
   isCorrect,
@@ -41,23 +49,38 @@ export interface VariableEntry {
 }
 
 export interface VariableTableValues {
-  iv: VariableEntry;
-  dv: VariableEntry;
+  iv: VariableEntry[];
+  dv: VariableEntry[];
   constants: VariableEntry[];
+}
+
+export type SectionConfig = { count: number } | { min: number; max: number };
+
+interface Bounds {
+  min: number;
+  max: number;
 }
 
 interface Props {
   id: string;
-  /** When true, the `unit` cell on IV and DV must be filled for the widget
-   *  to report `filled: true`. Default `false` because not all lab theories
-   *  teach specific units; the template lab leaves this off. */
+  /** When true, the `unit` cell on every visible IV and DV row must be filled
+   *  for the widget to report `filled: true`. Constants ignore this flag.
+   *  Default `false` because not all lab theories teach specific units. */
   requireUnits?: boolean;
   /** Optional author-supplied answer key. When set, the widget computes a
    *  `correct: boolean` + structured `errors` payload (in addition to the
    *  default `filled` bit) so an `all-validated` gate can require correct
-   *  answers. Each cell in each expected entry is independently optional —
-   *  the author validates only what they care about. */
+   *  answers. `iv` / `dv` accept a single object or an array; constants is
+   *  always an array. Each cell in each expected entry is independently
+   *  optional — the author validates only what they care about. */
   expected?: ExpectedVariables;
+  /** Per-section row-count config. Omit to keep today's behaviour: IV/DV are
+   *  exactly one fixed row, constants are 0..∞ student-added. `{ count: N }`
+   *  pins the row count (no +/× controls). `{ min, max }` lets the student
+   *  add/remove rows within bounds. */
+  iv?: SectionConfig;
+  dv?: SectionConfig;
+  constants?: SectionConfig;
   /** Per-instance label overrides (SPEC §17). Defaults live in strings.da.ts. */
   ivLabel?: string;
   dvLabel?: string;
@@ -66,6 +89,17 @@ interface Props {
   symbolHeader?: string;
   unitHeader?: string;
   addConstantLabel?: string;
+  addIvLabel?: string;
+  addDvLabel?: string;
+  removeConstantAriaLabel?: string;
+  removeIvAriaLabel?: string;
+  removeDvAriaLabel?: string;
+  constantRowAriaLabel?: string;
+  ivRowAriaLabel?: string;
+  dvRowAriaLabel?: string;
+  constantMissingMessage?: string;
+  ivMissingMessage?: string;
+  dvMissingMessage?: string;
   /** Tjek button label override (SPEC §17). Only rendered when `expected`
    *  is provided. */
   checkLabel?: string;
@@ -81,16 +115,47 @@ interface Props {
 
 const EMPTY: VariableEntry = { name: '', symbol: '', unit: '' };
 
-function readValues(raw: unknown): VariableTableValues {
+function resolveBounds(config: SectionConfig | undefined, fallback: Bounds): Bounds {
+  if (config === undefined) return fallback;
+  if ('count' in config) return { min: config.count, max: config.count };
+  return { min: config.min, max: config.max };
+}
+
+const DEFAULT_IV_BOUNDS: Bounds = { min: 1, max: 1 };
+const DEFAULT_DV_BOUNDS: Bounds = { min: 1, max: 1 };
+const DEFAULT_CONSTANTS_BOUNDS: Bounds = { min: 0, max: Number.POSITIVE_INFINITY };
+
+function emptyRows(n: number): VariableEntry[] {
+  const finite = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  return Array.from({ length: finite }, () => ({ ...EMPTY }));
+}
+
+function readRows(raw: unknown, min: number): VariableEntry[] {
+  if (Array.isArray(raw)) {
+    const rows = raw.map((c) => ({ ...EMPTY, ...(c as Partial<VariableEntry>) }));
+    while (rows.length < min) rows.push({ ...EMPTY });
+    return rows;
+  }
+  return emptyRows(min);
+}
+
+function readValues(
+  raw: unknown,
+  bounds: { iv: Bounds; dv: Bounds; constants: Bounds },
+): VariableTableValues {
   if (raw && typeof raw === 'object') {
-    const r = raw as Partial<VariableTableValues>;
+    const r = raw as { iv?: unknown; dv?: unknown; constants?: unknown };
     return {
-      iv: { ...EMPTY, ...(r.iv ?? {}) },
-      dv: { ...EMPTY, ...(r.dv ?? {}) },
-      constants: Array.isArray(r.constants) ? r.constants.map((c) => ({ ...EMPTY, ...c })) : [],
+      iv: readRows(r.iv, bounds.iv.min),
+      dv: readRows(r.dv, bounds.dv.min),
+      constants: readRows(r.constants, bounds.constants.min),
     };
   }
-  return { iv: { ...EMPTY }, dv: { ...EMPTY }, constants: [] };
+  return {
+    iv: emptyRows(bounds.iv.min),
+    dv: emptyRows(bounds.dv.min),
+    constants: emptyRows(bounds.constants.min),
+  };
 }
 
 function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
@@ -100,8 +165,50 @@ function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
   return nameOk && symbolOk && unitOk;
 }
 
+function sectionFilled(rows: VariableEntry[], bounds: Bounds, requireUnits: boolean): boolean {
+  if (rows.length < bounds.min) return false;
+  if (Number.isFinite(bounds.max) && rows.length > bounds.max) return false;
+  return rows.every((r) => entryFilled(r, requireUnits));
+}
+
 function valuesEqual(a: VariableTableValues, b: VariableTableValues): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Truncate an expected array to `max` entries, warning in dev when the
+ *  author oversupplied (a permanent-lock authoring failure — the student
+ *  physically cannot render enough rows). */
+function clampExpected<T>(
+  widgetId: string,
+  section: 'iv' | 'dv' | 'constants',
+  expected: T[],
+  bounds: Bounds,
+): T[] {
+  if (!Number.isFinite(bounds.max) || expected.length <= bounds.max) return expected;
+  if (import.meta.env.DEV) {
+    console.warn(
+      `[VariableTable id=${widgetId}] expected.${section}.length (${expected.length}) exceeds section max (${bounds.max}) — extra entries dropped to keep the widget useable in dev.`,
+    );
+  }
+  return expected.slice(0, bounds.max);
+}
+
+/** Dev-only warning when an expected entry has neither symbol nor name set —
+ *  such entries are silently dropped by `evaluateRowGroup` (no `missing`),
+ *  so without this warning a misauthored lab would look fine. */
+function warnMalformed(
+  widgetId: string,
+  section: 'iv' | 'dv' | 'constants',
+  expected: ReadonlyArray<{ symbol?: unknown; name?: unknown }>,
+): void {
+  if (!import.meta.env.DEV) return;
+  for (const e of expected) {
+    if (e.symbol === undefined && e.name === undefined) {
+      console.warn(
+        `[VariableTable id=${widgetId}] expected.${section} entry has neither symbol nor name — it will never match any student row.`,
+      );
+    }
+  }
 }
 
 /** Project a row's resolved hint per cell. Returns `null` for any cell
@@ -128,6 +235,9 @@ export function VariableTable({
   id,
   requireUnits = false,
   expected,
+  iv: ivConfig,
+  dv: dvConfig,
+  constants: constantsConfig,
   ivLabel,
   dvLabel,
   constantsLabel,
@@ -135,6 +245,17 @@ export function VariableTable({
   symbolHeader,
   unitHeader,
   addConstantLabel,
+  addIvLabel,
+  addDvLabel,
+  removeConstantAriaLabel,
+  removeIvAriaLabel,
+  removeDvAriaLabel,
+  constantRowAriaLabel,
+  ivRowAriaLabel,
+  dvRowAriaLabel,
+  constantMissingMessage,
+  ivMissingMessage,
+  dvMissingMessage,
   checkLabel,
   idleStatusLabel,
   checkedStatusLabel,
@@ -144,34 +265,56 @@ export function VariableTable({
 }: Props) {
   const { state, setWidgetValue, incrementVariableTableTier, setVariableTableLastChecked } =
     useRunner();
-  const values = readValues(state.widgetValues[id]);
-  const filled = entryFilled(values.iv, requireUnits) && entryFilled(values.dv, requireUnits);
 
-  const errors: CorrectnessReport | undefined = expected
-    ? evaluateTable(values, expected)
+  const bounds = {
+    iv: resolveBounds(ivConfig, DEFAULT_IV_BOUNDS),
+    dv: resolveBounds(dvConfig, DEFAULT_DV_BOUNDS),
+    constants: resolveBounds(constantsConfig, DEFAULT_CONSTANTS_BOUNDS),
+  };
+  const values = readValues(state.widgetValues[id], bounds);
+
+  // Resolve + clamp expected arrays once per render.
+  const ivExpectedArr = expected
+    ? clampExpected(id, 'iv', asExpectedArray(expected.iv), bounds.iv)
+    : [];
+  const dvExpectedArr = expected
+    ? clampExpected(id, 'dv', asExpectedArray(expected.dv), bounds.dv)
+    : [];
+  const constantsExpectedArr = expected?.constants
+    ? clampExpected(id, 'constants', expected.constants, bounds.constants)
     : undefined;
 
-  // Snapshot-gated `correct` (PL8): `correct: true` requires the current
-  // values to deep-equal the last-Tjek snapshot AND to evaluate to no errors.
-  // Without `expected`, `correct` stays undefined (back-compat).
+  if (import.meta.env.DEV && expected) {
+    warnMalformed(id, 'iv', ivExpectedArr);
+    warnMalformed(id, 'dv', dvExpectedArr);
+    if (constantsExpectedArr) warnMalformed(id, 'constants', constantsExpectedArr);
+  }
+
+  const ivFilled = sectionFilled(values.iv, bounds.iv, requireUnits);
+  const dvFilled = sectionFilled(values.dv, bounds.dv, requireUnits);
+  // PL11 carve-out: when the author did NOT pass a constants prop, the
+  // constants section's filled contribution is unconditionally true (matches
+  // today's behaviour where partial/blank constant rows don't block `filled`).
+  const constantsFilled =
+    constantsConfig === undefined ? true : sectionFilled(values.constants, bounds.constants, false);
+  const filled = ivFilled && dvFilled && constantsFilled;
+
+  const errors: CorrectnessReport | undefined = expected
+    ? evaluateTable(values, {
+        iv: ivExpectedArr,
+        dv: dvExpectedArr,
+        constants: constantsExpectedArr,
+      })
+    : undefined;
+
+  // Snapshot-gated `correct`: requires the current values to deep-equal the
+  // last-Tjek snapshot AND to evaluate to no errors. Without `expected`,
+  // `correct` stays undefined (back-compat).
   const lastChecked = state.variableTableLastChecked[id];
   const tjekStatus: 'idle' | 'checked' | 'dirty' =
     lastChecked === undefined ? 'idle' : valuesEqual(lastChecked, values) ? 'checked' : 'dirty';
   const correct =
     errors !== undefined ? filled && isCorrect(errors) && tjekStatus === 'checked' : undefined;
-
-  // Dev-only author guard: warn if a constant has neither symbol nor name —
-  // such an entry is silently skipped by evaluateConstants (never produces
-  // `missing`), so without this warning a misauthored lab would look fine.
-  if (import.meta.env.DEV && expected?.constants) {
-    for (const c of expected.constants) {
-      if (c.symbol === undefined && c.name === undefined) {
-        console.warn(
-          `[VariableTable id=${id}] expected.constants entry has neither symbol nor name — it will never match any student row.`,
-        );
-      }
-    }
-  }
 
   // Conditional spread: when `expected` is absent, omit the `correct`/`errors`
   // keys entirely (not `undefined`) so back-compat consumers can rely on
@@ -188,58 +331,56 @@ export function VariableTable({
     // already cover freshness (errors is purely derived), but documents intent
     // and survives future refactors that might drop cell-value deps.
     JSON.stringify(errors ?? null),
-    values.iv.name,
-    values.iv.symbol,
-    values.iv.unit,
-    values.dv.name,
-    values.dv.symbol,
-    values.dv.unit,
-    values.constants.map((c) => `${c.name}|${c.symbol}|${c.unit}`).join('§'),
+    JSON.stringify(values),
   ]);
 
-  function updateIv(field: keyof VariableEntry, next: string) {
-    setWidgetValue(id, { ...values, iv: { ...values.iv, [field]: next } });
+  function updateRow(
+    section: 'iv' | 'dv' | 'constants',
+    idx: number,
+    field: keyof VariableEntry,
+    next: string,
+  ) {
+    const rows = values[section].map((r, i) => (i === idx ? { ...r, [field]: next } : r));
+    setWidgetValue(id, { ...values, [section]: rows });
   }
-  function updateDv(field: keyof VariableEntry, next: string) {
-    setWidgetValue(id, { ...values, dv: { ...values.dv, [field]: next } });
+  function addRow(section: 'iv' | 'dv' | 'constants') {
+    setWidgetValue(id, { ...values, [section]: [...values[section], { ...EMPTY }] });
   }
-  function updateConstant(idx: number, field: keyof VariableEntry, next: string) {
-    const constants = values.constants.map((c, i) => (i === idx ? { ...c, [field]: next } : c));
-    setWidgetValue(id, { ...values, constants });
-  }
-  function addConstant() {
-    setWidgetValue(id, { ...values, constants: [...values.constants, { ...EMPTY }] });
-  }
-  function removeConstant(idx: number) {
-    setWidgetValue(id, { ...values, constants: values.constants.filter((_, i) => i !== idx) });
+  function removeRow(section: 'iv' | 'dv' | 'constants', idx: number) {
+    setWidgetValue(id, {
+      ...values,
+      [section]: values[section].filter((_, i) => i !== idx),
+    });
   }
 
   function handleTjek() {
     if (!expected || !errors) return;
     setVariableTableLastChecked(id, values);
     const cells: Cell[] = ['name', 'symbol', 'unit'];
-    const bumpRow = (
-      rowErrors: VariableRowErrors,
-      rowExpected: { name?: CellSpec; symbol?: CellSpec; unit?: CellSpec },
-      keyPrefix: string,
+    const bumpPartial = (
+      cm: RowMatch,
+      sectionPrefix: 'iv' | 'dv' | 'constants',
+      sectionExpected: ReadonlyArray<{
+        name?: CellSpec;
+        symbol?: CellSpec;
+        unit?: CellSpec;
+      }>,
     ) => {
+      if (cm.status !== 'partial') return;
+      const rowExpected = sectionExpected[cm.expectedIndex];
+      if (!rowExpected) return;
       for (const c of cells) {
-        const err = rowErrors[c];
+        const err = cm.errors[c];
         if (!err) continue;
         const cap = maxTierForCell(err, rowExpected[c], c);
         if (cap <= 0) continue;
-        incrementVariableTableTier(id, `${keyPrefix}.${c}`, cap);
+        incrementVariableTableTier(id, `${sectionPrefix}.${cm.expectedIndex}.${c}`, cap);
       }
     };
-    bumpRow(errors.iv, expected.iv, 'iv');
-    bumpRow(errors.dv, expected.dv, 'dv');
-    if (errors.constants && expected.constants) {
-      for (const cm of errors.constants) {
-        if (cm.status !== 'partial') continue;
-        const rowExpected = expected.constants[cm.expectedIndex];
-        if (!rowExpected) continue;
-        bumpRow(cm.errors, rowExpected, `constants.${cm.expectedIndex}`);
-      }
+    for (const m of errors.iv) bumpPartial(m, 'iv', ivExpectedArr);
+    for (const m of errors.dv) bumpPartial(m, 'dv', dvExpectedArr);
+    if (errors.constants && constantsExpectedArr) {
+      for (const m of errors.constants) bumpPartial(m, 'constants', constantsExpectedArr);
     }
   }
 
@@ -249,48 +390,51 @@ export function VariableTable({
   // so showing hints would leak answer guidance as the student types between
   // Tjek clicks. The tier counter survives reload so previously-revealed
   // hints keep showing after a refresh.
-  const ivTiers = state.variableTableHintTiers[id] ?? {};
+  const tiers = state.variableTableHintTiers[id] ?? {};
   const showHints = expected !== undefined && tjekStatus === 'checked';
-  const ivHints = showHints
-    ? rowHints(errors?.iv, expected.iv, (c) => ivTiers[`iv.${c}`] ?? 0)
-    : { name: null, symbol: null, unit: null };
-  const dvHints = showHints
-    ? rowHints(errors?.dv, expected.dv, (c) => ivTiers[`dv.${c}`] ?? 0)
-    : { name: null, symbol: null, unit: null };
-  function constantRowHints(studentIndex: number): Record<Cell, string | null> {
-    if (!showHints || !errors?.constants || !expected?.constants) {
-      return { name: null, symbol: null, unit: null };
-    }
-    // Constants are order-independent: a ConstantMatch's expectedIndex and
-    // studentIndex can differ. Hints render on the actual student row, so
-    // look up by studentIndex, then resolve rowExp + tier key from the
-    // match's expectedIndex (the persistent key used by handleTjek).
-    const cm = errors.constants.find(
-      (m) => m.status === 'partial' && m.studentIndex === studentIndex,
-    );
+
+  function rowHintsFor(
+    section: 'iv' | 'dv' | 'constants',
+    sectionExpected: ReadonlyArray<{
+      name?: CellSpec;
+      symbol?: CellSpec;
+      unit?: CellSpec;
+    }>,
+    matches: RowMatch[] | undefined,
+    studentIndex: number,
+  ): Record<Cell, string | null> {
+    if (!showHints || !matches) return { name: null, symbol: null, unit: null };
+    const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
     if (!cm || cm.status !== 'partial') return { name: null, symbol: null, unit: null };
-    const rowExp = expected.constants[cm.expectedIndex];
+    const rowExp = sectionExpected[cm.expectedIndex];
     if (!rowExp) return { name: null, symbol: null, unit: null };
-    return rowHints(cm.errors, rowExp, (c) => ivTiers[`constants.${cm.expectedIndex}.${c}`] ?? 0);
+    return rowHints(cm.errors, rowExp, (c) => tiers[`${section}.${cm.expectedIndex}.${c}`] ?? 0);
   }
 
-  // Missing-constants list: one line per expected constant the student has
-  // not added. Only surfaced after a Tjek click (tjekStatus === 'checked')
-  // so the message doesn't appear before the student has asked for feedback.
-  const missingConstantMessages: string[] = [];
-  if (showHints && errors?.constants && expected?.constants) {
-    for (const cm of errors.constants) {
-      if (cm.status !== 'missing') continue;
-      const exp = expected.constants[cm.expectedIndex];
+  function missingMessagesFor(
+    sectionExpected:
+      | ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>
+      | undefined,
+    matches: RowMatch[] | undefined,
+    template: string,
+  ): string[] {
+    if (!showHints || !matches || !sectionExpected) return [];
+    const out: string[] = [];
+    for (const m of matches) {
+      if (m.status !== 'missing') continue;
+      const exp = sectionExpected[m.expectedIndex];
       if (!exp) continue;
-      missingConstantMessages.push(
-        format(strings.widgets.variableTable.hints.constantMissing, {
+      out.push(
+        format(template, {
           name: cellAcceptedValues(exp.name)?.[0] ?? '',
           symbol: cellAcceptedValues(exp.symbol)?.[0] ?? '',
           unit: cellAcceptedValues(exp.unit)?.[0] ?? '',
         }),
       );
+      // Cap at one missing-message per section to avoid spam.
+      if (out.length >= 1) break;
     }
+    return out;
   }
 
   const nameH = nameHeader ?? strings.widgets.variableTable.nameHeader;
@@ -311,66 +455,83 @@ export function VariableTable({
       })
     : null;
 
+  const ivMissing = missingMessagesFor(
+    ivExpectedArr,
+    errors?.iv,
+    ivMissingMessage ?? strings.widgets.variableTable.hints.ivMissing,
+  );
+  const dvMissing = missingMessagesFor(
+    dvExpectedArr,
+    errors?.dv,
+    dvMissingMessage ?? strings.widgets.variableTable.hints.dvMissing,
+  );
+  const constantsMissing = missingMessagesFor(
+    constantsExpectedArr,
+    errors?.constants,
+    constantMissingMessage ?? strings.widgets.variableTable.hints.constantMissing,
+  );
+
   return (
     <div className="my-4 space-y-4">
-      <VariableSection
-        id={`${id}-iv`}
+      <RowGroupSection
+        sectionId="iv"
+        idPrefix={`${id}-iv`}
         label={ivLabel ?? strings.widgets.variableTable.ivLabel}
-        entry={values.iv}
-        onChange={updateIv}
+        rows={values.iv}
+        bounds={bounds.iv}
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
-        hints={ivHints}
+        addLabel={addIvLabel ?? strings.widgets.variableTable.addIvLabel}
+        removeAriaLabel={removeIvAriaLabel ?? strings.widgets.variableTable.removeIvAriaLabel}
+        rowAriaLabel={ivRowAriaLabel ?? strings.widgets.variableTable.ivRowAriaLabel}
+        onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
+        onAdd={() => addRow('iv')}
+        onRemove={(idx) => removeRow('iv', idx)}
+        getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
+        missingMessages={ivMissing}
         allowPaste={allowPaste}
       />
-      <VariableSection
-        id={`${id}-dv`}
+      <RowGroupSection
+        sectionId="dv"
+        idPrefix={`${id}-dv`}
         label={dvLabel ?? strings.widgets.variableTable.dvLabel}
-        entry={values.dv}
-        onChange={updateDv}
+        rows={values.dv}
+        bounds={bounds.dv}
         nameHeader={nameH}
         symbolHeader={symbolH}
         unitHeader={unitH}
-        hints={dvHints}
+        addLabel={addDvLabel ?? strings.widgets.variableTable.addDvLabel}
+        removeAriaLabel={removeDvAriaLabel ?? strings.widgets.variableTable.removeDvAriaLabel}
+        rowAriaLabel={dvRowAriaLabel ?? strings.widgets.variableTable.dvRowAriaLabel}
+        onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
+        onAdd={() => addRow('dv')}
+        onRemove={(idx) => removeRow('dv', idx)}
+        getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
+        missingMessages={dvMissing}
         allowPaste={allowPaste}
       />
-      <div className="rounded-md border border-slate-200 p-3">
-        <div className="mb-2 text-sm font-medium text-slate-800">
-          {constantsLabel ?? strings.widgets.variableTable.constantsLabel}
-        </div>
-        {values.constants.map((c, i) => (
-          <ConstantRow
-            // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a constants row
-            key={i}
-            id={`${id}-c${i}`}
-            rowIndex={i}
-            entry={c}
-            onChange={(field, next) => updateConstant(i, field, next)}
-            onRemove={() => removeConstant(i)}
-            nameHeader={nameH}
-            symbolHeader={symbolH}
-            unitHeader={unitH}
-            showHeaders={i === 0}
-            hints={constantRowHints(i)}
-            allowPaste={allowPaste}
-          />
-        ))}
-        {missingConstantMessages.length > 0 && (
-          <ul className="mb-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
-            {missingConstantMessages.map((msg) => (
-              <li key={msg}>{msg}</li>
-            ))}
-          </ul>
-        )}
-        <button
-          type="button"
-          onClick={addConstant}
-          className="mt-2 text-sm font-medium text-accent hover:underline"
-        >
-          {addConstantLabel ?? strings.widgets.variableTable.addConstantLabel}
-        </button>
-      </div>
+      <RowGroupSection
+        sectionId="constants"
+        idPrefix={`${id}-c`}
+        label={constantsLabel ?? strings.widgets.variableTable.constantsLabel}
+        rows={values.constants}
+        bounds={bounds.constants}
+        nameHeader={nameH}
+        symbolHeader={symbolH}
+        unitHeader={unitH}
+        addLabel={addConstantLabel ?? strings.widgets.variableTable.addConstantLabel}
+        removeAriaLabel={
+          removeConstantAriaLabel ?? strings.widgets.variableTable.removeConstantAriaLabel
+        }
+        rowAriaLabel={constantRowAriaLabel ?? strings.widgets.variableTable.constantRowAriaLabel}
+        onChange={(idx, field, next) => updateRow('constants', idx, field, next)}
+        onAdd={() => addRow('constants')}
+        onRemove={(idx) => removeRow('constants', idx)}
+        getHints={(s) => rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)}
+        missingMessages={constantsMissing}
+        allowPaste={allowPaste}
+      />
       {expected && (
         <div className="mt-2 flex items-center gap-3">
           <button
@@ -387,77 +548,106 @@ export function VariableTable({
   );
 }
 
-interface SectionProps {
-  id: string;
+interface RowGroupProps {
+  sectionId: 'iv' | 'dv' | 'constants';
+  idPrefix: string;
   label: string;
-  entry: VariableEntry;
-  onChange: (field: keyof VariableEntry, next: string) => void;
+  rows: VariableEntry[];
+  bounds: Bounds;
   nameHeader: string;
   symbolHeader: string;
   unitHeader: string;
-  hints: Record<Cell, string | null>;
+  addLabel: string;
+  removeAriaLabel: string;
+  rowAriaLabel: string;
+  onChange: (idx: number, field: keyof VariableEntry, next: string) => void;
+  onAdd: () => void;
+  onRemove: (idx: number) => void;
+  getHints: (studentIndex: number) => Record<Cell, string | null>;
+  missingMessages: string[];
   allowPaste?: boolean;
 }
 
-function VariableSection({
-  id,
+function RowGroupSection({
+  idPrefix,
   label,
-  entry,
-  onChange,
+  rows,
+  bounds,
   nameHeader,
   symbolHeader,
   unitHeader,
-  hints,
+  addLabel,
+  removeAriaLabel,
+  rowAriaLabel,
+  onChange,
+  onAdd,
+  onRemove,
+  getHints,
+  missingMessages,
   allowPaste,
-}: SectionProps) {
+}: RowGroupProps) {
+  const canAdd = rows.length < bounds.max;
+  const canRemove = rows.length > bounds.min;
   return (
     <div className="rounded-md border border-slate-200 p-3">
       <div className="mb-2 text-sm font-medium text-slate-800">{label}</div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field
-          id={`${id}-name`}
-          label={nameHeader}
-          value={entry.name}
-          onChange={(v) => onChange('name', v)}
-          hint={hints.name}
+      {rows.map((row, i) => (
+        <RepeatableRow
+          // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a row in this section
+          key={i}
+          id={`${idPrefix}${i}`}
+          rowIndex={i}
+          entry={row}
+          onChange={(field, next) => onChange(i, field, next)}
+          onRemove={canRemove ? () => onRemove(i) : undefined}
+          nameHeader={nameHeader}
+          symbolHeader={symbolHeader}
+          unitHeader={unitHeader}
+          rowAriaLabel={rowAriaLabel}
+          showHeaders={i === 0}
+          removeAriaLabel={removeAriaLabel}
+          hints={getHints(i)}
           allowPaste={allowPaste}
         />
-        <Field
-          id={`${id}-symbol`}
-          label={symbolHeader}
-          value={entry.symbol}
-          onChange={(v) => onChange('symbol', v)}
-          hint={hints.symbol}
-          allowPaste={allowPaste}
-        />
-        <Field
-          id={`${id}-unit`}
-          label={unitHeader}
-          value={entry.unit}
-          onChange={(v) => onChange('unit', v)}
-          hint={hints.unit}
-          allowPaste={allowPaste}
-        />
-      </div>
+      ))}
+      {missingMessages.length > 0 && (
+        <ul className="mb-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+          {missingMessages.map((msg) => (
+            <li key={msg}>{msg}</li>
+          ))}
+        </ul>
+      )}
+      {canAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="mt-2 text-sm font-medium text-accent hover:underline"
+        >
+          {addLabel}
+        </button>
+      )}
     </div>
   );
 }
 
-interface ConstantRowProps {
+interface RepeatableRowProps {
   id: string;
   rowIndex: number;
   entry: VariableEntry;
   onChange: (field: keyof VariableEntry, next: string) => void;
-  onRemove: () => void;
+  onRemove: (() => void) | undefined;
   nameHeader: string;
   symbolHeader: string;
   unitHeader: string;
+  /** Template with {n} and {field} placeholders for repeated-row aria labels. */
+  rowAriaLabel: string;
   showHeaders: boolean;
+  removeAriaLabel: string;
   hints: Record<Cell, string | null>;
   allowPaste?: boolean;
 }
 
-function ConstantRow({
+function RepeatableRow({
   id,
   rowIndex,
   entry,
@@ -466,15 +656,21 @@ function ConstantRow({
   nameHeader,
   symbolHeader,
   unitHeader,
+  rowAriaLabel,
   showHeaders,
+  removeAriaLabel,
   hints,
   allowPaste,
-}: ConstantRowProps) {
+}: RepeatableRowProps) {
   // When headers are hidden (rows 2+), each input still needs a programmatic
   // label so screen readers don't announce three anonymous text fields.
-  const rowAria = (header: string) => `Konstant ${rowIndex + 1}, ${header}`;
+  const rowAria = (field: string) => format(rowAriaLabel, { n: rowIndex + 1, field });
+  const hasRemove = onRemove !== undefined;
+  const gridClass = hasRemove
+    ? 'mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]'
+    : 'mb-2 grid grid-cols-1 gap-3 sm:grid-cols-3';
   return (
-    <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+    <div className={gridClass}>
       <Field
         id={`${id}-name`}
         label={showHeaders ? nameHeader : undefined}
@@ -502,14 +698,16 @@ function ConstantRow({
         hint={hints.unit}
         allowPaste={allowPaste}
       />
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={strings.widgets.variableTable.removeConstantAriaLabel}
-        className={`${showHeaders ? 'mt-5' : ''} self-start rounded px-2 py-1 text-sm text-slate-500 hover:text-red-600`}
-      >
-        ×
-      </button>
+      {hasRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={format(removeAriaLabel, { n: rowIndex + 1 })}
+          className={`${showHeaders ? 'mt-5' : ''} self-start rounded px-2 py-1 text-sm text-slate-500 hover:text-red-600`}
+        >
+          ×
+        </button>
+      )}
     </div>
   );
 }
@@ -518,8 +716,8 @@ interface FieldProps {
   id: string;
   label?: string;
   /** Programmatic label used when no visual `label` is rendered (repeated
-   *  constant rows). Either `label` or `ariaLabel` should be set so the input
-   *  is never anonymous to assistive tech. */
+   *  rows). Either `label` or `ariaLabel` should be set so the input is never
+   *  anonymous to assistive tech. */
   ariaLabel?: string;
   value: string;
   onChange: (next: string) => void;

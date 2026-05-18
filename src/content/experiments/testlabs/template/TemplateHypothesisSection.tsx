@@ -17,8 +17,8 @@ export function TemplateHypothesisSection({ rubric }: Props) {
     variables?.kind === 'filled'
       ? (variables.values as VariableTableValues | undefined)
       : undefined;
-  const iv = values?.iv.symbol.trim() || 'X';
-  const dv = values?.dv.symbol.trim() || 'Y';
+  const iv = values?.iv[0]?.symbol.trim() || 'X';
+  const dv = values?.dv[0]?.symbol.trim() || 'Y';
   return (
     <>
       <p className="my-3 text-slate-800">

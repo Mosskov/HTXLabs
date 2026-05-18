@@ -1,0 +1,46 @@
+Denne fase udforsker per-sektion config på `<VariableTable>`: fast antal rækker, student-valgt min/max, og en ranged konstant-sektion med answer-key.
+
+**Multi-IV + multi-DV (fast antal).** To uafhængige variable og to afhængige — `iv={{ count: 2 }}` og `dv={{ count: 2 }}` viser præcis to rækker uden +/× knapper.
+
+<VariableTable
+  id="multi-iv-fixed"
+  iv={{ count: 2 }}
+  dv={{ count: 2 }}
+  expected={{
+    iv: [
+      { name: 'højde', symbol: 'h', unit: 'm' },
+      { name: 'tid', symbol: 't', unit: 's' },
+    ],
+    dv: [
+      { name: 'fart', symbol: 'v', unit: 'm/s' },
+      { name: 'acceleration', symbol: 'a', unit: 'm/s²' },
+    ],
+  }}
+  requireUnits
+/>
+
+**Student-valgt antal (ingen answer-key).** Den studerende vælger selv mellem 1–3 IV-rækker og 1–2 DV-rækker. `+` skjules ved max, `×` skjules ved min.
+
+<VariableTable
+  id="student-pick"
+  iv={{ min: 1, max: 3 }}
+  dv={{ min: 1, max: 2 }}
+/>
+
+**Ranged konstanter med answer-key.** Den studerende skal mindst angive de tre forventede konstanter, men må tilføje op til fire i alt.
+
+<VariableTable
+  id="ranged-constants"
+  iv={{ count: 1 }}
+  dv={{ count: 1 }}
+  constants={{ min: 2, max: 4 }}
+  expected={{
+    iv: { name: 'højde', symbol: 'h' },
+    dv: { name: 'tid', symbol: 't' },
+    constants: [
+      { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
+      { name: 'masse', symbol: 'm', unit: 'kg' },
+      { name: 'luftmodstand', symbol: 'k', unit: 'kg/s' },
+    ],
+  }}
+/>

@@ -1,3 +1,5 @@
+// Real content modules — exercising the actual MDX-compiled phase bodies.
+import * as template from '@/content/experiments/testlabs/template';
 // Full-flow RTL test for the template lab's phase 1 (planlaeg). Mounts the
 // real LabGuide with the real content modules; only the rubric embedder is
 // swapped for a MockEmbedder so the test stays hermetic.
@@ -7,8 +9,6 @@
 // Tjek rubric → gate opens → Next enabled. Plus three negative paths.
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';
-// Real content modules — exercising the actual MDX-compiled phase bodies.
-import * as template from '@/content/experiments/testlabs/template';
 import { MDXProvider } from '@mdx-js/react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -59,23 +59,31 @@ function renderTemplate(experimentId: string) {
 async function fillVariables(values: { ivSymbol: string; dvSymbol: string }) {
   const user = userEvent.setup();
   // The VariableTable widget uses the id `variables` per the template MDX —
-  // so cell ids are stable.
+  // so cell ids are stable. With per-section config, row indices live in
+  // the cell id (`variables-iv0-*`, `variables-c0-*`).
+  await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'Force');
   await user.type(
-    document.getElementById('variables-iv-name') as HTMLInputElement,
-    'Force',
-  );
-  await user.type(
-    document.getElementById('variables-iv-symbol') as HTMLInputElement,
+    document.getElementById('variables-iv0-symbol') as HTMLInputElement,
     values.ivSymbol,
   );
   await user.type(
-    document.getElementById('variables-dv-name') as HTMLInputElement,
+    document.getElementById('variables-dv0-name') as HTMLInputElement,
     'Acceleration',
   );
   await user.type(
-    document.getElementById('variables-dv-symbol') as HTMLInputElement,
+    document.getElementById('variables-dv0-symbol') as HTMLInputElement,
     values.dvSymbol,
   );
+  // Phase 1 now requires the student to identify two constants too.
+  await user.type(
+    document.getElementById('variables-c0-name') as HTMLInputElement,
+    'tyngdeacceleration',
+  );
+  await user.type(document.getElementById('variables-c0-symbol') as HTMLInputElement, 'g');
+  await user.type(document.getElementById('variables-c0-unit') as HTMLInputElement, 'm/s²');
+  await user.type(document.getElementById('variables-c1-name') as HTMLInputElement, 'masse');
+  await user.type(document.getElementById('variables-c1-symbol') as HTMLInputElement, 'm');
+  await user.type(document.getElementById('variables-c1-unit') as HTMLInputElement, 'kg');
 }
 
 function nextButton() {
@@ -104,9 +112,7 @@ describe('template phase 1 — happy path', () => {
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Godkendt')).toBeInTheDocument();
     // Hypothesis section appears.
-    await waitFor(() =>
-      expect(document.getElementById('rr-hypotese')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
 
     // Write a hypothesis that clears both minWords (10) and the relation regex
     // (a short word adjacent to "stiger").
@@ -142,12 +148,9 @@ describe('template phase 1 — negative paths', () => {
     renderTemplate('negative/empty');
 
     // Type only names; leave symbols empty.
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'Force');
     await user.type(
-      document.getElementById('variables-iv-name') as HTMLInputElement,
-      'Force',
-    );
-    await user.type(
-      document.getElementById('variables-dv-name') as HTMLInputElement,
+      document.getElementById('variables-dv0-name') as HTMLInputElement,
       'Acceleration',
     );
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
@@ -162,19 +165,11 @@ describe('template phase 1 — negative paths', () => {
 
     await fillVariables({ ivSymbol: 'X', dvSymbol: 'Y' });
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    await waitFor(() =>
-      expect(document.getElementById('rr-hypotese')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
 
     // Now edit an IV cell — strict RevealWhen must hide the section again.
-    await user.type(
-      document.getElementById('variables-iv-symbol') as HTMLInputElement,
-      'Z',
-    );
-    await waitFor(() =>
-      expect(document.getElementById('rr-hypotese')).toBeNull(),
-    );
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'Z');
+    await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeNull());
     expect(nextButton()).toBeDisabled();
   });
 });
-

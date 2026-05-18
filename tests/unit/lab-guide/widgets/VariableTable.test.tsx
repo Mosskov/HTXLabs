@@ -1,12 +1,10 @@
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { isGateSatisfied } from '@/lab-guide/gates';
-import {
-  VariableTable,
-  type VariableTableValues,
-} from '@/lab-guide/widgets/VariableTable';
+import { VariableTable, type VariableTableValues } from '@/lab-guide/widgets/VariableTable';
 import type {
   CorrectnessReport,
   ExpectedVariables,
+  RowMatch,
 } from '@/lab-guide/widgets/variableTableCorrectness';
 import type { Gate, Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
@@ -24,18 +22,19 @@ function GateProbe() {
 
 function ValuesProbe() {
   const { gateCtx } = useRunner();
-  const w = gateCtx.widgets['variables'];
+  const w = gateCtx.widgets.variables;
   const values = w?.kind === 'filled' ? (w.values as VariableTableValues | undefined) : undefined;
-  return <div data-testid="values">{JSON.stringify(values?.iv ?? null)}</div>;
+  return <div data-testid="values">{JSON.stringify(values ?? null)}</div>;
 }
 
 function StateProbe() {
   const { gateCtx } = useRunner();
-  const w = gateCtx.widgets['variables'];
+  const w = gateCtx.widgets.variables;
   // Use the `in` check to distinguish "key absent" from "key present with undefined".
   const has = w && {
     hasCorrect: 'correct' in w,
     hasErrors: 'errors' in w,
+    filled: w.kind === 'filled' ? w.filled : null,
     correct: w.kind === 'filled' ? w.correct : null,
     errors: w.kind === 'filled' ? w.errors : null,
   };
@@ -62,10 +61,19 @@ function Harness({
 function readState(): {
   hasCorrect: boolean;
   hasErrors: boolean;
+  filled: boolean | null;
   correct: boolean | null | undefined;
   errors: CorrectnessReport | null | undefined;
 } {
   return JSON.parse(screen.getByTestId('state').textContent ?? '{}');
+}
+
+function readValues(): VariableTableValues | null {
+  return JSON.parse(screen.getByTestId('values').textContent ?? 'null');
+}
+
+function ivErrors(report: CorrectnessReport | null | undefined, idx = 0): RowMatch | undefined {
+  return report?.iv?.[idx];
 }
 
 describe('VariableTable', () => {
@@ -96,15 +104,13 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    // Fill IV name + symbol; leave unit empty.
-    const ivName = document.getElementById('variables-iv-name') as HTMLInputElement;
-    const ivSym = document.getElementById('variables-iv-symbol') as HTMLInputElement;
-    const dvName = document.getElementById('variables-dv-name') as HTMLInputElement;
-    const dvSym = document.getElementById('variables-dv-symbol') as HTMLInputElement;
-    await user.type(ivName, 'kraft');
-    await user.type(ivSym, 'F');
-    await user.type(dvName, 'acceleration');
-    await user.type(dvSym, 'a');
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'F');
+    await user.type(
+      document.getElementById('variables-dv0-name') as HTMLInputElement,
+      'acceleration',
+    );
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 'a');
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
   });
 
@@ -115,23 +121,26 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    await user.type(document.getElementById('variables-iv-name') as HTMLInputElement, 'kraft');
-    await user.type(document.getElementById('variables-iv-symbol') as HTMLInputElement, 'F');
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'F');
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
   });
 
-  it('publishes the entered IV symbol on the values facet', async () => {
+  it('publishes uniform array-shaped values', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vt/5">
         <VariableTable id="variables" />
       </Harness>,
     );
-    await user.type(document.getElementById('variables-iv-name') as HTMLInputElement, 'kraft');
-    await user.type(document.getElementById('variables-iv-symbol') as HTMLInputElement, 'F');
-    await user.type(document.getElementById('variables-iv-unit') as HTMLInputElement, 'N');
-    expect(screen.getByTestId('values')).toHaveTextContent('"symbol":"F"');
-    expect(screen.getByTestId('values')).toHaveTextContent('"unit":"N"');
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'F');
+    await user.type(document.getElementById('variables-iv0-unit') as HTMLInputElement, 'N');
+    const values = readValues();
+    expect(Array.isArray(values?.iv)).toBe(true);
+    expect(Array.isArray(values?.dv)).toBe(true);
+    expect(Array.isArray(values?.constants)).toBe(true);
+    expect(values?.iv[0]).toEqual({ name: 'kraft', symbol: 'F', unit: 'N' });
   });
 
   it('with requireUnits=true, blocks filled until the unit cells are filled', async () => {
@@ -141,14 +150,13 @@ describe('VariableTable', () => {
         <VariableTable id="variables" requireUnits />
       </Harness>,
     );
-    await user.type(document.getElementById('variables-iv-name') as HTMLInputElement, 'kraft');
-    await user.type(document.getElementById('variables-iv-symbol') as HTMLInputElement, 'F');
-    await user.type(document.getElementById('variables-dv-name') as HTMLInputElement, 'a');
-    await user.type(document.getElementById('variables-dv-symbol') as HTMLInputElement, 'a');
-    // Units still empty.
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'F');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 'a');
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
-    await user.type(document.getElementById('variables-iv-unit') as HTMLInputElement, 'N');
-    await user.type(document.getElementById('variables-dv-unit') as HTMLInputElement, 'm/s²');
+    await user.type(document.getElementById('variables-iv0-unit') as HTMLInputElement, 'N');
+    await user.type(document.getElementById('variables-dv0-unit') as HTMLInputElement, 'm/s²');
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
   });
 
@@ -159,11 +167,11 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    const ivSym = document.getElementById('variables-iv-symbol') as HTMLInputElement;
-    await user.type(document.getElementById('variables-iv-name') as HTMLInputElement, 'kraft');
+    const ivSym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
     await user.type(ivSym, 'F');
-    await user.type(document.getElementById('variables-dv-name') as HTMLInputElement, 'a');
-    await user.type(document.getElementById('variables-dv-symbol') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 'a');
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
     await user.clear(ivSym);
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
@@ -176,10 +184,10 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    await user.type(document.getElementById('variables-iv-name') as HTMLInputElement, 'kraft');
-    await user.type(document.getElementById('variables-iv-symbol') as HTMLInputElement, 'F');
-    await user.type(document.getElementById('variables-dv-name') as HTMLInputElement, 'a');
-    await user.type(document.getElementById('variables-dv-symbol') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'kraft');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'F');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 'a');
 
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
     expect(document.getElementById('variables-c0-name')).not.toBeNull();
@@ -197,7 +205,6 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    // Two rows: first keeps the visible header; second falls back to aria-label.
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
 
@@ -219,9 +226,9 @@ describe('VariableTable', () => {
         <VariableTable id="variables" />
       </Harness>,
     );
-    expect(
-      firePaste(document.getElementById('variables-iv-symbol') as HTMLInputElement),
-    ).toBe(true);
+    expect(firePaste(document.getElementById('variables-iv0-symbol') as HTMLInputElement)).toBe(
+      true,
+    );
     blocked.unmount();
 
     render(
@@ -229,9 +236,115 @@ describe('VariableTable', () => {
         <VariableTable id="variables" allowPaste />
       </Harness>,
     );
-    expect(
-      firePaste(document.getElementById('variables-iv-symbol') as HTMLInputElement),
-    ).toBe(false);
+    expect(firePaste(document.getElementById('variables-iv0-symbol') as HTMLInputElement)).toBe(
+      false,
+    );
+  });
+});
+
+describe('VariableTable — per-section config', () => {
+  it('iv={{ count: 2 }} renders exactly 2 rows with no add/remove controls', () => {
+    render(
+      <Harness experimentId="vt-cfg/1">
+        <VariableTable id="variables" iv={{ count: 2 }} />
+      </Harness>,
+    );
+    expect(document.getElementById('variables-iv0-name')).not.toBeNull();
+    expect(document.getElementById('variables-iv1-name')).not.toBeNull();
+    expect(document.getElementById('variables-iv2-name')).toBeNull();
+    expect(screen.queryByRole('button', { name: /tilføj uafhængig variabel/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /fjern uafhængig variabel/i })).toBeNull();
+  });
+
+  it('iv={{ min: 1, max: 3 }} starts at 1 row, + appears, × hides at min', () => {
+    render(
+      <Harness experimentId="vt-cfg/2">
+        <VariableTable id="variables" iv={{ min: 1, max: 3 }} />
+      </Harness>,
+    );
+    expect(document.getElementById('variables-iv0-name')).not.toBeNull();
+    expect(document.getElementById('variables-iv1-name')).toBeNull();
+    // At min: × hidden, + visible.
+    expect(screen.queryByRole('button', { name: /fjern uafhængig variabel/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /tilføj uafhængig variabel/i })).not.toBeNull();
+  });
+
+  it('iv={{ min: 1, max: 3 }} clicking + adds rows; + hides at max', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-cfg/3">
+        <VariableTable id="variables" iv={{ min: 1, max: 3 }} />
+      </Harness>,
+    );
+    await user.click(screen.getByRole('button', { name: /tilføj uafhængig variabel/i }));
+    await user.click(screen.getByRole('button', { name: /tilføj uafhængig variabel/i }));
+    expect(document.getElementById('variables-iv2-name')).not.toBeNull();
+    // At max: + hidden, × visible.
+    expect(screen.queryByRole('button', { name: /tilføj uafhængig variabel/i })).toBeNull();
+    expect(screen.queryAllByRole('button', { name: /fjern uafhængig variabel/i }).length).toBe(3);
+  });
+
+  it('filled requires count-in-bounds: iv={{ min: 2, max: 4 }} blocks at 1 filled row', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-cfg/4">
+        <VariableTable id="variables" iv={{ min: 2, max: 4 }} />
+      </Harness>,
+    );
+    // Starts at min=2 rows. Fill row 0 only.
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 't');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 't');
+    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    // Fill row 1.
+    await user.type(document.getElementById('variables-iv1-name') as HTMLInputElement, 'a');
+    await user.type(document.getElementById('variables-iv1-symbol') as HTMLInputElement, 'a');
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+  });
+
+  it('constants={{ count: 2 }} starts at 2 rows + blocks filled until both are filled', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-cfg/5">
+        <VariableTable id="variables" constants={{ count: 2 }} />
+      </Harness>,
+    );
+    expect(document.getElementById('variables-c0-name')).not.toBeNull();
+    expect(document.getElementById('variables-c1-name')).not.toBeNull();
+    // Fill IV/DV but not constants.
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 't');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 't');
+    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    // Fill constants.
+    await user.type(document.getElementById('variables-c0-name') as HTMLInputElement, 'g');
+    await user.type(document.getElementById('variables-c0-symbol') as HTMLInputElement, 'g');
+    await user.type(document.getElementById('variables-c1-name') as HTMLInputElement, 'm');
+    await user.type(document.getElementById('variables-c1-symbol') as HTMLInputElement, 'm');
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+  });
+
+  it('PL11: no-config widget treats partial constants as not-blocking filled', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-cfg/6-pl11">
+        <VariableTable id="variables" requireUnits />
+      </Harness>,
+    );
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'h');
+    await user.type(document.getElementById('variables-iv0-unit') as HTMLInputElement, 'm');
+    await user.type(document.getElementById('variables-dv0-name') as HTMLInputElement, 't');
+    await user.type(document.getElementById('variables-dv0-symbol') as HTMLInputElement, 't');
+    await user.type(document.getElementById('variables-dv0-unit') as HTMLInputElement, 's');
+    // Add two blank/partial constant rows.
+    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
+    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
+    await user.type(document.getElementById('variables-c0-name') as HTMLInputElement, 'partial');
+    // c1 stays fully blank, c0 has only `name` (partial).
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
   });
 });
 
@@ -266,7 +379,7 @@ describe('VariableTable — expected (correctness checking)', () => {
     expect(s.hasErrors).toBe(false);
   });
 
-  it('with expected, empty cells: correct=false, errors carry empty markers', () => {
+  it('with expected, empty cells: correct=false, errors.iv[0] partial with empty markers', () => {
     render(
       <Harness experimentId="vt-c/2">
         <VariableTable id="variables" requireUnits expected={fullExpected} />
@@ -275,63 +388,69 @@ describe('VariableTable — expected (correctness checking)', () => {
     const s = readState();
     expect(s.hasCorrect).toBe(true);
     expect(s.correct).toBe(false);
-    expect(s.errors?.iv.name).toEqual({ type: 'empty' });
-    expect(s.errors?.iv.symbol).toEqual({ type: 'empty' });
-    expect(s.errors?.iv.unit).toEqual({ type: 'empty' });
+    const iv0 = ivErrors(s.errors, 0);
+    expect(iv0?.status).toBe('partial');
+    if (iv0?.status === 'partial') {
+      expect(iv0.errors.name).toEqual({ type: 'empty' });
+      expect(iv0.errors.symbol).toEqual({ type: 'empty' });
+      expect(iv0.errors.unit).toEqual({ type: 'empty' });
+    }
   });
 
-  it('with expected, all correct + Tjek click: correct=true, errors.iv = {}', async () => {
+  it('with expected, all correct + Tjek click: correct=true, errors.iv[0] matched', async () => {
     render(
       <Harness experimentId="vt-c/3">
         <VariableTable id="variables" requireUnits expected={fullExpected} />
       </Harness>,
     );
-    await fillEntry('variables-iv', 'højde', 'h', 'm');
-    await fillEntry('variables-dv', 'tid', 't', 's');
+    await fillEntry('variables-iv0', 'højde', 'h', 'm');
+    await fillEntry('variables-dv0', 'tid', 't', 's');
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
     await fillEntry('variables-c0', 'tyngdeacceleration', 'g', 'm/s²');
-    // Snapshot-gated: correct stays false until Tjek is clicked.
     expect(readState().correct).toBe(false);
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
 
     const s = readState();
     expect(s.correct).toBe(true);
-    expect(s.errors?.iv).toEqual({});
-    expect(s.errors?.dv).toEqual({});
-    expect(s.errors?.constants?.[0]).toEqual({
+    expect(s.errors?.iv[0]).toMatchObject({ status: 'matched', expectedIndex: 0, studentIndex: 0 });
+    expect(s.errors?.dv[0]).toMatchObject({ status: 'matched', expectedIndex: 0, studentIndex: 0 });
+    expect(s.errors?.constants?.[0]).toMatchObject({
       status: 'matched',
       expectedIndex: 0,
       studentIndex: 0,
     });
   });
 
-  it('with expected, wrong unit case: errors.iv.unit = case-mismatch, correct=false', async () => {
+  it('with expected, wrong unit case: errors.iv[0].errors.unit = case-mismatch, correct=false', async () => {
     render(
       <Harness experimentId="vt-c/4">
         <VariableTable id="variables" requireUnits expected={fullExpected} />
       </Harness>,
     );
-    await fillEntry('variables-iv', 'højde', 'h', 'M'); // wrong case
-    await fillEntry('variables-dv', 'tid', 't', 's');
+    await fillEntry('variables-iv0', 'højde', 'h', 'M');
+    await fillEntry('variables-dv0', 'tid', 't', 's');
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
     await fillEntry('variables-c0', 'tyngdeacceleration', 'g', 'm/s²');
 
     const s = readState();
     expect(s.correct).toBe(false);
-    expect(s.errors?.iv.unit).toEqual({ type: 'case-mismatch' });
+    const iv0 = ivErrors(s.errors, 0);
+    expect(iv0?.status).toBe('partial');
+    if (iv0?.status === 'partial') {
+      expect(iv0.errors.unit).toEqual({ type: 'case-mismatch' });
+    }
   });
 
-  it('with expected.constants, student didn\'t add any: missing + correct=false', async () => {
+  it("with expected.constants, student didn't add any: missing + correct=false", async () => {
     render(
       <Harness experimentId="vt-c/5">
         <VariableTable id="variables" requireUnits expected={fullExpected} />
       </Harness>,
     );
-    await fillEntry('variables-iv', 'højde', 'h', 'm');
-    await fillEntry('variables-dv', 'tid', 't', 's');
-    // No constants added.
+    await fillEntry('variables-iv0', 'højde', 'h', 'm');
+    await fillEntry('variables-dv0', 'tid', 't', 's');
     const s = readState();
     expect(s.correct).toBe(false);
     expect(s.errors?.constants?.[0]).toEqual({ status: 'missing', expectedIndex: 0 });
@@ -339,7 +458,7 @@ describe('VariableTable — expected (correctness checking)', () => {
 
   it('expected.unit omitted on IV + requireUnits=false: blank unit → correct=true after Tjek', async () => {
     const partial: ExpectedVariables = {
-      iv: { name: 'højde', symbol: 'h' }, // no unit
+      iv: { name: 'højde', symbol: 'h' },
       dv: { name: 'tid', symbol: 't' },
     };
     const user = userEvent.setup();
@@ -348,30 +467,30 @@ describe('VariableTable — expected (correctness checking)', () => {
         <VariableTable id="variables" expected={partial} />
       </Harness>,
     );
-    await fillEntry('variables-iv', 'højde', 'h', '');
-    await fillEntry('variables-dv', 'tid', 't', '');
+    await fillEntry('variables-iv0', 'højde', 'h', '');
+    await fillEntry('variables-dv0', 'tid', 't', '');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    const s = readState();
-    expect(s.correct).toBe(true);
+    expect(readState().correct).toBe(true);
   });
 
   it('expected.unit omitted on IV + requireUnits=true: blank unit → correct=false (filled rule)', async () => {
     const partial: ExpectedVariables = {
-      iv: { name: 'højde', symbol: 'h' }, // no unit
-      dv: { name: 'tid', symbol: 't' }, // no unit
+      iv: { name: 'højde', symbol: 'h' },
+      dv: { name: 'tid', symbol: 't' },
     };
     render(
       <Harness experimentId="vt-c/7">
         <VariableTable id="variables" requireUnits expected={partial} />
       </Harness>,
     );
-    await fillEntry('variables-iv', 'højde', 'h', '');
-    await fillEntry('variables-dv', 'tid', 't', '');
+    await fillEntry('variables-iv0', 'højde', 'h', '');
+    await fillEntry('variables-dv0', 'tid', 't', '');
     const s = readState();
-    // requireUnits demands non-empty unit → filled=false → correct=false
-    // even though errors.iv.unit is undefined (expected.unit not declared).
     expect(s.correct).toBe(false);
-    expect(s.errors?.iv.unit).toBeUndefined();
+    const iv0 = ivErrors(s.errors, 0);
+    if (iv0?.status === 'partial') {
+      expect(iv0.errors.unit).toBeUndefined();
+    }
   });
 });
 
@@ -385,8 +504,6 @@ describe('VariableTable — dev-warn guard for malformed constants', () => {
     const malformed: ExpectedVariables = {
       iv: { name: 'højde', symbol: 'h' },
       dv: { name: 'tid', symbol: 't' },
-      // Cast bypasses the discriminated-union check — simulating a teacher
-      // who slipped past the type system.
       constants: [{} as never],
     };
     render(
@@ -412,5 +529,24 @@ describe('VariableTable — dev-warn guard for malformed constants', () => {
       </Harness>,
     );
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('PL14: warns when expected.iv.length exceeds resolved max + drops extra entries', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tooMany: ExpectedVariables = {
+      iv: [
+        { name: 'højde', symbol: 'h' },
+        { name: 'tid', symbol: 't' },
+      ],
+      dv: { name: 'fart', symbol: 'v' },
+    };
+    render(
+      <Harness experimentId="vt-warn/3">
+        <VariableTable id="variables" iv={{ count: 1 }} expected={tooMany} />
+      </Harness>,
+    );
+    expect(
+      warn.mock.calls.some((c) => typeof c[0] === 'string' && c[0].includes('exceeds section max')),
+    ).toBe(true);
   });
 });

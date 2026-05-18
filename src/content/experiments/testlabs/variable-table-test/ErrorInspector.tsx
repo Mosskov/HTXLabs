@@ -1,12 +1,12 @@
 // Dev-only diagnostic surface for variable-table-test phase 3. Subscribes to
 // a VariableTable's registered state and renders the structured
 // CorrectnessReport so the author can see each CellError type and
-// ConstantMatch status fire in real time. Read-only consumer; never writes.
+// RowMatch status fire in real time. Read-only consumer; never writes.
 import { useWidgetState } from '@/lab-guide/RunnerContext';
 import type {
   CellError,
-  ConstantMatch,
   CorrectnessReport,
+  RowMatch,
   VariableRowErrors,
 } from '@/lab-guide/widgets/variableTableCorrectness';
 
@@ -46,33 +46,14 @@ function toneClass(tone: 'ok' | 'warn' | 'bad'): string {
   return 'bg-rose-100 text-rose-800';
 }
 
-function constantTone(status: ConstantMatch['status']): 'ok' | 'warn' | 'bad' {
+function matchTone(status: RowMatch['status']): 'ok' | 'warn' | 'bad' {
   if (status === 'matched') return 'ok';
   if (status === 'partial') return 'warn';
   return 'bad';
 }
 
-function RowBlock({ label, errors }: { label: string; errors: VariableRowErrors }) {
-  const cells: Array<keyof VariableRowErrors> = ['name', 'symbol', 'unit'];
-  return (
-    <div className="mb-2">
-      <div className="text-xs font-semibold text-slate-700 mb-1">{label}</div>
-      <div className="flex flex-wrap gap-2">
-        {cells.map((c) => {
-          const tag = cellTag(errors[c]);
-          return (
-            <span key={c} className={`rounded px-2 py-0.5 text-xs ${toneClass(tag.tone)}`}>
-              <span className="font-medium">{CELL_LABEL[c]}:</span> {tag.text}
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ConstantBlock({ match }: { match: ConstantMatch }) {
-  const tone = constantTone(match.status);
+function RowMatchBlock({ match }: { match: RowMatch }) {
+  const tone = matchTone(match.status);
   return (
     <div className={`rounded px-2 py-1 text-xs ${toneClass(tone)}`}>
       <div>
@@ -89,6 +70,23 @@ function ConstantBlock({ match }: { match: ConstantMatch }) {
               </span>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionBlock({ label, matches }: { label: string; matches: RowMatch[] }) {
+  return (
+    <div className="mb-2">
+      <div className="text-xs font-semibold text-slate-700 mb-1">{label}</div>
+      {matches.length === 0 ? (
+        <div className="text-xs text-slate-500">(ingen forventede)</div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {matches.map((m) => (
+            <RowMatchBlock key={`${m.status}-${m.expectedIndex}`} match={m} />
+          ))}
         </div>
       )}
     </div>
@@ -121,20 +119,9 @@ export function ErrorInspector({ widgetId }: Props) {
       </div>
       {report ? (
         <>
-          <RowBlock label="Uafhængig variabel (IV)" errors={report.iv} />
-          <RowBlock label="Afhængig variabel (DV)" errors={report.dv} />
-          <div className="mt-2">
-            <div className="text-xs font-semibold text-slate-700 mb-1">Konstanter</div>
-            {(report.constants ?? []).length === 0 ? (
-              <div className="text-xs text-slate-500">(ingen forventede konstanter)</div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {(report.constants ?? []).map((m) => (
-                  <ConstantBlock key={m.expectedIndex} match={m} />
-                ))}
-              </div>
-            )}
-          </div>
+          <SectionBlock label="Uafhængige variable (IV-rækker)" matches={report.iv} />
+          <SectionBlock label="Afhængige variable (DV-rækker)" matches={report.dv} />
+          <SectionBlock label="Konstanter" matches={report.constants ?? []} />
         </>
       ) : (
         <div className="text-xs text-slate-500">
