@@ -45,19 +45,16 @@ export function ExperimentRoute() {
   const [theoryOpen, setTheoryOpen] = useState(false);
   const onToggleTheory = useCallback(() => setTheoryOpen((v) => !v), []);
 
-  // Sim disclosure default differs by context (closed on landing, open in guide).
-  // Tri-state: `null` means "untouched, use context default"; once the student
-  // toggles, the explicit choice survives the landing↔guide swap.
-  const [simOverride, setSimOverride] = useState<boolean | null>(null);
-  const simOpen = simOverride ?? hasMode;
-  const onToggleSim = useCallback(() => {
-    setSimOverride((prev) => !(prev ?? hasMode));
-  }, [hasMode]);
+  // Sim disclosure: single boolean, default closed; the student's choice
+  // survives the landing↔guide swap so phase 1 inherits whatever they set on
+  // the landing (and vice versa).
+  const [simOpen, setSimOpen] = useState(false);
+  const onToggleSim = useCallback(() => setSimOpen((v) => !v), []);
   // "Nulstil lab" view reset: drop ?mode= to land on the mode picker and
   // collapse both disclosures so the lab reads as a fresh visit.
   const handleResetView = useCallback(() => {
     setTheoryOpen(false);
-    setSimOverride(null);
+    setSimOpen(false);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('mode');
