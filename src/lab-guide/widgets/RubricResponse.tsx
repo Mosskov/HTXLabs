@@ -5,8 +5,9 @@
 //   `!dirty && !embedderDown && requiredSatisfied`, sourced from the live
 // `result` (just-evaluated) or the persisted pass record (cross-reload).
 // Editing the text — or changing `dependsOn` — flips `dirty:true` → the gate
-// re-closes without us touching the persisted record. The status pill
-// ("Ændret siden tjek") communicates that an earlier check is now stale.
+// re-closes without us touching the persisted record. Feedback to the student
+// comes from the tier hint list (on fail) and the Next-phase button enabling
+// (on pass); an sr-only `<output>` announces "Godkendt" once for AT users.
 //
 // Reload-safety: each completed evaluate writes a minimal pass record to
 // `widgetValues[`${id}:result`]` containing
@@ -325,7 +326,11 @@ export function RubricResponse({
   const tooShort = nonEmpty && !meetsMinWords;
   const helpId = `rr-${id}-help`;
 
-  const pill = renderPill({ pending, lastCheckedText, dirty, satisfied });
+  // Visible status pill removed — feedback now comes from the tier hint list
+  // (on fail) and the Next-phase button enabling (on pass). The sr-only
+  // live region preserves the AT-side "Godkendt" announcement on pass so
+  // screen-reader users still hear that the rubric accepted their answer.
+  const showAriaStatus = !pending && !dirty && satisfied;
 
   return (
     <div className="my-4">
@@ -351,7 +356,12 @@ export function RubricResponse({
         )}
       </div>
 
-      <div className="mt-2 flex items-center gap-3">
+      <div className="mt-2 flex items-center justify-end gap-3">
+        {showAriaStatus && (
+          <output className="sr-only" aria-live="polite">
+            {strings.widgets.rubric.statusPassed}
+          </output>
+        )}
         <button
           type="button"
           onClick={evaluate}
@@ -362,7 +372,6 @@ export function RubricResponse({
             ? strings.widgets.rubric.evaluating
             : (checkLabel ?? strings.widgets.rubric.checkLabel)}
         </button>
-        {pill && <span className={pill.className}>{pill.label}</span>}
       </div>
 
       {showEmbedderBanner && (
@@ -379,39 +388,4 @@ export function RubricResponse({
       />
     </div>
   );
-}
-
-function renderPill(args: {
-  pending: boolean;
-  lastCheckedText: string | null;
-  dirty: boolean;
-  satisfied: boolean;
-}): { label: string; className: string } | null {
-  const base = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium';
-  if (args.pending) {
-    return {
-      label: strings.widgets.rubric.evaluating,
-      className: `${base} bg-slate-100 text-slate-700`,
-    };
-  }
-  if (args.lastCheckedText === null) {
-    return {
-      label: strings.widgets.rubric.statusUnchecked,
-      className: `${base} bg-slate-100 text-slate-600`,
-    };
-  }
-  if (args.dirty) {
-    return {
-      label: strings.widgets.rubric.statusEdited,
-      className: `${base} bg-amber-100 text-amber-900`,
-    };
-  }
-  if (args.satisfied) {
-    return {
-      label: strings.widgets.rubric.statusPassed,
-      className: `${base} bg-green-100 text-green-800`,
-    };
-  }
-  // Checked, not dirty, not satisfied — the hint list speaks; no pill.
-  return null;
 }

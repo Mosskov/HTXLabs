@@ -71,18 +71,17 @@ describe('VariableTable Tjek flow', () => {
     expect(screen.queryByText(/ikke tjekket endnu/i)).not.toBeInTheDocument();
   });
 
-  it('with `expected`: shows pill in idle state and no hints before Tjek', async () => {
+  it('with `expected`: no hints before Tjek (tier=0)', async () => {
     render(
       <Harness experimentId="vtj/idle">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
-    expect(screen.getByText(/ikke tjekket endnu/i)).toBeInTheDocument();
     // Even though IV symbol is empty (an error), no hint should appear because tier=0.
     expect(screen.queryByText(/dette felt er tomt/i)).not.toBeInTheDocument();
   });
 
-  it('typing correct values before Tjek: correct stays false and pill stays idle', async () => {
+  it('typing correct values before Tjek: correct stays false', async () => {
     render(
       <Harness experimentId="vtj/pre-tjek-correct">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
@@ -92,12 +91,11 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-iv0-symbol', 'X');
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
-    // Snapshot not taken → correct stays false, pill stays idle.
+    // Snapshot not taken → correct stays false.
     expect(readCorrect()).toBe(false);
-    expect(screen.getByText(/ikke tjekket endnu/i)).toBeInTheDocument();
   });
 
-  it('Tjek with correct values: correct flips to true, pill "Godkendt"', async () => {
+  it('Tjek with correct values: correct flips to true, visible pill hidden + sr-only "Godkendt" announced', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj/tjek-correct">
@@ -110,10 +108,13 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(readCorrect()).toBe(true);
-    expect(screen.getByText('Godkendt')).toBeInTheDocument();
+    // Visible pill is hidden on full success (per-cell green carries the
+    // signal); sr-only role="status" element fires the AT announcement.
+    expect(screen.queryByTestId('variable-table-status-pill')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Godkendt');
   });
 
-  it('editing a cell after a passing Tjek: correct flips back to false, pill "Ændret siden tjek"', async () => {
+  it('editing a cell after a passing Tjek: correct flips back to false', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj/edit-after-pass">
@@ -130,7 +131,6 @@ describe('VariableTable Tjek flow', () => {
     // Edit any cell — even with a still-valid value — must flip correct back.
     await typeInto('variables-iv0-name', 'X');
     expect(readCorrect()).toBe(false);
-    expect(screen.getByText(/ændret siden tjek/i)).toBeInTheDocument();
   });
 
   it('Tjek with wrong commonMistake value: tier-1 hint matches the mistake hint', async () => {
@@ -146,7 +146,6 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('wrong-letter mistake hint')).toBeInTheDocument();
-    expect(screen.getByText(/tjekket — se tips/i)).toBeInTheDocument();
   });
 
   it('Tjek twice with persistent error: tier escalates from 1 to 2', async () => {
@@ -350,26 +349,6 @@ describe('VariableTable Tjek flow', () => {
     expect(row1UnitWrapper?.textContent ?? '').not.toContain('Tjek enheden.');
   });
 
-  it('checkedWithErrorsStatusLabel override replaces the default copy', async () => {
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/override">
-        <VariableTable
-          id="variables"
-          expected={expectedSymbolsOnly}
-          checkedWithErrorsStatusLabel="Tjek igen"
-        />
-      </Harness>,
-    );
-    await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z');
-    await typeInto('variables-dv0-name', 'Acceleration');
-    await typeInto('variables-dv0-symbol', 'Y');
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Tjek igen')).toBeInTheDocument();
-    expect(screen.queryByText(/tjekket — se tips/i)).not.toBeInTheDocument();
-  });
-
   it('array expected.iv: order-independent matching pairs by symbol key', async () => {
     const expectedArr: import('@/lab-guide/widgets/variableTableCorrectness').ExpectedVariables = {
       iv: [
@@ -395,7 +374,9 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-dv0-symbol', 'v');
     await typeInto('variables-dv0-unit', 'm/s');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Godkendt')).toBeInTheDocument();
+    // Full success → visible pill hidden, sr-only live status carries the copy.
+    expect(screen.queryByTestId('variable-table-status-pill')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Godkendt');
   });
 
   it('tier keys for array IV use iv.<expectedIndex>.<cell>', async () => {
@@ -418,5 +399,84 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-dv0-symbol', 'v');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
+  });
+});
+
+describe('VariableTable per-cell green confirmation', () => {
+  // The `data-correct` marker lives on the wrapping <div> the Field renders
+  // around each ProtectedInput. Reading from the input back up to the wrapper
+  // keeps the assertion robust to extra wrapper changes.
+  function cellMarker(inputId: string): string | null | undefined {
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    return input?.closest('div')?.getAttribute('data-correct');
+  }
+
+  it('passing Tjek: every expected-defined cell has data-correct="true"', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj-green/passing">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    // expectedSymbolsOnly only sets `symbol` on IV and DV — name and unit
+    // are not part of the answer key, so they stay unmarked.
+    expect(cellMarker('variables-iv0-symbol')).toBe('true');
+    expect(cellMarker('variables-dv0-symbol')).toBe('true');
+    expect(cellMarker('variables-iv0-name')).toBeNull();
+    expect(cellMarker('variables-dv0-name')).toBeNull();
+  });
+
+  it('mixed Tjek: only error-free expected-defined cells get the marker; wrong cell has hint, not green', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj-green/mixed">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong — generic mismatch
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(cellMarker('variables-iv0-symbol')).toBeNull();
+    expect(cellMarker('variables-dv0-symbol')).toBe('true');
+    // Hint surfaces under the wrong cell — green and hint are mutually exclusive.
+    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
+  });
+
+  it('dirty state after passing Tjek: data-correct markers all clear, sr-only status unmounts', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj-green/dirty">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(cellMarker('variables-iv0-symbol')).toBe('true');
+    // Edit any cell — green should disappear and the sr-only live status unmounts.
+    await typeInto('variables-iv0-name', 'X');
+    expect(cellMarker('variables-iv0-symbol')).toBeNull();
+    expect(cellMarker('variables-dv0-symbol')).toBeNull();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('without `expected`: no data-correct markers ever, no Tjek button', () => {
+    render(
+      <Harness experimentId="vtj-green/no-expected">
+        <VariableTable id="variables" />
+      </Harness>,
+    );
+    expect(cellMarker('variables-iv0-symbol')).toBeNull();
+    expect(cellMarker('variables-dv0-symbol')).toBeNull();
+    expect(screen.queryByRole('button', { name: /tjek mine variable/i })).not.toBeInTheDocument();
   });
 });

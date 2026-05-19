@@ -14,7 +14,7 @@ import PhaseRapporter from './phase-rapporter.mdx';
 import Theory from './theory.mdx';
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 11,
+  version: 12,
   title: 'Template',
   simulationId: 'template-sim',
   learningObjectives: ['Forstå hvordan en generisk lab er opbygget i frameworket'],

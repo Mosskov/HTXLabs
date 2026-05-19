@@ -103,12 +103,13 @@ interface Props {
   /** Tjek button label override (SPEC §17). Only rendered when `expected`
    *  is provided. */
   checkLabel?: string;
-  /** Per-status pill copy overrides (SPEC §17). Only rendered when
-   *  `expected` is provided. */
-  idleStatusLabel?: string;
-  checkedStatusLabel?: string;
-  checkedWithErrorsStatusLabel?: string;
-  dirtyStatusLabel?: string;
+  /** SR-only aria label for a per-cell correctness confirmation announced on
+   *  input focus after a passing Tjek. Vars: {field} = nameHeader / symbolHeader /
+   *  unitHeader. */
+  cellCorrectAriaLabel?: string;
+  /** SR-only live-region announcement on full-success Tjek. Reuses existing
+   *  Danish copy verbatim; exists only as the SPEC §17 override knob. */
+  checkedAriaStatusLabel?: string;
   /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
   allowPaste?: boolean;
 }
@@ -211,6 +212,32 @@ function warnMalformed(
   }
 }
 
+/** Per-cell correctness projection. A cell is `correct` iff:
+ *   - the paired expected entry has that cell's `accepted` defined, AND
+ *   - the row match is either `matched` (no errors at all) OR
+ *     `partial` with no error on that specific cell.
+ *  Cells without an expected `accepted` spec, and cells in `missing` matches
+ *  or unmatched student rows, stay `false`. The Tjek-snapshot gating
+ *  (`tjekStatus === 'checked'`) is applied at the caller site. */
+function rowCorrect(
+  match: RowMatch | undefined,
+  rowExpected: { name?: CellSpec; symbol?: CellSpec; unit?: CellSpec } | undefined,
+): Record<Cell, boolean> {
+  const result: Record<Cell, boolean> = { name: false, symbol: false, unit: false };
+  if (!match || !rowExpected) return result;
+  if (match.status === 'missing') return result;
+  const cells: Cell[] = ['name', 'symbol', 'unit'];
+  for (const c of cells) {
+    if (rowExpected[c] === undefined) continue;
+    if (match.status === 'matched') {
+      result[c] = true;
+    } else if (match.errors[c] === undefined) {
+      result[c] = true;
+    }
+  }
+  return result;
+}
+
 /** Project a row's resolved hint per cell. Returns `null` for any cell
  *  with no error or no resolvable hint at the current tier. */
 function rowHints(
@@ -257,10 +284,8 @@ export function VariableTable({
   ivMissingMessage,
   dvMissingMessage,
   checkLabel,
-  idleStatusLabel,
-  checkedStatusLabel,
-  checkedWithErrorsStatusLabel,
-  dirtyStatusLabel,
+  cellCorrectAriaLabel,
+  checkedAriaStatusLabel,
   allowPaste,
 }: Props) {
   const { state, setWidgetValue, incrementVariableTableTier, setVariableTableLastChecked } =
@@ -411,6 +436,25 @@ export function VariableTable({
     return rowHints(cm.errors, rowExp, (c) => tiers[`${section}.${cm.expectedIndex}.${c}`] ?? 0);
   }
 
+  // Per-cell green is gated on the same conditions as hints: `expected` set
+  // and the live values match the most recent Tjek snapshot. In `dirty`
+  // state, every cell flips back to `false` — typing after a passing Tjek
+  // removes both green and hints until the next Tjek.
+  function rowCorrectFor(
+    sectionExpected: ReadonlyArray<{
+      name?: CellSpec;
+      symbol?: CellSpec;
+      unit?: CellSpec;
+    }>,
+    matches: RowMatch[] | undefined,
+    studentIndex: number,
+  ): Record<Cell, boolean> {
+    if (!showHints || !matches) return { name: false, symbol: false, unit: false };
+    const cm = matches.find((m) => m.status !== 'missing' && m.studentIndex === studentIndex);
+    if (!cm || cm.status === 'missing') return { name: false, symbol: false, unit: false };
+    return rowCorrect(cm, sectionExpected[cm.expectedIndex]);
+  }
+
   function missingMessagesFor(
     sectionExpected:
       | ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>
@@ -441,19 +485,12 @@ export function VariableTable({
   const symbolH = symbolHeader ?? strings.widgets.variableTable.symbolHeader;
   const unitH = unitHeader ?? strings.widgets.variableTable.unitHeader;
 
-  const pill = expected
-    ? renderPill({
-        status: tjekStatus,
-        allCorrect: errors !== undefined && filled && isCorrect(errors),
-        labels: {
-          idle: idleStatusLabel ?? strings.widgets.variableTable.status.idle,
-          checked: checkedStatusLabel ?? strings.widgets.variableTable.status.checked,
-          checkedWithErrors:
-            checkedWithErrorsStatusLabel ?? strings.widgets.variableTable.status.checkedWithErrors,
-          dirty: dirtyStatusLabel ?? strings.widgets.variableTable.status.dirty,
-        },
-      })
-    : null;
+  const allCorrect = errors !== undefined && filled && isCorrect(errors);
+  const showAriaStatus = expected !== undefined && tjekStatus === 'checked' && allCorrect;
+  const ariaStatusLabel =
+    checkedAriaStatusLabel ?? strings.widgets.variableTable.checkedAriaStatusLabel;
+  const resolvedCellCorrectAria =
+    cellCorrectAriaLabel ?? strings.widgets.variableTable.cellCorrectAriaLabel;
 
   const ivMissing = missingMessagesFor(
     ivExpectedArr,
@@ -489,6 +526,8 @@ export function VariableTable({
         onAdd={() => addRow('iv')}
         onRemove={(idx) => removeRow('iv', idx)}
         getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
+        getCorrect={(s) => rowCorrectFor(ivExpectedArr, errors?.iv, s)}
+        cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={ivMissing}
         allowPaste={allowPaste}
       />
@@ -508,6 +547,8 @@ export function VariableTable({
         onAdd={() => addRow('dv')}
         onRemove={(idx) => removeRow('dv', idx)}
         getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
+        getCorrect={(s) => rowCorrectFor(dvExpectedArr, errors?.dv, s)}
+        cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={dvMissing}
         allowPaste={allowPaste}
       />
@@ -529,19 +570,25 @@ export function VariableTable({
         onAdd={() => addRow('constants')}
         onRemove={(idx) => removeRow('constants', idx)}
         getHints={(s) => rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)}
+        getCorrect={(s) => rowCorrectFor(constantsExpectedArr ?? [], errors?.constants, s)}
+        cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={constantsMissing}
         allowPaste={allowPaste}
       />
       {expected && (
-        <div className="mt-2 flex items-center gap-3">
+        <div className="mt-2 flex items-center justify-end gap-3">
+          {showAriaStatus && (
+            <output className="sr-only" aria-live="polite">
+              {ariaStatusLabel}
+            </output>
+          )}
           <button
             type="button"
             onClick={handleTjek}
-            className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white"
+            className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
           >
             {checkLabel ?? strings.widgets.variableTable.checkLabel}
           </button>
-          {pill && <span className={pill.className}>{pill.label}</span>}
         </div>
       )}
     </div>
@@ -564,6 +611,8 @@ interface RowGroupProps {
   onAdd: () => void;
   onRemove: (idx: number) => void;
   getHints: (studentIndex: number) => Record<Cell, string | null>;
+  getCorrect: (studentIndex: number) => Record<Cell, boolean>;
+  cellCorrectAriaLabel: string;
   missingMessages: string[];
   allowPaste?: boolean;
 }
@@ -583,6 +632,8 @@ function RowGroupSection({
   onAdd,
   onRemove,
   getHints,
+  getCorrect,
+  cellCorrectAriaLabel,
   missingMessages,
   allowPaste,
 }: RowGroupProps) {
@@ -607,6 +658,8 @@ function RowGroupSection({
           showHeaders={i === 0}
           removeAriaLabel={removeAriaLabel}
           hints={getHints(i)}
+          correct={getCorrect(i)}
+          cellCorrectAriaLabel={cellCorrectAriaLabel}
           allowPaste={allowPaste}
         />
       ))}
@@ -644,6 +697,9 @@ interface RepeatableRowProps {
   showHeaders: boolean;
   removeAriaLabel: string;
   hints: Record<Cell, string | null>;
+  correct: Record<Cell, boolean>;
+  /** Template with {field} placeholder for the sr-only correctness aria label. */
+  cellCorrectAriaLabel: string;
   allowPaste?: boolean;
 }
 
@@ -660,6 +716,8 @@ function RepeatableRow({
   showHeaders,
   removeAriaLabel,
   hints,
+  correct,
+  cellCorrectAriaLabel,
   allowPaste,
 }: RepeatableRowProps) {
   // When headers are hidden (rows 2+), each input still needs a programmatic
@@ -678,6 +736,8 @@ function RepeatableRow({
         value={entry.name}
         onChange={(v) => onChange('name', v)}
         hint={hints.name}
+        correct={correct.name}
+        correctAriaLabel={format(cellCorrectAriaLabel, { field: nameHeader })}
         allowPaste={allowPaste}
       />
       <Field
@@ -687,6 +747,8 @@ function RepeatableRow({
         value={entry.symbol}
         onChange={(v) => onChange('symbol', v)}
         hint={hints.symbol}
+        correct={correct.symbol}
+        correctAriaLabel={format(cellCorrectAriaLabel, { field: symbolHeader })}
         allowPaste={allowPaste}
       />
       <Field
@@ -696,6 +758,8 @@ function RepeatableRow({
         value={entry.unit}
         onChange={(v) => onChange('unit', v)}
         hint={hints.unit}
+        correct={correct.unit}
+        correctAriaLabel={format(cellCorrectAriaLabel, { field: unitHeader })}
         allowPaste={allowPaste}
       />
       {hasRemove && (
@@ -723,12 +787,33 @@ interface FieldProps {
   onChange: (next: string) => void;
   /** Resolved hint text shown directly below the input. `null` = no hint. */
   hint: string | null;
+  /** True iff this cell was confirmed correct on the most recent Tjek (and
+   *  the live value still matches the snapshot). Renders a subtle emerald
+   *  ring on the input. Hints take precedence visually — if `hint` is set,
+   *  `correct` should never also be true (the derivation enforces this). */
+  correct: boolean;
+  /** Resolved sr-only label announced on focus when `correct === true`. */
+  correctAriaLabel: string;
   allowPaste?: boolean;
 }
 
-function Field({ id, label, ariaLabel, value, onChange, hint, allowPaste }: FieldProps) {
+function Field({
+  id,
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  hint,
+  correct,
+  correctAriaLabel,
+  allowPaste,
+}: FieldProps) {
+  // Defense-in-depth: hint wins visually if both signals collide.
+  const showGreen = correct && !hint;
+  const inputClass = showGreen ? 'w-full ring-1 ring-emerald-300' : 'w-full';
+  const ariaDescribedBy = showGreen ? `${id}-correct` : undefined;
   return (
-    <div>
+    <div data-correct={showGreen ? 'true' : undefined}>
       {label && (
         <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">
           {label}
@@ -739,34 +824,19 @@ function Field({ id, label, ariaLabel, value, onChange, hint, allowPaste }: Fiel
         type="text"
         value={value}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         allowPaste={allowPaste}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full"
+        className={inputClass}
       />
+      {showGreen && (
+        <span id={`${id}-correct`} className="sr-only">
+          {correctAriaLabel}
+        </span>
+      )}
       {hint && (
         <TieredHintList variant="inline" failedHints={[{ key: `${id}-hint`, text: hint }]} />
       )}
     </div>
   );
-}
-
-interface PillArgs {
-  status: 'idle' | 'checked' | 'dirty';
-  allCorrect: boolean;
-  labels: { idle: string; checked: string; checkedWithErrors: string; dirty: string };
-}
-
-function renderPill(args: PillArgs): { label: string; className: string } {
-  const base = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium';
-  if (args.status === 'idle') {
-    return { label: args.labels.idle, className: `${base} bg-slate-100 text-slate-600` };
-  }
-  if (args.status === 'dirty') {
-    return { label: args.labels.dirty, className: `${base} bg-amber-100 text-amber-900` };
-  }
-  // 'checked' — green when all correct, amber otherwise.
-  if (args.allCorrect) {
-    return { label: args.labels.checked, className: `${base} bg-green-100 text-green-800` };
-  }
-  return { label: args.labels.checkedWithErrors, className: `${base} bg-amber-100 text-amber-900` };
 }

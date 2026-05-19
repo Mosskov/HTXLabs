@@ -129,9 +129,7 @@ export const strings = {
       tooShort: 'Skriv mindst {n} ord før du tjekker.',
       embedderDown:
         'Den semantiske vurdering er ikke tilgængelig lige nu — start embed-serveren og prøv igen.',
-      statusUnchecked: 'Ikke tjekket endnu',
       statusPassed: 'Godkendt',
-      statusEdited: 'Ændret siden tjek',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
       bonusPanelTitle: 'Vil du gøre svaret stærkere?',
       hintsLabel: 'Tips til de manglende krav',
@@ -157,12 +155,15 @@ export const strings = {
       ivRowAriaLabel: 'Uafhængig variabel {n}, {field}',
       dvRowAriaLabel: 'Afhængig variabel {n}, {field}',
       checkLabel: 'Tjek mine variable',
-      status: {
-        idle: 'Ikke tjekket endnu',
-        checked: 'Godkendt',
-        checkedWithErrors: 'Tjekket — se tips',
-        dirty: 'Ændret siden tjek',
-      },
+      /** Sr-only aria label announced on input focus for cells confirmed
+       *  correct after a Tjek. Vars: {field} = nameHeader / symbolHeader /
+       *  unitHeader. */
+      cellCorrectAriaLabel: '{field}: korrekt',
+      /** Sr-only live-region announcement fired the moment a passing Tjek
+       *  hides the visible status pill, so assistive-tech users still hear
+       *  that the table was accepted. Reuses the existing `status.checked`
+       *  copy verbatim — no new Danish phrasing introduced. */
+      checkedAriaStatusLabel: 'Godkendt',
       /** Per-cell tiered hint ladders keyed by `CellError.type` values. Each
        *  entry is a `string[]` — index `0` is tier 1, index `1` is tier 2, …
        *  The renderer indexes by `Math.min(tier - 1, ladder.length - 1)`,

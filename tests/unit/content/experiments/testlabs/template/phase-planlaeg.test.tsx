@@ -115,8 +115,8 @@ describe('template phase 1 — happy path', () => {
     expect(nextButton()).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Godkendt')).toBeInTheDocument();
-    // Hypothesis section appears.
+    // Hypothesis section appears via RevealWhen `strict` once the table reports
+    // correct — the primary positive signal now that the visible pill is gone.
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
 
     // Write a hypothesis that clears both minWords (10) and the relation regex

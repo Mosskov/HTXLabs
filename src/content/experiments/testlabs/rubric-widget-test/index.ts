@@ -40,7 +40,7 @@ export const frontmatter: ExperimentFrontmatter = {
           id: 'planlaeg',
           title: 'Baseline',
           steps: [
-            'Skriv en hypotese og tryk Tjek for at se status-pille og hint-tiers rulle frem.',
+            'Skriv en hypotese og tryk Tjek for at se hint-tiers rulle frem og gaten åbne ved pass.',
           ],
           gate: { type: 'rubric-required', widgetIds: ['hypotese'] },
         },
@@ -53,7 +53,7 @@ export const frontmatter: ExperimentFrontmatter = {
         {
           id: 'maal',
           title: 'Multi-rubric',
-          steps: ['Tjek begge svarfelter. Fasen åbner først når begge har grøn pille.'],
+          steps: ['Tjek begge svarfelter. Fasen åbner først når begge er godkendt.'],
           gate: { type: 'all-satisfied', widgetIds: ['rubA', 'rubB'] },
         },
         {

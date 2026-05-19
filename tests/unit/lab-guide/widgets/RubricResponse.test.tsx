@@ -107,7 +107,7 @@ describe('RubricResponse', () => {
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
     await user.type(screen.getByRole('textbox'), passingText);
     await user.click(screen.getByRole('button', { name: /tjek/i }));
-    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(/godkendt/i);
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
   });
 
@@ -120,13 +120,13 @@ describe('RubricResponse', () => {
     );
     await user.type(screen.getByRole('textbox'), passingText);
     await user.click(screen.getByRole('button', { name: /tjek/i }));
-    expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(/godkendt/i);
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
 
-    // Edit one character → dirty → gate re-closes, status pill flips.
+    // Edit one character → dirty → gate re-closes, sr-only "Godkendt" unmounts.
     await user.type(screen.getByRole('textbox'), '!');
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
-    expect(screen.getByText(/ændret siden tjek/i)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('keeps the gate closed when semantic checks are skipped-embedder but literal passes', async () => {
@@ -438,7 +438,8 @@ describe('RubricResponse — reload safety', () => {
       </Harness>,
     );
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
-    expect(screen.getByText(/ikke tjekket endnu/i)).toBeInTheDocument();
+    // sr-only success status no longer mounts after the version bump.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('marks dirty + closes the gate when dependsOn changes after a pass', async () => {
@@ -475,9 +476,9 @@ describe('RubricResponse — reload safety', () => {
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
 
     // Flip the external dep — text is unchanged, but the prior pass no longer
-    // applies. Gate re-closes; "Ændret siden tjek" pill surfaces.
+    // applies. Gate re-closes; sr-only "Godkendt" unmounts.
     await user.click(screen.getByTestId('flip-deps'));
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
-    expect(screen.getByText(/ændret siden tjek/i)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });
