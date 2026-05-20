@@ -171,10 +171,10 @@ describe('VariableTable Tjek flow', () => {
     ).toBeInTheDocument();
   });
 
-  it('empty cell hint stays at "Dette felt er tomt." and does not escalate', async () => {
+  it('empty cell shows no hint after Tjek (the empty ladder was dropped)', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj/empty-stays">
+      <Harness experimentId="vtj/empty-no-hint">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
@@ -184,11 +184,11 @@ describe('VariableTable Tjek flow', () => {
     await typeInto('variables-dv0-symbol', 'Y');
 
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Dette felt er tomt.')).toBeInTheDocument();
-
-    // Click again — ladder length is 1, so the same text is shown (no escalation).
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getAllByText('Dette felt er tomt.').length).toBeGreaterThanOrEqual(1);
+    // An empty input is self-evident — no "Dette felt er tomt." hint, and no
+    // other hint surfaces under the empty cell (only its "Symbol" label).
+    expect(screen.queryByText(/dette felt er tomt/i)).not.toBeInTheDocument();
+    const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    expect(ivSymbol.closest('div')?.textContent).toBe('Symbol');
   });
 
   it('author hint appears after generic ladder is exhausted', async () => {
@@ -257,7 +257,7 @@ describe('VariableTable Tjek flow', () => {
     ).toBeInTheDocument();
   });
 
-  it('hints disappear when the student edits a cell after a Tjek (dirty state)', async () => {
+  it('editing a cell in a section hides that section\'s hints (per-section dirty)', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj/dirty-hides-hints">
@@ -265,16 +265,35 @@ describe('VariableTable Tjek flow', () => {
       </Harness>,
     );
     await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z'); // wrong → mismatch
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong → IV mismatch hint
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
 
-    // Editing any cell flips status to dirty → hints should vanish until
-    // the student clicks Tjek again, so live error guidance doesn't leak.
-    await typeInto('variables-dv0-name', 'x');
+    // Editing an IV cell flips IV to dirty → the IV hint vanishes until the
+    // next Tjek, so live error guidance doesn't leak.
+    await typeInto('variables-iv0-name', 'x');
     expect(screen.queryByText('Tjek dit symbol.')).not.toBeInTheDocument();
+  });
+
+  it('editing one section keeps a sibling section\'s hints (per-section dirty)', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtj/sibling-keeps-hints">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong → IV mismatch hint
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
+
+    // Editing a DV cell must NOT dirty IV — the IV hint stays put.
+    await typeInto('variables-dv0-name', 'x');
+    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
   });
 
   it('missing constant: surfaces a "Du mangler en konstant" message after Tjek', async () => {
@@ -449,7 +468,7 @@ describe('VariableTable per-cell green confirmation', () => {
     expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
   });
 
-  it('dirty state after passing Tjek: data-correct markers all clear, sr-only status unmounts', async () => {
+  it('editing a section after a passing Tjek clears its green but keeps siblings', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj-green/dirty">
@@ -462,10 +481,11 @@ describe('VariableTable per-cell green confirmation', () => {
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(cellMarker('variables-iv0-symbol')).toBe('true');
-    // Edit any cell — green should disappear and the sr-only live status unmounts.
+    // Edit an IV cell — IV green clears, but DV (untouched) keeps its green.
     await typeInto('variables-iv0-name', 'X');
     expect(cellMarker('variables-iv0-symbol')).toBeNull();
-    expect(cellMarker('variables-dv0-symbol')).toBeNull();
+    expect(cellMarker('variables-dv0-symbol')).toBe('true');
+    // The whole-table success announcement unmounts (no longer all-checked).
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

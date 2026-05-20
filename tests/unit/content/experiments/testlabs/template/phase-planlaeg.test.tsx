@@ -165,7 +165,7 @@ describe('template phase 1 — negative paths', () => {
     expect(footerButton()).toHaveTextContent(/tjek variable/i);
   });
 
-  it('empty symbols: footer stays on "Tjek variable" with "feltet er tomt" hints', async () => {
+  it('empty symbols: footer stays on "Tjek variable", no empty-cell hint', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/empty');
 
@@ -176,7 +176,9 @@ describe('template phase 1 — negative paths', () => {
       'Acceleration',
     );
     await user.click(footerButton());
-    expect(screen.getAllByText(/dette felt er tomt/i).length).toBeGreaterThanOrEqual(1);
+    // The empty-cell hint was dropped — a blank input is self-evident.
+    expect(screen.queryByText(/dette felt er tomt/i)).not.toBeInTheDocument();
+    // Table never reported correct → hypothesis stays hidden, button on state 1.
     expect(document.getElementById('rr-hypotese')).toBeNull();
     expect(footerButton()).toHaveTextContent(/tjek variable/i);
   });

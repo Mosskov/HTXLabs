@@ -22,6 +22,34 @@ describe('Phase schema', () => {
     const result = Phase.safeParse({ id: 'x', title: 'X', intro: 'a', steps: ['b'] });
     expect(result.success).toBe(false);
   });
+
+  it('accepts object-form steps with a widget target', () => {
+    const result = Phase.safeParse({
+      id: 'x',
+      title: 'X',
+      steps: [{ text: 'a', widgetId: 'w', section: 'iv' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a mixed string + object steps array', () => {
+    const result = Phase.safeParse({
+      id: 'x',
+      title: 'X',
+      steps: ['plain', { text: 'tracked', widgetId: 'w' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an object step with an out-of-enum section', () => {
+    const result = Phase.safeParse({ id: 'x', title: 'X', steps: [{ text: 'a', section: 'bogus' }] });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an object step with empty text', () => {
+    const result = Phase.safeParse({ id: 'x', title: 'X', steps: [{ text: '' }] });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('Gate schema — rubric-required', () => {

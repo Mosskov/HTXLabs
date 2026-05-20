@@ -550,3 +550,89 @@ describe('VariableTable — dev-warn guard for malformed constants', () => {
     ).toBe(true);
   });
 });
+
+describe('VariableTable — sections facet', () => {
+  const sectionsExpected: ExpectedVariables = {
+    iv: { name: 'højde', symbol: 'h', unit: 'm' },
+    dv: { name: 'tid', symbol: 't', unit: 's' },
+    constants: [
+      { name: 'masse', symbol: 'm', unit: 'kg' },
+      { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
+    ],
+  };
+
+  function SectionsProbe() {
+    const { gateCtx } = useRunner();
+    const w = gateCtx.widgets.variables;
+    const sections = w?.kind === 'filled' ? (w.sections ?? null) : null;
+    return <div data-testid="sections">{JSON.stringify(sections)}</div>;
+  }
+
+  function readSections(): { iv: boolean; dv: boolean; constants: boolean } | null {
+    return JSON.parse(screen.getByTestId('sections').textContent ?? 'null');
+  }
+
+  async function fill(prefix: string, name: string, symbol: string, unit: string) {
+    const user = userEvent.setup();
+    await user.type(document.getElementById(`${prefix}-name`) as HTMLInputElement, name);
+    await user.type(document.getElementById(`${prefix}-symbol`) as HTMLInputElement, symbol);
+    await user.type(document.getElementById(`${prefix}-unit`) as HTMLInputElement, unit);
+  }
+
+  const widget = (
+    <VariableTable
+      id="variables"
+      iv={{ count: 1 }}
+      dv={{ count: 1 }}
+      constants={{ count: 2 }}
+      requireUnits
+      expected={sectionsExpected}
+    />
+  );
+
+  it('reports all sections false before any Tjek', () => {
+    render(
+      <Harness experimentId="vt-sec/1">
+        {widget}
+        <SectionsProbe />
+      </Harness>,
+    );
+    expect(readSections()).toEqual({ iv: false, dv: false, constants: false });
+  });
+
+  it('Tjek flips only the sections that are filled + correct', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-sec/2">
+        {widget}
+        <SectionsProbe />
+      </Harness>,
+    );
+    await fill('variables-iv0', 'højde', 'h', 'm');
+    // DV + constants left empty.
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(readSections()).toEqual({ iv: true, dv: false, constants: false });
+  });
+
+  it('editing a section after a passing Tjek reverts only that section', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vt-sec/3">
+        {widget}
+        <SectionsProbe />
+      </Harness>,
+    );
+    await fill('variables-iv0', 'højde', 'h', 'm');
+    await fill('variables-dv0', 'tid', 't', 's');
+    await fill('variables-c0', 'masse', 'm', 'kg');
+    await fill('variables-c1', 'tyngdeacceleration', 'g', 'm/s²');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(readSections()).toEqual({ iv: true, dv: true, constants: true });
+
+    // Editing an IV cell drops only IV — DV + constants stay validated. This
+    // is the per-section dirty fix: filling one section must not un-check
+    // another that the student already validated.
+    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'x');
+    expect(readSections()).toEqual({ iv: false, dv: true, constants: true });
+  });
+});

@@ -27,10 +27,17 @@ export const frontmatter: ExperimentFrontmatter = {
         {
           id: 'planlaeg',
           title: 'Planlæg',
+          // Object-form steps: each line tracks one element on the page, so
+          // the instruction-box renders as a circle progress tracker.
           steps: [
-            'Identificér din uafhængige og afhængige variabel.',
-            'Identificér de to konstante størrelser, der ikke ændres under forsøget.',
-            'Formulér en kort hypotese om sammenhængen.',
+            { text: 'Identificér din uafhængige variabel.', widgetId: 'variables', section: 'iv' },
+            { text: 'Identificér din afhængige variabel.', widgetId: 'variables', section: 'dv' },
+            {
+              text: 'Identificér de to konstante størrelser, der ikke ændres under forsøget.',
+              widgetId: 'variables',
+              section: 'constants',
+            },
+            { text: 'Formulér en kort hypotese om sammenhængen.', widgetId: 'hypotese' },
           ],
           gate: { type: 'all-satisfied', strict: true, widgetIds: ['variables', 'hypotese'] },
         },

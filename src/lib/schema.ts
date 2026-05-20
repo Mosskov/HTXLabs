@@ -87,12 +87,26 @@ export const CANONICAL_PHASE_IDS = [
 ] as const;
 export type CanonicalPhaseId = (typeof CANONICAL_PHASE_IDS)[number];
 
+/** Object form of an instruction-box step. A step may instead be a plain
+ *  string (untracked line — the shorthand). The object form lets a step
+ *  declare a target widget whose satisfaction marks the line done; the
+ *  instruction-box then renders it as a small progress tracker. */
+export const PhaseStep = z.object({
+  text: z.string().min(1),
+  /** Widget id whose satisfaction marks this line done. Omit = untracked. */
+  widgetId: z.string().optional(),
+  /** For a VariableTable target: which section satisfies this line. Omit to
+   *  use whole-widget satisfaction. */
+  section: z.enum(['iv', 'dv', 'constants']).optional(),
+});
+export type PhaseStep = z.infer<typeof PhaseStep>;
+
 export const Phase = z
   .object({
     id: z.string(),
     title: z.string(),
     intro: z.string().optional(),
-    steps: z.array(z.string().min(1)).optional(),
+    steps: z.array(z.union([z.string().min(1), PhaseStep])).optional(),
     gate: Gate.default({ type: 'always' }),
   })
   .refine((p) => !(p.intro && p.steps), {

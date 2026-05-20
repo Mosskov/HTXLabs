@@ -51,6 +51,14 @@ export const strings = {
     phaseAriaLabel: 'Fase {n}: {title}{current}',
     currentSuffix: ' (nuværende)',
   },
+  /** Instruction-box checklist (the light-blue card above the phase body).
+   *  Sr-only suffixes appended to a tracked step's text so assistive tech
+   *  hears its completion state — the circle + ✓ are decorative. An `active`
+   *  step gets no suffix (the default state). */
+  instructionBox: {
+    stepDone: ' (fuldført)',
+    stepLocked: ' (låst)',
+  },
   modes: {
     guided: 'Guidet',
     'semi-guided': 'Semi-guidet',
@@ -174,7 +182,8 @@ export const strings = {
        *  to avoid handing students the answer. */
       hints: {
         name: {
-          empty: ['Dette felt er tomt.'],
+          // No hint — an empty input already says it is empty.
+          empty: [],
           mismatch: [
             'Tjek navnet på den fysiske størrelse.',
             'Brug navnet teorien introducerer — ikke et generelt ord som "ting" eller "variabel".',
@@ -193,7 +202,8 @@ export const strings = {
           ],
         },
         symbol: {
-          empty: ['Dette felt er tomt.'],
+          // No hint — an empty input already says it is empty.
+          empty: [],
           mismatch: [
             'Tjek dit symbol.',
             'Brug det symbol teorien introducerer for denne størrelse.',
@@ -216,7 +226,8 @@ export const strings = {
           ],
         },
         unit: {
-          empty: ['Dette felt er tomt.'],
+          // No hint — an empty input already says it is empty.
+          empty: [],
           mismatch: ['Tjek enheden.', 'Brug SI-enheden teorien introducerer for denne størrelse.'],
           'case-mismatch': [
             'Tjek enheden — er stort/lille bogstav rigtigt?',

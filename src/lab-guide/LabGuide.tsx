@@ -2,6 +2,7 @@
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { ComponentType, ReactNode } from 'react';
+import { InstructionBox } from './InstructionBox';
 import { LabBreadcrumb } from './LabBreadcrumb';
 import { PhaseFooter } from './PhaseFooter';
 import { PhaseStepper } from './PhaseStepper';
@@ -143,26 +144,7 @@ function LabGuideInner({
           <PhaseStepper phases={phases} />
         </div>
         {currentPhase && (currentPhase.steps || currentPhase.intro) && (
-          <div className="instruction-box mx-4 mb-6 text-sm">
-            {currentPhase.steps ? (
-              <>
-                <p className="font-semibold text-slate-900 mb-2">
-                  Fase {phases.indexOf(currentPhase) + 1} – {currentPhase.title}:
-                </p>
-                {currentPhase.steps.length === 1 ? (
-                  <p>{currentPhase.steps[0]}</p>
-                ) : (
-                  <ol className="list-[lower-alpha] pl-6 space-y-1">
-                    {currentPhase.steps.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ol>
-                )}
-              </>
-            ) : (
-              <span className="whitespace-pre-line">{currentPhase.intro}</span>
-            )}
-          </div>
+          <InstructionBox phase={currentPhase} phaseNumber={phases.indexOf(currentPhase) + 1} />
         )}
         <div className="prose max-w-none px-4 text-sm">
           {phases.map((p) => (

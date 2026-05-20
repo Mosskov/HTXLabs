@@ -25,8 +25,12 @@ export type WidgetState =
    *  widget's opaque error payload (typed `unknown` here so gates.ts stays
    *  free of widget-specific types). `values` is an opaque payload for
    *  sibling widgets that want to read what was filled (read via
-   *  `useWidgetState`); gate evaluators ignore it. Lets a single registration
-   *  drive multiple gate kinds without double-keying the widget registry. */
+   *  `useWidgetState`); gate evaluators ignore it. `sections` is an optional
+   *  per-section satisfaction map (currently only VariableTable publishes it,
+   *  one bit per IV/DV/constants section) — a sibling-read facet for the
+   *  instruction-box step tracker; gate evaluators ignore it too. Lets a
+   *  single registration drive multiple gate kinds without double-keying the
+   *  widget registry. */
   | {
       kind: 'filled';
       filled: boolean;
@@ -34,6 +38,7 @@ export type WidgetState =
       correct?: boolean;
       errors?: unknown;
       values?: unknown;
+      sections?: { iv: boolean; dv: boolean; constants: boolean };
     }
   | { kind: 'keywords'; foundCount: number; total: number }
   /** `<RubricResponse>` registers this. `satisfied` is a single derived bit:

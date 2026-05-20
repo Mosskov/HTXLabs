@@ -180,7 +180,10 @@ function sectionFilled(rows: VariableEntry[], bounds: Bounds, requireUnits: bool
   return rows.every((r) => entryFilled(r, requireUnits));
 }
 
-function valuesEqual(a: VariableTableValues, b: VariableTableValues): boolean {
+/** Deep-equality via JSON. Used for snapshot/dirty comparison — on the whole
+ *  table and on individual section slices, so editing one section does not
+ *  dirty its siblings. */
+function valuesEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
@@ -341,26 +344,51 @@ export function VariableTable({
       })
     : undefined;
 
-  // Snapshot-gated `correct`: requires the current values to deep-equal the
-  // last-Tjek snapshot AND to evaluate to no errors. Without `expected`,
-  // `correct` stays undefined (back-compat).
+  // Snapshot-gated correctness. The Tjek snapshot is the whole table, but
+  // dirty-detection is PER SECTION: editing one section must not un-check a
+  // sibling section that was validated earlier and is unchanged since. The
+  // whole-table `correct` requires every section to still be checked (which
+  // equals whole-table snapshot equality). Without `expected`, `correct`
+  // stays undefined (back-compat).
   const lastChecked = state.variableTableLastChecked[id];
-  const tjekStatus: 'idle' | 'checked' | 'dirty' =
-    lastChecked === undefined ? 'idle' : valuesEqual(lastChecked, values) ? 'checked' : 'dirty';
-  const correct =
-    errors !== undefined ? filled && isCorrect(errors) && tjekStatus === 'checked' : undefined;
+  const sectionChecked = {
+    iv: lastChecked !== undefined && valuesEqual(lastChecked.iv, values.iv),
+    dv: lastChecked !== undefined && valuesEqual(lastChecked.dv, values.dv),
+    constants: lastChecked !== undefined && valuesEqual(lastChecked.constants, values.constants),
+  };
+  const allChecked = sectionChecked.iv && sectionChecked.dv && sectionChecked.constants;
+  const correct = errors !== undefined ? filled && isCorrect(errors) && allChecked : undefined;
+
+  // Per-section satisfaction facet for the instruction-box step tracker
+  // (sibling-read; gate evaluators ignore it). With `expected`, a section
+  // counts as satisfied only when it is filled, every row matched, and
+  // unchanged since the last Tjek. Without `expected` it falls back to
+  // presence (`filled`).
+  const sectionMatched = (m: RowMatch[] | undefined): boolean =>
+    m !== undefined && m.length > 0 && m.every((x) => x.status === 'matched');
+  const sections = {
+    iv: expected ? ivFilled && sectionMatched(errors?.iv) && sectionChecked.iv : ivFilled,
+    dv: expected ? dvFilled && sectionMatched(errors?.dv) && sectionChecked.dv : dvFilled,
+    constants:
+      expected && constantsExpectedArr
+        ? constantsFilled && sectionMatched(errors?.constants) && sectionChecked.constants
+        : constantsFilled,
+  };
 
   // Conditional spread: when `expected` is absent, omit the `correct`/`errors`
   // keys entirely (not `undefined`) so back-compat consumers can rely on
   // `'correct' in state` semantics.
   const widgetState =
     expected !== undefined
-      ? ({ kind: 'filled', filled, correct, errors, values } as const)
-      : ({ kind: 'filled', filled, values } as const);
+      ? ({ kind: 'filled', filled, correct, errors, values, sections } as const)
+      : ({ kind: 'filled', filled, values, sections } as const);
 
   useRegisteredWidgetState(id, widgetState, [
     filled,
     correct ?? null,
+    sections.iv,
+    sections.dv,
+    sections.constants,
     // Explicit errors key: technically redundant since cell-value deps below
     // already cover freshness (errors is purely derived), but documents intent
     // and survives future refactors that might drop cell-value deps.
@@ -435,14 +463,19 @@ export function VariableTable({
   checkRef.current.run = handleTjek;
   useRegisteredWidgetCheck(id, footerActive, checkRef, 0);
 
-  // Hint resolution per cell — only when `expected` is set and the live
-  // values match the most recent Tjek snapshot (tjekStatus === 'checked').
-  // In `dirty` state, errors are recomputed from live values on every render,
-  // so showing hints would leak answer guidance as the student types between
-  // Tjek clicks. The tier counter survives reload so previously-revealed
-  // hints keep showing after a refresh.
+  // Hint + green resolution per cell — surfaced only when `expected` is set
+  // and the section's values match the most recent Tjek snapshot. Keyed per
+  // section (not the whole table): editing one section hides only its own
+  // hints/green, so a sibling section that was validated earlier keeps them.
+  // While a section is dirty its errors are recomputed live on every render,
+  // so showing its hints would leak answer guidance between Tjek clicks. The
+  // tier counter survives reload so previously-revealed hints keep showing.
   const tiers = state.variableTableHintTiers[id] ?? {};
-  const showHints = expected !== undefined && tjekStatus === 'checked';
+  const showHints = {
+    iv: expected !== undefined && sectionChecked.iv,
+    dv: expected !== undefined && sectionChecked.dv,
+    constants: expected !== undefined && sectionChecked.constants,
+  };
 
   function rowHintsFor(
     section: 'iv' | 'dv' | 'constants',
@@ -454,7 +487,7 @@ export function VariableTable({
     matches: RowMatch[] | undefined,
     studentIndex: number,
   ): Record<Cell, string | null> {
-    if (!showHints || !matches) return { name: null, symbol: null, unit: null };
+    if (!showHints[section] || !matches) return { name: null, symbol: null, unit: null };
     const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
     if (!cm || cm.status !== 'partial') return { name: null, symbol: null, unit: null };
     const rowExp = sectionExpected[cm.expectedIndex];
@@ -462,11 +495,12 @@ export function VariableTable({
     return rowHints(cm.errors, rowExp, (c) => tiers[`${section}.${cm.expectedIndex}.${c}`] ?? 0);
   }
 
-  // Per-cell green is gated on the same conditions as hints: `expected` set
-  // and the live values match the most recent Tjek snapshot. In `dirty`
-  // state, every cell flips back to `false` — typing after a passing Tjek
-  // removes both green and hints until the next Tjek.
+  // Per-cell green is gated on the same per-section condition as hints:
+  // `expected` set and the section unchanged since its last Tjek. Editing a
+  // section flips its own cells back to `false`; sibling sections are
+  // unaffected.
   function rowCorrectFor(
+    section: 'iv' | 'dv' | 'constants',
     sectionExpected: ReadonlyArray<{
       name?: CellSpec;
       symbol?: CellSpec;
@@ -475,20 +509,21 @@ export function VariableTable({
     matches: RowMatch[] | undefined,
     studentIndex: number,
   ): Record<Cell, boolean> {
-    if (!showHints || !matches) return { name: false, symbol: false, unit: false };
+    if (!showHints[section] || !matches) return { name: false, symbol: false, unit: false };
     const cm = matches.find((m) => m.status !== 'missing' && m.studentIndex === studentIndex);
     if (!cm || cm.status === 'missing') return { name: false, symbol: false, unit: false };
     return rowCorrect(cm, sectionExpected[cm.expectedIndex]);
   }
 
   function missingMessagesFor(
+    section: 'iv' | 'dv' | 'constants',
     sectionExpected:
       | ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>
       | undefined,
     matches: RowMatch[] | undefined,
     template: string,
   ): string[] {
-    if (!showHints || !matches || !sectionExpected) return [];
+    if (!showHints[section] || !matches || !sectionExpected) return [];
     const out: string[] = [];
     for (const m of matches) {
       if (m.status !== 'missing') continue;
@@ -512,23 +547,26 @@ export function VariableTable({
   const unitH = unitHeader ?? strings.widgets.variableTable.unitHeader;
 
   const allCorrect = errors !== undefined && filled && isCorrect(errors);
-  const showAriaStatus = expected !== undefined && tjekStatus === 'checked' && allCorrect;
+  const showAriaStatus = expected !== undefined && allChecked && allCorrect;
   const ariaStatusLabel =
     checkedAriaStatusLabel ?? strings.widgets.variableTable.checkedAriaStatusLabel;
   const resolvedCellCorrectAria =
     cellCorrectAriaLabel ?? strings.widgets.variableTable.cellCorrectAriaLabel;
 
   const ivMissing = missingMessagesFor(
+    'iv',
     ivExpectedArr,
     errors?.iv,
     ivMissingMessage ?? strings.widgets.variableTable.hints.ivMissing,
   );
   const dvMissing = missingMessagesFor(
+    'dv',
     dvExpectedArr,
     errors?.dv,
     dvMissingMessage ?? strings.widgets.variableTable.hints.dvMissing,
   );
   const constantsMissing = missingMessagesFor(
+    'constants',
     constantsExpectedArr,
     errors?.constants,
     constantMissingMessage ?? strings.widgets.variableTable.hints.constantMissing,
@@ -552,7 +590,7 @@ export function VariableTable({
         onAdd={() => addRow('iv')}
         onRemove={(idx) => removeRow('iv', idx)}
         getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
-        getCorrect={(s) => rowCorrectFor(ivExpectedArr, errors?.iv, s)}
+        getCorrect={(s) => rowCorrectFor('iv', ivExpectedArr, errors?.iv, s)}
         cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={ivMissing}
         allowPaste={allowPaste}
@@ -573,7 +611,7 @@ export function VariableTable({
         onAdd={() => addRow('dv')}
         onRemove={(idx) => removeRow('dv', idx)}
         getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
-        getCorrect={(s) => rowCorrectFor(dvExpectedArr, errors?.dv, s)}
+        getCorrect={(s) => rowCorrectFor('dv', dvExpectedArr, errors?.dv, s)}
         cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={dvMissing}
         allowPaste={allowPaste}
@@ -596,7 +634,9 @@ export function VariableTable({
         onAdd={() => addRow('constants')}
         onRemove={(idx) => removeRow('constants', idx)}
         getHints={(s) => rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)}
-        getCorrect={(s) => rowCorrectFor(constantsExpectedArr ?? [], errors?.constants, s)}
+        getCorrect={(s) =>
+          rowCorrectFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
+        }
         cellCorrectAriaLabel={resolvedCellCorrectAria}
         missingMessages={constantsMissing}
         allowPaste={allowPaste}
