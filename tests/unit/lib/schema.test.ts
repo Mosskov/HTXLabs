@@ -50,6 +50,24 @@ describe('Phase schema', () => {
     const result = Phase.safeParse({ id: 'x', title: 'X', steps: [{ text: '' }] });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an object step with a lockedHint', () => {
+    const result = Phase.safeParse({
+      id: 'x',
+      title: 'X',
+      steps: [{ text: 'a', widgetId: 'w', lockedHint: 'Låst fordi …' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an object step without a lockedHint (the field is optional)', () => {
+    const result = Phase.safeParse({
+      id: 'x',
+      title: 'X',
+      steps: [{ text: 'a', widgetId: 'w' }],
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('Gate schema — rubric-required', () => {

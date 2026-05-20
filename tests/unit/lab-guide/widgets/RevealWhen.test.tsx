@@ -3,7 +3,7 @@ import { RevealWhen } from '@/lab-guide/widgets/RevealWhen';
 import type { Phase } from '@/lib/schema';
 import { act, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const phase: Phase = { id: 'p', title: 'P', gate: { type: 'always' } };
 
@@ -247,5 +247,120 @@ describe('RevealWhen', () => {
       </Harness>,
     );
     expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+  });
+});
+
+describe('RevealWhen — scrollOnReveal', () => {
+  // The global tests/setup.ts stubs window.matchMedia (matches:false) and a
+  // no-op Element.prototype.scrollIntoView. These tests spy / override locally
+  // for call-count and reduced-motion assertions; restoreAllMocks puts the
+  // global stubs back.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function Switch({
+    experimentId,
+    filled,
+    scroll,
+  }: {
+    experimentId: string;
+    filled: boolean;
+    scroll?: boolean;
+  }) {
+    return (
+      <Harness experimentId={experimentId}>
+        <FakeWidget id="variables" filled={filled} />
+        <RevealWhen widgetIds={['variables']} scrollOnReveal={scroll}>
+          <div data-testid="child">child</div>
+        </RevealWhen>
+      </Harness>
+    );
+  }
+
+  it('scrolls and focuses the revealed content on a user-action reveal', () => {
+    // The watched widget registers unsatisfied first (present across renders),
+    // then flips to satisfied — the genuine user-action path.
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const { rerender } = render(<Switch experimentId="rw/scroll-user" filled={false} scroll />);
+    expect(scrollSpy).not.toHaveBeenCalled();
+    rerender(<Switch experimentId="rw/scroll-user" filled={true} scroll />);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    // Focus lands on the tabIndex=-1 wrapper that holds the children.
+    expect(screen.getByTestId('child').parentElement).toHaveFocus();
+  });
+
+  it('does NOT scroll on a cold reload (watched widget registers absent→satisfied)', () => {
+    // FakeWidget filled=true from the start → the widget goes absent→satisfied
+    // in one registration step, exactly the persisted-correct reload path.
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    render(<Switch experimentId="rw/scroll-reload" filled={true} scroll />);
+    expect(screen.getByTestId('child')).toBeInTheDocument();
+    expect(scrollSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT scroll on an in-SPA phase remount (registry already populated)', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    function Tree({ mountReveal }: { mountReveal: boolean }) {
+      return (
+        <Harness experimentId="rw/scroll-remount">
+          <FakeWidget id="variables" filled={true} />
+          {mountReveal && (
+            <RevealWhen widgetIds={['variables']} scrollOnReveal>
+              <div data-testid="child">child</div>
+            </RevealWhen>
+          )}
+        </Harness>
+      );
+    }
+    const { rerender } = render(<Tree mountReveal={true} />);
+    expect(scrollSpy).not.toHaveBeenCalled(); // first mount is the reload path
+    // Unmount then remount RevealWhen while `variables` stays registered — it
+    // is satisfied on the remount's first render, so no transition fires.
+    rerender(<Tree mountReveal={false} />);
+    rerender(<Tree mountReveal={true} />);
+    expect(scrollSpy).not.toHaveBeenCalled();
+  });
+
+  it('without scrollOnReveal: no scroll and no tabIndex wrapper', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const { rerender } = render(<Switch experimentId="rw/no-scroll" filled={false} />);
+    rerender(<Switch experimentId="rw/no-scroll" filled={true} />);
+    expect(scrollSpy).not.toHaveBeenCalled();
+    expect(document.querySelector('[tabindex="-1"]')).toBeNull();
+  });
+
+  it('uses smooth scroll by default', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const { rerender } = render(<Switch experimentId="rw/smooth" filled={false} scroll />);
+    rerender(<Switch experimentId="rw/smooth" filled={true} scroll />);
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+  });
+
+  it('honors prefers-reduced-motion with an instant scroll', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    } as unknown as MediaQueryList);
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const { rerender } = render(<Switch experimentId="rw/reduced" filled={false} scroll />);
+    rerender(<Switch experimentId="rw/reduced" filled={true} scroll />);
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+  });
+
+  it('scrolls again on each hide→reveal cycle', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const id = 'rw/scroll-cycle';
+    const { rerender } = render(<Switch experimentId={id} filled={false} scroll />);
+    rerender(<Switch experimentId={id} filled={true} scroll />); // reveal 1
+    rerender(<Switch experimentId={id} filled={false} scroll />); // hide
+    rerender(<Switch experimentId={id} filled={true} scroll />); // reveal 2
+    expect(scrollSpy).toHaveBeenCalledTimes(2);
   });
 });

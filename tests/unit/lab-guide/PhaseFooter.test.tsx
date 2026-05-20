@@ -181,3 +181,34 @@ describe('PhaseFooter — respects the gate strict flag', () => {
     expect(screen.getByRole('button', { name: /næste fase/i })).not.toBeDisabled();
   });
 });
+
+describe('PhaseFooter — all-validated gate', () => {
+  it('a filled-but-incorrect widget reads unsatisfied → its check stays surfaced', () => {
+    const phases = twoPhases({ type: 'all-validated', widgetIds: ['a'] });
+    const checks = { a: mkCheck({ label: 'Tjek A' }) };
+    // `all-validated` carries no `strict` flag, but a filled-but-incorrect
+    // widget must NOT read satisfied — else the footer Tjek button vanishes and
+    // the phase is stuck behind a still-locked gate.
+    render(
+      <Harness
+        experimentId="pf/10"
+        phases={phases}
+        states={{ a: { kind: 'filled', filled: true, correct: false } }}
+        checks={checks}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Tjek A' })).toBeInTheDocument();
+  });
+
+  it('a correct widget reads satisfied → the button advances the phase', async () => {
+    const user = userEvent.setup();
+    const phases = twoPhases({ type: 'all-validated', widgetIds: ['a'] });
+    render(
+      <Harness experimentId="pf/11" phases={phases} states={{ a: correctFilled }} checks={{}} />,
+    );
+    const btn = screen.getByRole('button', { name: /næste fase/i });
+    expect(btn).not.toBeDisabled();
+    await user.click(btn);
+    expect(screen.getByTestId('phase')).toHaveTextContent('p2');
+  });
+});

@@ -8,9 +8,24 @@
 // (which `useRegisteredWidgetState` does NOT clean up on unmount — see
 // the comment on that hook for why) would keep ghost-satisfying a phase
 // gate while visually hidden.
+//
+// `scrollOnReveal` smooth-scrolls + focuses the revealed content on the
+// hidden→visible transition. It must fire only on a real user-action reveal,
+// never on a cold reload that hydrates persisted-correct state — see the
+// two-ref guard in the effect below.
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useRunner } from '../RunnerContext';
 import { widgetSatisfied } from '../gates';
+
+/** Scroll `el` into view and move keyboard/SR focus to it. Honors
+ *  prefers-reduced-motion (instant scroll). Scroll first, then focus with
+ *  `preventScroll` so focus does not fight the smooth scroll. */
+function revealIntoView(el: HTMLElement | null) {
+  if (!el) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  el.focus({ preventScroll: true });
+}
 
 interface Props {
   widgetIds: string[];
@@ -25,26 +40,56 @@ interface Props {
    *  presence-only. Same semantics as the `all-satisfied` gate's `strict`
    *  flag — see `widgetSatisfied`. */
   strict?: boolean;
+  /** When true, smooth-scroll the revealed content into view and move focus
+   *  to it on the hidden→visible transition — never on initial
+   *  mount-while-visible. Reload-safe (see the effect's two-ref guard).
+   *  Honors `prefers-reduced-motion`. */
+  scrollOnReveal?: boolean;
   children: ReactNode;
 }
 
-export function RevealWhen({ widgetIds, clearOnHide, strict, children }: Props) {
+export function RevealWhen({ widgetIds, clearOnHide, strict, scrollOnReveal, children }: Props) {
   const { gateCtx, registerWidgetState } = useRunner();
   const visible = widgetIds.every((id) => widgetSatisfied(gateCtx.widgets[id], strict));
+  // True once every watched widget has registered any state. On a user-action
+  // reveal the watched widgets were present (registered-but-unsatisfied) across
+  // renders before the flip; on a cold reload they go absent→satisfied in one
+  // step — the distinguishing signal used by the scroll guard below.
+  const allPresent = widgetIds.every((id) => gateCtx.widgets[id] !== undefined);
 
-  // Track the previous visibility so we can detect the visible→hidden edge
-  // and clear dependent widget state once per transition, not on every
-  // render while hidden.
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Track previous visibility (clearOnHide edge + scroll edge) and previous
+  // registry presence (scroll guard). `prevAllPresentRef` advances on the
+  // registration render via the `allPresent` effect dep, even while `visible`
+  // is still false.
   const prevVisibleRef = useRef(visible);
+  const prevAllPresentRef = useRef(allPresent);
   useEffect(() => {
     if (prevVisibleRef.current && !visible && clearOnHide) {
       for (const id of clearOnHide) {
         registerWidgetState(id, null);
       }
     }
+    // Scroll only on a genuine user-action reveal: the render before the flip
+    // had all watched widgets already present. A cold reload registers a
+    // watched widget absent→satisfied in one step, so `prevAllPresentRef` is
+    // still false there and the scroll is suppressed.
+    if (!prevVisibleRef.current && visible && scrollOnReveal && prevAllPresentRef.current) {
+      revealIntoView(containerRef.current);
+    }
     prevVisibleRef.current = visible;
-  }, [visible, clearOnHide, registerWidgetState]);
+    prevAllPresentRef.current = allPresent;
+  }, [visible, allPresent, clearOnHide, scrollOnReveal, registerWidgetState]);
 
   if (!visible) return null;
+  // Only the opt-in path wraps children — non-opt-in consumers keep the
+  // byte-identical Fragment so existing layout is undisturbed.
+  if (scrollOnReveal) {
+    return (
+      <div ref={containerRef} tabIndex={-1} className="outline-none">
+        {children}
+      </div>
+    );
+  }
   return <>{children}</>;
 }

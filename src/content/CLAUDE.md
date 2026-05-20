@@ -17,7 +17,7 @@ Canonical phase ids are the 7 from SPEC §2 — don't invent new ones.
 
 Each phase has an instruction-box, an MDX prose body, and one or more widgets with their own labels. They are **not** three places to say the same thing:
 
-- **Instruction-box** (`steps: string[]` in frontmatter) — owns the *task list*. Framework renders `Fase N – {title}:` header + a/b/c lettering automatically. Use `steps` for almost every phase, even single-task ones (one-item array still gets the header, no `a.` prefix). The legacy `intro: string` is the rare opt-out for a one-sentence phase with no header; schema rejects both fields at once.
+- **Instruction-box** (`steps: string[]` in frontmatter) — owns the *task list*. Framework renders `Fase N – {title}:` header + a/b/c lettering automatically. Use `steps` for almost every phase, even single-task ones (one-item array still gets the header, no `a.` prefix). The legacy `intro: string` is the rare opt-out for a one-sentence phase with no header; schema rejects both fields at once. An object-form step may carry an optional `lockedHint` — tooltip text shown while the step renders `locked`; omit it for the generic `strings.da.ts` default.
 - **MDX prose** (the paragraphs around widgets in `phase-<id>.mdx`) — owns *motivation / why this matters / scaffolding questions / operational guidance*. Never restate a step here. If you can't think of motivation worth writing, drop the prose paragraph.
 - **Widget label** (the `prompt`, `label`, or item labels on widgets) — owns the *concrete input prompt* (what the student should type or select right now).
 

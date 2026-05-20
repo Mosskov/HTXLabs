@@ -4,6 +4,7 @@
 import { InstructionBox } from '@/lab-guide/InstructionBox';
 import { RunnerProvider } from '@/lab-guide/RunnerContext';
 import type { WidgetState } from '@/lab-guide/gates';
+import { strings } from '@/lab-guide/strings.da';
 import { useRegisteredWidgetState } from '@/lab-guide/useRegisteredWidgetState';
 import type { Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
@@ -107,6 +108,62 @@ describe('InstructionBox — object-step circle tracker', () => {
     const hypotese = screen.getAllByRole('listitem')[3];
     expect(hypotese.textContent).not.toContain('✓');
     expect(hypotese.textContent).not.toContain('låst');
+  });
+
+  it('a presence-only filled widget (no `correct` facet) reads done once filled', () => {
+    // FreeTextResponse / DataTable register `kind:'filled'` without `correct` —
+    // a strict projection would leave such a step active forever.
+    render(
+      <Harness phase={trackedPhase}>
+        <RegisterWidget id="hypotese" state={{ kind: 'filled', filled: true }} />
+      </Harness>,
+    );
+    const hypotese = screen.getAllByRole('listitem')[3];
+    expect(hypotese.textContent).toContain('✓');
+    expect(hypotese.textContent).toContain('fuldført');
+  });
+
+  it('a filled widget that publishes `correct:false` stays active (not done)', () => {
+    render(
+      <Harness phase={trackedPhase}>
+        <RegisterWidget id="hypotese" state={{ kind: 'filled', filled: true, correct: false }} />
+      </Harness>,
+    );
+    const hypotese = screen.getAllByRole('listitem')[3];
+    expect(hypotese.textContent).not.toContain('✓');
+    expect(hypotese.textContent).not.toContain('låst');
+  });
+});
+
+describe('InstructionBox — locked-step tooltip', () => {
+  const phaseWithLockedHint: Phase = {
+    id: 'planlaeg',
+    title: 'Planlæg',
+    gate: { type: 'always' },
+    steps: [{ text: 'Hypotese-linje', widgetId: 'hypotese', lockedHint: 'Egen forklaring.' }],
+  };
+
+  it('a locked step shows the generic stepLockedHint when none is authored', () => {
+    // trackedPhase: only the hypothesis line (widgetId hypotese, absent) locks.
+    render(<Harness phase={trackedPhase} />);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(strings.instructionBox.stepLockedHint);
+  });
+
+  it('a locked step shows the authored lockedHint when provided', () => {
+    render(<Harness phase={phaseWithLockedHint} />);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Egen forklaring.');
+  });
+
+  it('done and active steps render no tooltip and no focusable trigger', () => {
+    // hypotese satisfied → step 4 done; the 3 section steps are active. No step
+    // is locked, so no tooltip and no tabindex'd trigger exist.
+    const { container } = render(
+      <Harness phase={trackedPhase}>
+        <RegisterWidget id="hypotese" state={{ kind: 'rubric', satisfied: true }} />
+      </Harness>,
+    );
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(container.querySelector('[tabindex]')).toBeNull();
   });
 });
 

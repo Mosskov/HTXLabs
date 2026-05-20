@@ -58,6 +58,9 @@ export const strings = {
   instructionBox: {
     stepDone: ' (fuldført)',
     stepLocked: ' (låst)',
+    /** Generic tooltip on a locked tracker step — overridden per step by the
+     *  author-supplied `lockedHint` field on a `PhaseStep` (SPEC §17). */
+    stepLockedHint: 'Dette trin låses op, når du har fuldført trinnene ovenfor.',
   },
   modes: {
     guided: 'Guidet',

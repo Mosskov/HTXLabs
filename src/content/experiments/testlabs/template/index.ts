@@ -37,7 +37,11 @@ export const frontmatter: ExperimentFrontmatter = {
               widgetId: 'variables',
               section: 'constants',
             },
-            { text: 'Formulér en kort hypotese om sammenhængen.', widgetId: 'hypotese' },
+            {
+              text: 'Formulér en kort hypotese om sammenhængen.',
+              widgetId: 'hypotese',
+              lockedHint: 'Låses op, når du har tjekket dine variabler.',
+            },
           ],
           gate: { type: 'all-satisfied', strict: true, widgetIds: ['variables', 'hypotese'] },
         },

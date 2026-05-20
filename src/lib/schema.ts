@@ -98,6 +98,9 @@ export const PhaseStep = z.object({
   /** For a VariableTable target: which section satisfies this line. Omit to
    *  use whole-widget satisfaction. */
   section: z.enum(['iv', 'dv', 'constants']).optional(),
+  /** Author tooltip shown on a `locked` instruction-box step, explaining why it
+   *  is locked. Omit → generic default from strings.da.ts (SPEC §17). */
+  lockedHint: z.string().optional(),
 });
 export type PhaseStep = z.infer<typeof PhaseStep>;
 

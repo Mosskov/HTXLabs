@@ -4,6 +4,7 @@
 // step's completion read live from the widget registry.
 import type { Phase, PhaseStep } from '@/lib/schema';
 import { useRunner } from './RunnerContext';
+import { Tooltip } from './Tooltip';
 import { type GateCtx, widgetSatisfied } from './gates';
 import { strings } from './strings.da';
 
@@ -16,17 +17,22 @@ function normalize(step: string | PhaseStep): NormalizedStep {
 
 /** Project one step to its tracker state. A section target reads the parent
  *  table's per-section facet and never locks (the table is always on the
- *  page). A whole-widget target is `done` when strict-satisfied and `locked`
- *  while its widget is absent from the registry — which is exactly how
- *  `<RevealWhen>` + `clearOnHide` leave a not-yet-revealed widget. */
+ *  page). A whole-widget target is `locked` while its widget is absent from
+ *  the registry — which is exactly how `<RevealWhen>` + `clearOnHide` leave a
+ *  not-yet-revealed widget — and `done` once its widget is satisfied. A
+ *  `kind:'filled'` widget that publishes `correct` (has an `expected` config)
+ *  must be correct to read `done`; a presence-only `filled` widget (no
+ *  `correct` facet — e.g. FreeTextResponse, DataTable) is `done` once filled,
+ *  since a strict projection would leave it active forever. */
 function stepState(step: NormalizedStep, gateCtx: GateCtx): StepState {
   if (step.widgetId) {
     const w = gateCtx.widgets[step.widgetId];
     if (step.section) {
       return w?.kind === 'filled' && w.sections?.[step.section] ? 'done' : 'active';
     }
-    if (widgetSatisfied(w, true)) return 'done';
     if (w === undefined) return 'locked';
+    const requireCorrect = !(w.kind === 'filled' && w.correct === undefined);
+    if (widgetSatisfied(w, requireCorrect)) return 'done';
   }
   return 'active';
 }
@@ -89,6 +95,13 @@ function StepRow({ step, state }: { step: NormalizedStep; state: StepState }) {
         ? strings.instructionBox.stepLocked
         : '';
 
+  const textNode = (
+    <span className={textClass}>
+      {step.text}
+      {suffix && <span className="sr-only">{suffix}</span>}
+    </span>
+  );
+
   return (
     <li className="flex items-start gap-2">
       <span
@@ -97,10 +110,13 @@ function StepRow({ step, state }: { step: NormalizedStep; state: StepState }) {
       >
         {state === 'done' ? '✓' : ''}
       </span>
-      <span className={textClass}>
-        {step.text}
-        {suffix && <span className="sr-only">{suffix}</span>}
-      </span>
+      {state === 'locked' ? (
+        <Tooltip content={step.lockedHint ?? strings.instructionBox.stepLockedHint}>
+          {textNode}
+        </Tooltip>
+      ) : (
+        textNode
+      )}
     </li>
   );
 }

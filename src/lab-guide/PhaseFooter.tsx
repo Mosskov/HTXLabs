@@ -43,12 +43,21 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
   // active check, so this is a no-op for every non-opted-in phase. Open mode
   // bypasses the gate entirely, so no check is surfaced there either.
   const gateWidgetIds = 'widgetIds' in currentPhase.gate ? currentPhase.gate.widgetIds : [];
-  const gateStrict = 'strict' in currentPhase.gate && currentPhase.gate.strict === true;
+  // Per-widget satisfaction must match the gate's own semantics. `widgetSatisfied`
+  // with the gate's `strict` flag covers all-correct / all-checked / all-filled /
+  // rubric-required / all-satisfied. `all-validated` carries no `strict` field but
+  // is correctness-gated by definition — project it strictly too, else a
+  // filled-but-incorrect widget reads satisfied here, its footer Tjek button
+  // vanishes, and the phase is stuck (gate locked, no way to run the check).
+  const strictProjection =
+    currentPhase.gate.type === 'all-validated' ||
+    ('strict' in currentPhase.gate && currentPhase.gate.strict === true);
   const activeCheckId =
     state.mode === 'open'
       ? undefined
       : gateWidgetIds.find(
-          (wid) => !widgetSatisfied(gateCtx.widgets[wid], gateStrict) && widgetChecks[wid] != null,
+          (wid) =>
+            !widgetSatisfied(gateCtx.widgets[wid], strictProjection) && widgetChecks[wid] != null,
         );
   const activeCheck = activeCheckId !== undefined ? widgetChecks[activeCheckId] : undefined;
 
