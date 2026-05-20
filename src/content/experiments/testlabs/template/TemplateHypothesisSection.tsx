@@ -31,6 +31,8 @@ export function TemplateHypothesisSection({ rubric }: Props) {
         placeholder={`Fx. Det forventes at ${dv} stiger lineært med ${iv} …`}
         minWords={10}
         dependsOn={`${iv}|${dv}`}
+        checkInFooter
+        checkLabel="Tjek hypotese"
       />
     </>
   );

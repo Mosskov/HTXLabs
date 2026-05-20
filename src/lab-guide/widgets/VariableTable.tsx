@@ -22,9 +22,12 @@
 // recent Tjek click — typing correct values without clicking Tjek keeps
 // `correct: false`, and editing any cell after a passing Tjek flips it back
 // to `false`. The matching logic lives in `variableTableCorrectness.ts`.
+import { useRef } from 'react';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
+import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
+import type { WidgetCheck } from '../widgetCheck';
 import { ProtectedInput } from './ProtectedInput';
 import { TieredHintList } from './TieredHintList';
 import {
@@ -103,6 +106,11 @@ interface Props {
   /** Tjek button label override (SPEC §17). Only rendered when `expected`
    *  is provided. */
   checkLabel?: string;
+  /** Opt in to driving the Tjek from the shared PhaseFooter button instead of
+   *  the in-widget button. Meaningful only when `expected` is set; ignored in
+   *  open mode (the in-widget button stays so free-advance keeps self-check).
+   *  Default `false`. */
+  checkInFooter?: boolean;
   /** SR-only aria label for a per-cell correctness confirmation announced on
    *  input focus after a passing Tjek. Vars: {field} = nameHeader / symbolHeader /
    *  unitHeader. */
@@ -284,6 +292,7 @@ export function VariableTable({
   ivMissingMessage,
   dvMissingMessage,
   checkLabel,
+  checkInFooter = false,
   cellCorrectAriaLabel,
   checkedAriaStatusLabel,
   allowPaste,
@@ -408,6 +417,23 @@ export function VariableTable({
       for (const m of errors.constants) bumpPartial(m, 'constants', constantsExpectedArr);
     }
   }
+
+  // Footer-check opt-in: when `checkInFooter` is set (and `expected` exists,
+  // and we're not in open mode), the in-widget Tjek button is suppressed and
+  // the PhaseFooter drives `handleTjek` instead. The check object is stable;
+  // we mutate it in place each render so the footer reads the latest closure.
+  // VariableTable's check is synchronous — never disabled, never pending — so
+  // the registration `revision` is a constant `0`.
+  const footerActive = checkInFooter && expected !== undefined && state.mode !== 'open';
+  const checkRef = useRef<WidgetCheck>({
+    label: '',
+    run: () => {},
+    disabled: false,
+    pending: false,
+  });
+  checkRef.current.label = checkLabel ?? strings.widgets.variableTable.checkLabel;
+  checkRef.current.run = handleTjek;
+  useRegisteredWidgetCheck(id, footerActive, checkRef, 0);
 
   // Hint resolution per cell — only when `expected` is set and the live
   // values match the most recent Tjek snapshot (tjekStatus === 'checked').
@@ -575,20 +601,22 @@ export function VariableTable({
         missingMessages={constantsMissing}
         allowPaste={allowPaste}
       />
-      {expected && (
+      {expected && (!footerActive || showAriaStatus) && (
         <div className="mt-2 flex items-center justify-end gap-3">
           {showAriaStatus && (
             <output className="sr-only" aria-live="polite">
               {ariaStatusLabel}
             </output>
           )}
-          <button
-            type="button"
-            onClick={handleTjek}
-            className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
-          >
-            {checkLabel ?? strings.widgets.variableTable.checkLabel}
-          </button>
+          {!footerActive && (
+            <button
+              type="button"
+              onClick={handleTjek}
+              className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
+            >
+              {checkLabel ?? strings.widgets.variableTable.checkLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -25,6 +25,7 @@ import {
   wipe,
 } from './runner';
 import { runnerReducer } from './runnerReducer';
+import type { WidgetCheck } from './widgetCheck';
 import type { VariableTableValues } from './widgets/VariableTable';
 
 interface RunnerApi {
@@ -55,6 +56,14 @@ interface RunnerApi {
   onSimulationProgress: (e: ProgressEvent) => void;
   setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
+  /** Register (or, with `null`, clear) a widget's footer-invokable check
+   *  action. Parallel to `registerWidgetState` — see `widgetChecks`. */
+  registerWidgetCheck: (id: string, check: WidgetCheck | null) => void;
+  /** Live map of widget id → check action, read by `PhaseFooter` to drive the
+   *  merged check button. Kept separate from `gateCtx.widgets` so the pure
+   *  gate evaluators never see a React callback. Footer consumers re-render on
+   *  `tick` via their existing `gateCtx` subscription. */
+  widgetChecks: Record<string, WidgetCheck>;
   /** Latest snapshot of the sim's published state (via `onState`). Exposed so
    * widgets like the sim-mode `DataTable` can mirror sim-owned data without
    * adding a new ProgressEvent kind. Subscribe to `tick` (via gate evaluation
@@ -106,6 +115,9 @@ export function RunnerProvider({
   // Live widget state map — kept in a ref so widget renders don't trigger
   // a runner re-render cascade. Gate evaluation reads from here.
   const widgetStateRef = useRef<Record<string, WidgetState>>({});
+  // Parallel registry for footer-invokable widget check actions. Same ref-not-
+  // -state pattern as `widgetStateRef`; read by `PhaseFooter`.
+  const widgetCheckRef = useRef<Record<string, WidgetCheck>>({});
   // Seed from persisted state so sim-mirror consumers (sim-mode DataTable)
   // render the restored rows on the first paint, not after the sim's first
   // post-mount `onState` publish.
@@ -236,6 +248,15 @@ export function RunnerProvider({
     setTick((t) => t + 1);
   }, []);
 
+  const registerWidgetCheck = useCallback((id: string, check: WidgetCheck | null) => {
+    if (check === null) {
+      delete widgetCheckRef.current[id];
+    } else {
+      widgetCheckRef.current[id] = check;
+    }
+    setTick((t) => t + 1);
+  }, []);
+
   const resetLab = useCallback(() => {
     // Cancel any pending sim-state persist so a late trailing-edge dispatch
     // can't resurrect the wiped state with a stale snapshot.
@@ -276,6 +297,8 @@ export function RunnerProvider({
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,
+    registerWidgetCheck,
+    widgetChecks: widgetCheckRef.current,
     simulationStateRef,
     gateCtx,
     resetLab,

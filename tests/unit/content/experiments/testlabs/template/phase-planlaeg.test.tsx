@@ -4,9 +4,12 @@ import * as template from '@/content/experiments/testlabs/template';
 // real LabGuide with the real content modules; only the rubric embedder is
 // swapped for a MockEmbedder so the test stays hermetic.
 //
-// Walks through: empty → fill IV/DV correctly → assert hypothesis still hidden
-// (snapshot-gated correct) → Tjek variables → reveal → write hypothesis →
-// Tjek rubric → gate opens → Next enabled. Plus three negative paths.
+// Phase 1 now drives the whole flow from a SINGLE merged footer button that
+// cycles through three states (merged-check-button): "Tjek variable" →
+// "Tjek hypotese" → "Næste fase →". The two in-widget Tjek buttons no longer
+// exist. The test walks: empty → fill IV/DV correctly → footer "Tjek variable"
+// → reveal hypothesis → footer "Tjek hypotese" → rubric pass → footer
+// "Næste fase →". Plus three negative paths.
 import { LabGuide } from '@/lab-guide/LabGuide';
 import { mdxComponents } from '@/lab-guide/widgets/mdx';
 import { MDXProvider } from '@mdx-js/react';
@@ -77,10 +80,7 @@ async function fillVariables(values: { ivSymbol: string; dvSymbol: string }) {
     values.dvSymbol,
   );
   await user.type(document.getElementById('variables-dv0-unit') as HTMLInputElement, 'uy');
-  await user.type(
-    document.getElementById('variables-c0-name') as HTMLInputElement,
-    'hældning',
-  );
+  await user.type(document.getElementById('variables-c0-name') as HTMLInputElement, 'hældning');
   await user.type(document.getElementById('variables-c0-symbol') as HTMLInputElement, 'a');
   await user.type(document.getElementById('variables-c0-unit') as HTMLInputElement, 'ua');
   await user.type(
@@ -91,8 +91,13 @@ async function fillVariables(values: { ivSymbol: string; dvSymbol: string }) {
   await user.type(document.getElementById('variables-c1-unit') as HTMLInputElement, 'ub');
 }
 
-function nextButton() {
-  return screen.getByRole('button', { name: /næste fase/i });
+// The merged footer button — the only Tjek/Næste control in phase 1. Its
+// accessible name is whichever of the three states is active; the regex
+// matches all of them so the same query works across the whole flow.
+function footerButton(): HTMLButtonElement {
+  return screen.getByRole('button', {
+    name: /tjek variable|tjek hypotese|tjekker|næste fase/i,
+  }) as HTMLButtonElement;
 }
 
 beforeEach(() => {
@@ -102,53 +107,65 @@ beforeEach(() => {
 });
 
 describe('template phase 1 — happy path', () => {
-  it('opens the gate after filling variables, Tjek, hypothesis, rubric Tjek', async () => {
+  it('cycles the footer button: Tjek variable → Tjek hypotese → Næste fase', async () => {
     const user = userEvent.setup();
     renderTemplate('happy-path');
 
-    expect(nextButton()).toBeDisabled();
+    // State 1: the merged button shows "Tjek variable" and is enabled (the
+    // VariableTable check is synchronous — never disabled).
+    expect(footerButton()).toHaveTextContent(/tjek variable/i);
+    expect(footerButton()).not.toBeDisabled();
+    // No in-widget Tjek buttons exist any more.
+    expect(
+      screen.queryByRole('button', { name: /tjek mine variable/i }),
+    ).not.toBeInTheDocument();
 
     await fillVariables({ ivSymbol: 'X', dvSymbol: 'Y' });
-    // Variables filled correctly but Tjek not yet clicked — strict RevealWhen
-    // hides the hypothesis section.
+    // Variables filled correctly but not yet checked — strict RevealWhen hides
+    // the hypothesis section, and the button stays on "Tjek variable".
     expect(document.getElementById('rr-hypotese')).toBeNull();
-    expect(nextButton()).toBeDisabled();
+    expect(footerButton()).toHaveTextContent(/tjek variable/i);
 
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Hypothesis section appears via RevealWhen `strict` once the table reports
-    // correct — the primary positive signal now that the visible pill is gone.
+    await user.click(footerButton());
+    // The table reports correct → strict RevealWhen shows the hypothesis, the
+    // RubricResponse registers its footer check, and state 2 takes over.
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
+    await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
+    // State 2 is disabled until the hypothesis clears the minWords floor.
+    expect(footerButton()).toBeDisabled();
 
-    // Write a hypothesis that clears both minWords (10) and the relation regex
-    // (a short word adjacent to "stiger").
     const textarea = document.getElementById('rr-hypotese') as HTMLTextAreaElement;
     await user.type(
       textarea,
       'Når X stiger, forventer jeg, at Y stiger lineært med X i denne lab.',
     );
-    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
-    // Wait for the rubric evaluation to resolve and the gate to flip.
-    await waitFor(() => expect(nextButton()).not.toBeDisabled());
+    await waitFor(() => expect(footerButton()).not.toBeDisabled());
+
+    await user.click(footerButton());
+    // Rubric eval resolves → both gate widgets satisfied → state 3.
+    await waitFor(() => expect(footerButton()).toHaveTextContent(/næste fase/i));
+    expect(footerButton()).not.toBeDisabled();
   });
 });
 
 describe('template phase 1 — negative paths', () => {
-  it('lowercase symbols: Tjek shows case-mismatch hints, hypothesis stays hidden', async () => {
+  it('lowercase symbols: footer stays on "Tjek variable" with case-mismatch hints', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/lowercase');
 
     // Canonical IV/DV symbols are uppercase X/Y; lowercase x/y trips the
     // case-mismatch ladder (precedence wins over the lowercase commonMistake).
     await fillVariables({ ivSymbol: 'x', dvSymbol: 'y' });
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    await user.click(footerButton());
     expect(
       screen.getAllByText(/tjek dette symbol — er stort\/lille bogstav rigtigt\?/i).length,
     ).toBeGreaterThanOrEqual(1);
     expect(document.getElementById('rr-hypotese')).toBeNull();
-    expect(nextButton()).toBeDisabled();
+    // The table never reported correct → the button stays on state 1.
+    expect(footerButton()).toHaveTextContent(/tjek variable/i);
   });
 
-  it('empty symbols: Tjek shows "Dette felt er tomt." hints, hypothesis stays hidden', async () => {
+  it('empty symbols: footer stays on "Tjek variable" with "feltet er tomt" hints', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/empty');
 
@@ -158,23 +175,27 @@ describe('template phase 1 — negative paths', () => {
       document.getElementById('variables-dv0-name') as HTMLInputElement,
       'Acceleration',
     );
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    await user.click(footerButton());
     expect(screen.getAllByText(/dette felt er tomt/i).length).toBeGreaterThanOrEqual(1);
     expect(document.getElementById('rr-hypotese')).toBeNull();
-    expect(nextButton()).toBeDisabled();
+    expect(footerButton()).toHaveTextContent(/tjek variable/i);
   });
 
-  it('edit a cell after a passing Tjek: hypothesis hides + Next re-locks', async () => {
+  it('edit a cell after reaching "Tjek hypotese": footer reverts to "Tjek variable"', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/edit-after-pass');
 
     await fillVariables({ ivSymbol: 'X', dvSymbol: 'Y' });
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    await user.click(footerButton());
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
+    await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
 
-    // Now edit an IV cell — strict RevealWhen must hide the section again.
+    // Edit an IV cell — strict RevealWhen hides the section, `clearOnHide`
+    // clears `hypotese`, RubricResponse unmounts and its footer check is
+    // unregistered (the deliberate unmount cleanup) → the footer walk stops
+    // at `variables` and the button reverts to state 1.
     await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'Z');
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeNull());
-    expect(nextButton()).toBeDisabled();
+    await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek variable/i));
   });
 });

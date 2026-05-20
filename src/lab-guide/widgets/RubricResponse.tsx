@@ -28,7 +28,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
+import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
+import type { WidgetCheck } from '../widgetCheck';
 import { ProtectedTextarea } from './ProtectedInput';
 import { TieredHintList } from './TieredHintList';
 
@@ -65,6 +67,10 @@ interface Props {
   maxChars?: number;
   placeholder?: string;
   checkLabel?: string;
+  /** Opt in to driving the check from the shared PhaseFooter button instead of
+   *  the in-widget button. Ignored in open mode (the in-widget button stays so
+   *  free-advance keeps self-check). Default `false`. */
+  checkInFooter?: boolean;
   tooShortMessage?: string;
   embedderDownMessage?: string;
   /** Title for the bonus panel surfaced when required criteria all pass but
@@ -92,6 +98,7 @@ export function RubricResponse({
   maxChars,
   placeholder,
   checkLabel,
+  checkInFooter = false,
   tooShortMessage,
   embedderDownMessage,
   bonusPanelTitle,
@@ -129,6 +136,11 @@ export function RubricResponse({
   const [pending, setPending] = useState(false);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
+  // Synchronous re-entry guard for `evaluate`. The closed-over `pending` state
+  // is not synchronous enough to block a same-render double-click, and the
+  // footer's `disabled` only reaches the button after the `revision` tick —
+  // so this ref is the one thing that reliably stops a second `evaluateRubric`.
+  const pendingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -188,6 +200,9 @@ export function RubricResponse({
 
   const evaluate = async () => {
     if (!parsed.ok) return;
+    // Re-entry guard: drop a second call while one is already in flight.
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     const reqId = ++requestIdRef.current;
     const snapshotText = text;
     const snapshotDependsOn = dependsOnNorm;
@@ -226,9 +241,34 @@ export function RubricResponse({
         }
       }
     } finally {
+      pendingRef.current = false;
       if (mountedRef.current) setPending(false);
     }
   };
+
+  // Footer-check opt-in: when `checkInFooter` is set (and the rubric parsed,
+  // and we're not in open mode), the in-widget Tjek button is suppressed and
+  // the PhaseFooter drives `evaluate` instead. The check object is stable; we
+  // mutate it in place each render so the footer reads the latest closure +
+  // live `disabled`/`pending`. A `pending`-derived `revision` re-fires the
+  // registration on each async-check edge so the footer re-renders.
+  // `disabled` mirrors the in-widget `checkDisabled` (computed after the
+  // `parsed.ok` early return below); recomputed here because this hook must
+  // run before that return to keep hook order stable on a bad rubric.
+  const footerActive = checkInFooter && parsed.ok && state.mode !== 'open';
+  const checkRef = useRef<WidgetCheck>({
+    label: '',
+    run: () => {},
+    disabled: false,
+    pending: false,
+  });
+  checkRef.current.label = pending
+    ? strings.widgets.rubric.evaluating
+    : (checkLabel ?? strings.widgets.rubric.checkLabel);
+  checkRef.current.run = evaluate;
+  checkRef.current.disabled = pending || !nonEmpty || !meetsMinWords;
+  checkRef.current.pending = pending;
+  useRegisteredWidgetCheck(id, footerActive, checkRef, pending ? 1 : 0);
 
   // Bad rubric: render disabled chrome so the page doesn't break.
   if (!parsed.ok) {
@@ -356,23 +396,27 @@ export function RubricResponse({
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-end gap-3">
-        {showAriaStatus && (
-          <output className="sr-only" aria-live="polite">
-            {strings.widgets.rubric.statusPassed}
-          </output>
-        )}
-        <button
-          type="button"
-          onClick={evaluate}
-          disabled={checkDisabled}
-          className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {pending
-            ? strings.widgets.rubric.evaluating
-            : (checkLabel ?? strings.widgets.rubric.checkLabel)}
-        </button>
-      </div>
+      {(showAriaStatus || !footerActive) && (
+        <div className="mt-2 flex items-center justify-end gap-3">
+          {showAriaStatus && (
+            <output className="sr-only" aria-live="polite">
+              {strings.widgets.rubric.statusPassed}
+            </output>
+          )}
+          {!footerActive && (
+            <button
+              type="button"
+              onClick={evaluate}
+              disabled={checkDisabled}
+              className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending
+                ? strings.widgets.rubric.evaluating
+                : (checkLabel ?? strings.widgets.rubric.checkLabel)}
+            </button>
+          )}
+        </div>
+      )}
 
       {showEmbedderBanner && (
         <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">

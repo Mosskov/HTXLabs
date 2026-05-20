@@ -480,3 +480,64 @@ describe('VariableTable per-cell green confirmation', () => {
     expect(screen.queryByRole('button', { name: /tjek mine variable/i })).not.toBeInTheDocument();
   });
 });
+
+describe('VariableTable checkInFooter (footer-driven Tjek)', () => {
+  // Reads the runner's footer-check registry + exposes a button to invoke it,
+  // standing in for the PhaseFooter the widget would normally be driven by.
+  function CheckRunner() {
+    const { widgetChecks } = useRunner();
+    const check = widgetChecks.variables;
+    return (
+      <div>
+        <span data-testid="vc-label">{check?.label ?? '(none)'}</span>
+        <button type="button" data-testid="vc-run" onClick={() => check?.run()}>
+          run
+        </button>
+      </div>
+    );
+  }
+
+  it('suppresses the in-widget Tjek button and registers a footer check', () => {
+    render(
+      <Harness experimentId="vtf/registered">
+        <VariableTable
+          id="variables"
+          expected={expectedSymbolsOnly}
+          checkInFooter
+          checkLabel="Tjek variable"
+        />
+        <CheckRunner />
+      </Harness>,
+    );
+    expect(screen.queryByRole('button', { name: /tjek mine variable/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('vc-label')).toHaveTextContent('Tjek variable');
+  });
+
+  it('footer-driven run() flips correct just like the in-widget Tjek', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtf/run">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} checkInFooter />
+        <CheckRunner />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'X');
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    expect(readCorrect()).toBe(false);
+    await user.click(screen.getByTestId('vc-run'));
+    expect(readCorrect()).toBe(true);
+  });
+
+  it('without checkInFooter: keeps the in-widget button, registers no footer check', () => {
+    render(
+      <Harness experimentId="vtf/off">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+        <CheckRunner />
+      </Harness>,
+    );
+    expect(screen.getByRole('button', { name: /tjek mine variable/i })).toBeInTheDocument();
+    expect(screen.getByTestId('vc-label')).toHaveTextContent('(none)');
+  });
+});

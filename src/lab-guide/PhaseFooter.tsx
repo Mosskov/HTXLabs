@@ -3,7 +3,7 @@ import type { Phase } from '@/lib/schema';
 import { type ReactNode, useContext } from 'react';
 import { ResetWorkButton } from './ResetWorkButton';
 import { useRunner } from './RunnerContext';
-import { gateMessage, isGateSatisfied } from './gates';
+import { gateMessage, isGateSatisfied, widgetSatisfied } from './gates';
 import { strings } from './strings.da';
 import { ToastContext } from './widgets/ToastContext';
 
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onResetView }: Props) {
-  const { state, setCurrentPhase, gateCtx, simulation, resetLab } = useRunner();
+  const { state, setCurrentPhase, gateCtx, simulation, resetLab, widgetChecks } = useRunner();
   const { push: pushToast } = useContext(ToastContext);
   const currentIdx = phases.findIndex((p) => p.id === state.currentPhaseId);
   const currentPhase = phases[currentIdx];
@@ -35,9 +35,36 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
   // message and the button's enabled/disabled state.
   const gateOk = isGateSatisfied(currentPhase.gate, state, simulation, gateCtx, currentPhase.id);
 
+  // Merged check button: a widget-driven gate may have widgets that opted in
+  // (`checkInFooter`) to driving their Tjek from this footer button. Walk the
+  // gate's `widgetIds` in order and pick the first unsatisfied widget that
+  // registered a check — that's the active step. A gate without `widgetIds`
+  // (milestone / data-points / predicate / always / keyword-count) yields no
+  // active check, so this is a no-op for every non-opted-in phase. Open mode
+  // bypasses the gate entirely, so no check is surfaced there either.
+  const gateWidgetIds = 'widgetIds' in currentPhase.gate ? currentPhase.gate.widgetIds : [];
+  const gateStrict = 'strict' in currentPhase.gate && currentPhase.gate.strict === true;
+  const activeCheckId =
+    state.mode === 'open'
+      ? undefined
+      : gateWidgetIds.find(
+          (wid) => !widgetSatisfied(gateCtx.widgets[wid], gateStrict) && widgetChecks[wid] != null,
+        );
+  const activeCheck = activeCheckId !== undefined ? widgetChecks[activeCheckId] : undefined;
+
+  // When a check is active the footer button runs that check; otherwise it
+  // advances the phase (unchanged behaviour). The button is disabled per the
+  // check's own `disabled` while a check is active, or per the gate otherwise.
+  const buttonDisabled = activeCheck ? activeCheck.disabled : !gateOk;
+  const buttonLabel = activeCheck
+    ? activeCheck.label
+    : isLast
+      ? strings.guide.finishGuide
+      : strings.guide.nextPhase;
+
   return (
     <div className="mt-8 no-print">
-      {!gateOk && (
+      {!gateOk && activeCheck === undefined && (
         <output className="mb-3 block text-sm text-slate-600">
           {gateMessage(currentPhase.gate)}
         </output>
@@ -69,6 +96,10 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
           <button
             type="button"
             onClick={() => {
+              if (activeCheck) {
+                if (!activeCheck.disabled) void activeCheck.run();
+                return;
+              }
               if (!gateOk) return;
               if (isLast) {
                 pushToast(strings.guide.guideFinished);
@@ -76,17 +107,17 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
               }
               if (nextPhase) setCurrentPhase(nextPhase.id);
             }}
-            disabled={!gateOk}
+            disabled={buttonDisabled}
             className={`
               px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-colors
               ${
-                gateOk
+                !buttonDisabled
                   ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'
                   : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
               }
             `}
           >
-            {isLast ? strings.guide.finishGuide : strings.guide.nextPhase}
+            {buttonLabel}
           </button>
         </div>
       </div>

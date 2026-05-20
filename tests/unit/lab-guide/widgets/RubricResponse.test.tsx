@@ -4,10 +4,10 @@ import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { RubricResponse } from '@/lab-guide/widgets/RubricResponse';
 import { MockEmbedder } from '@/lib/rubric/embedder';
 import type { Gate, Phase } from '@/lib/schema';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // A minimal rubric with one required semantic criterion + one literal-only
 // required criterion. The mock embedder hands out vectors that make `passing`
@@ -480,5 +480,165 @@ describe('RubricResponse — reload safety', () => {
     await user.click(screen.getByTestId('flip-deps'));
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+describe('RubricResponse — checkInFooter (footer-driven check)', () => {
+  // Reads the runner's footer-check registry + exposes buttons to invoke it,
+  // standing in for the PhaseFooter the widget would normally be driven by.
+  function RubricCheckProbe() {
+    const { widgetChecks } = useRunner();
+    const check = widgetChecks.hypotese;
+    return (
+      <div>
+        <span data-testid="rc-label">{check?.label ?? '(none)'}</span>
+        <span data-testid="rc-pending">{String(check?.pending ?? false)}</span>
+        <span data-testid="rc-disabled">{String(check?.disabled ?? true)}</span>
+        <button type="button" data-testid="rc-run" onClick={() => check?.run()}>
+          run
+        </button>
+        <button
+          type="button"
+          data-testid="rc-run2"
+          onClick={() => {
+            check?.run();
+            check?.run();
+          }}
+        >
+          run twice
+        </button>
+      </div>
+    );
+  }
+
+  /** An embedder whose single `embed` call stays pending until `release`. */
+  function deferredEmbedder() {
+    let resolve: ((v: number[][]) => void) | undefined;
+    const embed = vi.fn(
+      () =>
+        new Promise<number[][]>((res) => {
+          resolve = res;
+        }),
+    );
+    return {
+      embedder: { embed },
+      embed,
+      release: (v: number[][]) => resolve?.(v),
+    };
+  }
+
+  it('suppresses the in-widget button and registers a footer check', () => {
+    render(
+      <Harness experimentId="rr-footer/1">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          checkInFooter
+          embedder={mockEmbedder()}
+        />
+        <RubricCheckProbe />
+      </Harness>,
+    );
+    expect(screen.queryByRole('button', { name: /tjek mit svar/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('rc-label')).toHaveTextContent('Tjek mit svar');
+  });
+
+  it('without checkInFooter: keeps the in-widget button, registers no footer check', () => {
+    render(
+      <Harness experimentId="rr-footer/2">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          embedder={mockEmbedder()}
+        />
+        <RubricCheckProbe />
+      </Harness>,
+    );
+    expect(screen.getByRole('button', { name: /tjek mit svar/i })).toBeInTheDocument();
+    expect(screen.getByTestId('rc-label')).toHaveTextContent('(none)');
+  });
+
+  it('the registered check disabled tracks the minWords floor', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rr-footer/3">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          minWords={5}
+          checkInFooter
+          embedder={mockEmbedder()}
+        />
+        <RubricCheckProbe />
+      </Harness>,
+    );
+    expect(screen.getByTestId('rc-disabled')).toHaveTextContent('true');
+    await user.type(screen.getByRole('textbox'), 'one two three four five');
+    expect(screen.getByTestId('rc-disabled')).toHaveTextContent('false');
+  });
+
+  it('the registered check label + pending track the async evaluation', async () => {
+    const user = userEvent.setup();
+    const { embedder, release } = deferredEmbedder();
+    render(
+      <Harness experimentId="rr-footer/4">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          checkInFooter
+          embedder={embedder}
+        />
+        <RubricCheckProbe />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), passingText);
+    expect(screen.getByTestId('rc-label')).toHaveTextContent('Tjek mit svar');
+
+    await user.click(screen.getByTestId('rc-run'));
+    // While the eval is in flight the registered label flips to the pending
+    // copy — proving the `pending`-derived `revision` re-fires registration.
+    await waitFor(() => expect(screen.getByTestId('rc-pending')).toHaveTextContent('true'));
+    expect(screen.getByTestId('rc-label')).toHaveTextContent('Tjekker…');
+
+    release([
+      [1, 0],
+      [1, 0],
+    ]);
+    await waitFor(() => expect(screen.getByTestId('rc-pending')).toHaveTextContent('false'));
+  });
+
+  it('a synchronous double run() triggers only one evaluation (pendingRef guard)', async () => {
+    const user = userEvent.setup();
+    const { embedder, embed, release } = deferredEmbedder();
+    render(
+      <Harness experimentId="rr-footer/5">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          checkInFooter
+          embedder={embedder}
+        />
+        <RubricCheckProbe />
+      </Harness>,
+    );
+    await user.type(screen.getByRole('textbox'), passingText);
+
+    // The probe fires run() twice synchronously in one click handler. The
+    // re-entry guard must drop the second call → evaluateRubric runs once →
+    // its single batched embed call fires exactly once.
+    await user.click(screen.getByTestId('rc-run2'));
+    expect(embed).toHaveBeenCalledTimes(1);
+
+    // Release the in-flight evaluation so the component settles cleanly.
+    release([
+      [1, 0],
+      [1, 0],
+    ]);
+    await waitFor(() => expect(screen.getByTestId('rc-pending')).toHaveTextContent('false'));
   });
 });
