@@ -91,10 +91,41 @@ describe('RubricResponse', () => {
         />
       </Harness>,
     );
-    const button = screen.getByRole('button', { name: /tjek/i });
-    expect(button).toBeDisabled();
+    // Re-query the button each time: below the floor it is wrapped in a hover
+    // Tooltip (carrying the min-words hint), which remounts the element — a
+    // stale reference held across the transition would point at dead DOM.
+    // Below the floor it is aria-disabled (focusable, so the tooltip can open),
+    // not carrying a real `disabled` attribute.
+    expect(screen.getByRole('button', { name: /tjek/i })).toHaveAttribute('aria-disabled', 'true');
     await user.type(screen.getByRole('textbox'), 'one two three four five');
-    expect(button).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /tjek/i })).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('blocks the check above the maxWords ceiling, with a counter and tooltip', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="rr-maxwords/1">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={passingRubric}
+          maxWords={3}
+          embedder={mockEmbedder()}
+        />
+      </Harness>,
+    );
+    const textbox = screen.getByRole('textbox');
+
+    // At the ceiling — counter shows, check still allowed.
+    await user.type(textbox, 'one two three');
+    expect(screen.getByText('3 / 3 ord')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /tjek/i })).not.toHaveAttribute('aria-disabled');
+
+    // Over the ceiling — check blocked (aria-disabled), reason in the tooltip.
+    await user.type(textbox, ' four');
+    expect(screen.getByText('4 / 3 ord')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /tjek/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/skriv højst 3 ord/i)).toHaveAttribute('role', 'tooltip');
   });
 
   it('flips the gate to pass on a successful check', async () => {

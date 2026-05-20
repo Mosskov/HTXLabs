@@ -21,15 +21,13 @@ export function TemplateHypothesisSection({ rubric }: Props) {
   const dv = values?.dv[0]?.symbol.trim() || 'Y';
   return (
     <>
-      <p className="my-3 text-slate-800">
-        Hvordan forventer du at <b>{dv}</b> afhænger af <b>{iv}</b>?
-      </p>
       <RubricResponse
         id="hypotese"
         rubric={rubric}
         prompt={`Skriv en kort hypotese om sammenhængen mellem ${iv} og ${dv}.`}
-        placeholder={`Fx. Det forventes at ${dv} stiger lineært med ${iv} …`}
-        minWords={10}
+        placeholder={`Fx. Det forventes at ${dv} …`}
+        minWords={6}
+        maxWords={30}
         dependsOn={`${iv}|${dv}`}
         checkInFooter
         checkLabel="Tjek hypotese"

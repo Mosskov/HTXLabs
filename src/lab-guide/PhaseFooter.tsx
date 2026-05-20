@@ -3,6 +3,7 @@ import type { Phase } from '@/lib/schema';
 import { type ReactNode, useContext } from 'react';
 import { ResetWorkButton } from './ResetWorkButton';
 import { useRunner } from './RunnerContext';
+import { Tooltip } from './Tooltip';
 import { gateMessage, isGateSatisfied, widgetSatisfied } from './gates';
 import { strings } from './strings.da';
 import { ToastContext } from './widgets/ToastContext';
@@ -71,6 +72,42 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
       ? strings.guide.finishGuide
       : strings.guide.nextPhase;
 
+  // A disabled check that carries a hover explanation renders `aria-disabled`
+  // instead of a real `disabled` attribute: a truly disabled <button> fires no
+  // pointer events, so its Tooltip would never open. Every other disabled state
+  // keeps the real attribute. The click handler no-ops while disabled either way.
+  const disabledReason = activeCheck?.disabledReason;
+
+  const nextButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (activeCheck) {
+          if (!activeCheck.disabled) void activeCheck.run();
+          return;
+        }
+        if (!gateOk) return;
+        if (isLast) {
+          pushToast(strings.guide.guideFinished);
+          return;
+        }
+        if (nextPhase) setCurrentPhase(nextPhase.id);
+      }}
+      disabled={buttonDisabled && disabledReason == null}
+      aria-disabled={disabledReason != null || undefined}
+      className={`
+        px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-colors
+        ${
+          !buttonDisabled
+            ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'
+            : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
+        }
+      `}
+    >
+      {buttonLabel}
+    </button>
+  );
+
   return (
     <div className="mt-8 no-print">
       {!gateOk && activeCheck === undefined && (
@@ -102,32 +139,13 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
         </div>
         <div className="flex items-center gap-2">{middleActions}</div>
         <div className="flex-1 flex justify-end">
-          <button
-            type="button"
-            onClick={() => {
-              if (activeCheck) {
-                if (!activeCheck.disabled) void activeCheck.run();
-                return;
-              }
-              if (!gateOk) return;
-              if (isLast) {
-                pushToast(strings.guide.guideFinished);
-                return;
-              }
-              if (nextPhase) setCurrentPhase(nextPhase.id);
-            }}
-            disabled={buttonDisabled}
-            className={`
-              px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-colors
-              ${
-                !buttonDisabled
-                  ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'
-                  : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
-              }
-            `}
-          >
-            {buttonLabel}
-          </button>
+          {disabledReason != null ? (
+            <Tooltip content={disabledReason} align="right">
+              {nextButton}
+            </Tooltip>
+          ) : (
+            nextButton
+          )}
         </div>
       </div>
       <ResetWorkButton

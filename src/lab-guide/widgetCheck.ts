@@ -13,4 +13,9 @@ export interface WidgetCheck {
   disabled: boolean;
   /** True while an async check is in flight — the footer shows the pending label. */
   pending: boolean;
+  /** Why the check is disabled, when the disable warrants an explanation (e.g.
+   *  below the min-words floor). The PhaseFooter surfaces it as a hover tooltip
+   *  on the footer button. Omitted when no explanation is needed (empty input,
+   *  check in flight). */
+  disabledReason?: string;
 }

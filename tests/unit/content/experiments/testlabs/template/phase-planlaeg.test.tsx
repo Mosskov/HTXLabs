@@ -131,8 +131,9 @@ describe('template phase 1 — happy path', () => {
     // RubricResponse registers its footer check, and state 2 takes over.
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
     await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
-    // State 2 is disabled until the hypothesis clears the minWords floor.
-    expect(footerButton()).toBeDisabled();
+    // State 2 is disabled (aria-disabled, so its min-words tooltip can open)
+    // until the hypothesis clears the minWords floor.
+    expect(footerButton()).toHaveAttribute('aria-disabled', 'true');
 
     const textarea = document.getElementById('rr-hypotese') as HTMLTextAreaElement;
     await user.type(
@@ -181,6 +182,33 @@ describe('template phase 1 — negative paths', () => {
     // Table never reported correct → hypothesis stays hidden, button on state 1.
     expect(document.getElementById('rr-hypotese')).toBeNull();
     expect(footerButton()).toHaveTextContent(/tjek variable/i);
+  });
+
+  it('too-short hypothesis: the min-words tooltip shows even on an empty box', async () => {
+    const user = userEvent.setup();
+    renderTemplate('negative/short-hypothesis');
+
+    await fillVariables({ ivSymbol: 'X', dvSymbol: 'Y' });
+    await user.click(footerButton());
+    await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
+
+    // Empty box — a student jumping straight to Tjek. The button is
+    // aria-disabled (not a real `disabled` attr) so it still takes hover, and
+    // the message renders once, as the tooltip bubble (role="tooltip") — not an
+    // inline <p>. getByText throws on a duplicate, proving there is one.
+    await waitFor(() => expect(footerButton()).toHaveAttribute('aria-disabled', 'true'));
+    const tip = screen.getByText(/skriv mindst 6 ord før du tjekker/i);
+    expect(tip).toHaveAttribute('role', 'tooltip');
+    expect(tip).toHaveAttribute('data-open', 'false');
+
+    // It opens on hover of the check button — before any text is typed.
+    await user.hover(footerButton());
+    expect(tip).toHaveAttribute('data-open', 'true');
+
+    // Still too short after a few words — the button stays aria-disabled.
+    const textarea = document.getElementById('rr-hypotese') as HTMLTextAreaElement;
+    await user.type(textarea, 'Y stiger lidt');
+    await waitFor(() => expect(footerButton()).toHaveAttribute('aria-disabled', 'true'));
   });
 
   it('edit a cell after reaching "Tjek hypotese": footer reverts to "Tjek variable"', async () => {

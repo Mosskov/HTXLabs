@@ -49,6 +49,59 @@ describe('Tooltip', () => {
     expect(tip).toHaveAttribute('data-open', 'false');
   });
 
+  it('anchors the bubble to the right edge when align="right"', () => {
+    render(
+      <Tooltip content="Forklaring" align="right">
+        <span>Udløser</span>
+      </Tooltip>,
+    );
+    const trigger = screen.getByText('Udløser');
+    const tip = screen.getByRole('tooltip');
+    fireEvent.pointerEnter(trigger);
+    expect(tip).toHaveClass('right-0');
+    expect(tip).not.toHaveClass('left-0');
+  });
+
+  it('opens below the trigger by default', () => {
+    render(
+      <Tooltip content="Forklaring">
+        <span>Udløser</span>
+      </Tooltip>,
+    );
+    const trigger = screen.getByText('Udløser');
+    const tip = screen.getByRole('tooltip');
+    fireEvent.pointerEnter(trigger);
+    expect(tip).toHaveClass('top-full');
+    expect(tip).not.toHaveClass('bottom-full');
+  });
+
+  it('flips above the trigger when there is no room below', () => {
+    render(
+      <Tooltip content="Forklaring">
+        <span>Udløser</span>
+      </Tooltip>,
+    );
+    const trigger = screen.getByText('Udløser');
+    const tip = screen.getByRole('tooltip');
+    const wrapper = trigger.parentElement as HTMLElement;
+    const originalInnerHeight = window.innerHeight;
+
+    // jsdom does no layout — feed the placement check a trigger pinned near the
+    // viewport bottom and a bubble with real height.
+    Object.defineProperty(window, 'innerHeight', { value: 600, configurable: true });
+    Object.defineProperty(tip, 'offsetHeight', { value: 120, configurable: true });
+    wrapper.getBoundingClientRect = () =>
+      ({ top: 560, bottom: 590, height: 30, width: 0, left: 0, right: 0, x: 0, y: 560 }) as DOMRect;
+
+    fireEvent.pointerEnter(trigger);
+    Object.defineProperty(window, 'innerHeight', {
+      value: originalInnerHeight,
+      configurable: true,
+    });
+    expect(tip).toHaveClass('bottom-full');
+    expect(tip).not.toHaveClass('top-full');
+  });
+
   it('opens on focus and closes on blur', () => {
     render(
       <Tooltip content="Forklaring">

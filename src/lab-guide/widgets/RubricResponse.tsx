@@ -27,6 +27,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { useRunner } from '../RunnerContext';
+import { Tooltip } from '../Tooltip';
 import { format, strings } from '../strings.da';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
@@ -65,6 +66,11 @@ interface Props {
   rubric: unknown;
   minWords?: number;
   maxChars?: number;
+  /** Soft upper bound on word count. Over the limit the check is blocked (the
+   *  button is (aria-)disabled with a tooltip) and a `words / maxWords` counter
+   *  shows. Unlike `maxChars` it is not hard-enforced — a textarea has no native
+   *  word limit — so the student keeps their text and trims it down. */
+  maxWords?: number;
   placeholder?: string;
   checkLabel?: string;
   /** Opt in to driving the check from the shared PhaseFooter button instead of
@@ -72,6 +78,7 @@ interface Props {
    *  free-advance keeps self-check). Default `false`. */
   checkInFooter?: boolean;
   tooShortMessage?: string;
+  tooLongMessage?: string;
   embedderDownMessage?: string;
   /** Title for the bonus panel surfaced when required criteria all pass but
    *  optional criteria still carry tiered hints. Defaults to
@@ -96,10 +103,12 @@ export function RubricResponse({
   rubric,
   minWords,
   maxChars,
+  maxWords,
   placeholder,
   checkLabel,
   checkInFooter = false,
   tooShortMessage,
+  tooLongMessage,
   embedderDownMessage,
   bonusPanelTitle,
   dependsOn,
@@ -186,7 +195,27 @@ export function RubricResponse({
 
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   const meetsMinWords = typeof minWords !== 'number' || words >= minWords;
+  const overMaxWords = typeof maxWords === 'number' && words > maxWords;
   const nonEmpty = text.trim().length > 0;
+  // `tooShort` (typed something but below the minimum) drives aria-invalid — an
+  // empty field is not "invalid". `wordCountHint` is the broader tooltip text:
+  // it also covers a fresh empty field (so a student jumping straight to Tjek
+  // sees why) and the above-maximum case. The message surfaces as a hover
+  // tooltip on the check button, never as an inline paragraph; `!pending`
+  // suppresses it mid-check, when the button reads "Tjekker…". Below-minimum
+  // wins over above-maximum if an author misconfigures minWords > maxWords.
+  const tooShort = nonEmpty && !meetsMinWords;
+  const tooShortText =
+    tooShortMessage ?? format(strings.widgets.rubric.tooShort, { n: minWords ?? 0 });
+  const tooLongText =
+    tooLongMessage ?? format(strings.widgets.rubric.tooLong, { n: maxWords ?? 0 });
+  const wordCountHint = pending
+    ? undefined
+    : !meetsMinWords
+      ? tooShortText
+      : overMaxWords
+        ? tooLongText
+        : undefined;
 
   const onTextChange = (next: string) => {
     // Invalidate any in-flight evaluation: when it resolves, its requestId
@@ -266,7 +295,8 @@ export function RubricResponse({
     ? strings.widgets.rubric.evaluating
     : (checkLabel ?? strings.widgets.rubric.checkLabel);
   checkRef.current.run = evaluate;
-  checkRef.current.disabled = pending || !nonEmpty || !meetsMinWords;
+  checkRef.current.disabled = pending || !nonEmpty || !meetsMinWords || overMaxWords;
+  checkRef.current.disabledReason = wordCountHint;
   checkRef.current.pending = pending;
   useRegisteredWidgetCheck(id, footerActive, checkRef, pending ? 1 : 0);
 
@@ -291,9 +321,7 @@ export function RubricResponse({
     );
   }
 
-  const checkDisabled = pending || !nonEmpty || !meetsMinWords;
-  const tooShortText =
-    tooShortMessage ?? format(strings.widgets.rubric.tooShort, { n: minWords ?? 0 });
+  const checkDisabled = pending || !nonEmpty || !meetsMinWords || overMaxWords;
 
   const triggeredMisconceptions =
     result && !dirty && !pending
@@ -363,7 +391,6 @@ export function RubricResponse({
     (failedHints.length > 0 || triggeredMisconceptions.length > 0);
   const showEmbedderBanner = embedderDown && !dirty;
 
-  const tooShort = nonEmpty && !meetsMinWords;
   const helpId = `rr-${id}-help`;
 
   // Visible status pill removed — feedback now comes from the tier hint list
@@ -371,6 +398,29 @@ export function RubricResponse({
   // live region preserves the AT-side "Godkendt" announcement on pass so
   // screen-reader users still hear that the rubric accepted their answer.
   const showAriaStatus = !pending && !dirty && satisfied;
+
+  // In-widget check button (shown when the footer isn't driving the check —
+  // open mode, or `checkInFooter` not set). Wrapped in a Tooltip when the word
+  // count blocks the check, so the reason surfaces on hover.
+  const checkButton = (
+    <button
+      type="button"
+      onClick={() => {
+        if (!checkDisabled) void evaluate();
+      }}
+      // While the check is blocked on word count (empty, too-short, too-long)
+      // the button renders `aria-disabled` — not `disabled` — so the Tooltip
+      // can still open on hover (a truly disabled <button> fires no pointer
+      // events). `pending` keeps the real attribute.
+      disabled={checkDisabled && wordCountHint == null}
+      aria-disabled={wordCountHint != null || undefined}
+      className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+    >
+      {pending
+        ? strings.widgets.rubric.evaluating
+        : (checkLabel ?? strings.widgets.rubric.checkLabel)}
+    </button>
+  );
 
   return (
     <div className="my-4">
@@ -383,15 +433,21 @@ export function RubricResponse({
         maxLength={maxChars}
         placeholder={placeholder ?? strings.widgets.rubric.placeholder}
         aria-describedby={helpId}
-        aria-invalid={tooShort || undefined}
+        aria-invalid={tooShort || overMaxWords || undefined}
         allowPaste={allowPaste}
         onChange={(e) => onTextChange(e.target.value)}
       />
       <div id={helpId} aria-live="polite" className="contents">
-        {tooShort && <p className="mt-1 text-xs text-amber-700">{tooShortText}</p>}
         {typeof maxChars === 'number' && (
           <div className="mt-1 text-xs text-slate-500 text-right">
             {text.length} / {maxChars}
+          </div>
+        )}
+        {typeof maxWords === 'number' && (
+          <div
+            className={`mt-1 text-xs text-right ${overMaxWords ? 'text-amber-700' : 'text-slate-500'}`}
+          >
+            {format(strings.widgets.rubric.wordCount, { n: words, max: maxWords })}
           </div>
         )}
       </div>
@@ -403,18 +459,14 @@ export function RubricResponse({
               {strings.widgets.rubric.statusPassed}
             </output>
           )}
-          {!footerActive && (
-            <button
-              type="button"
-              onClick={evaluate}
-              disabled={checkDisabled}
-              className="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending
-                ? strings.widgets.rubric.evaluating
-                : (checkLabel ?? strings.widgets.rubric.checkLabel)}
-            </button>
-          )}
+          {!footerActive &&
+            (wordCountHint != null ? (
+              <Tooltip content={wordCountHint} align="right">
+                {checkButton}
+              </Tooltip>
+            ) : (
+              checkButton
+            ))}
         </div>
       )}
 

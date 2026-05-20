@@ -138,6 +138,10 @@ export const strings = {
       evaluating: 'Tjekker…',
       /** Vars: {n} = minWords threshold */
       tooShort: 'Skriv mindst {n} ord før du tjekker.',
+      /** Vars: {n} = maxWords threshold */
+      tooLong: 'Skriv højst {n} ord før du tjekker.',
+      /** Vars: {n} = current word count, {max} = maxWords threshold */
+      wordCount: '{n} / {max} ord',
       embedderDown:
         'Den semantiske vurdering er ikke tilgængelig lige nu — start embed-serveren og prøv igen.',
       statusPassed: 'Godkendt',
