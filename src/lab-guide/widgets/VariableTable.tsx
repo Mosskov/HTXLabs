@@ -573,74 +573,93 @@ export function VariableTable({
   );
 
   return (
-    <div className="my-4 space-y-4">
-      <RowGroupSection
-        sectionId="iv"
-        idPrefix={`${id}-iv`}
-        label={ivLabel ?? strings.widgets.variableTable.ivLabel}
-        rows={values.iv}
-        bounds={bounds.iv}
-        nameHeader={nameH}
-        symbolHeader={symbolH}
-        unitHeader={unitH}
-        addLabel={addIvLabel ?? strings.widgets.variableTable.addIvLabel}
-        removeAriaLabel={removeIvAriaLabel ?? strings.widgets.variableTable.removeIvAriaLabel}
-        rowAriaLabel={ivRowAriaLabel ?? strings.widgets.variableTable.ivRowAriaLabel}
-        onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
-        onAdd={() => addRow('iv')}
-        onRemove={(idx) => removeRow('iv', idx)}
-        getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
-        getCorrect={(s) => rowCorrectFor('iv', ivExpectedArr, errors?.iv, s)}
-        cellCorrectAriaLabel={resolvedCellCorrectAria}
-        missingMessages={ivMissing}
-        allowPaste={allowPaste}
-      />
-      <RowGroupSection
-        sectionId="dv"
-        idPrefix={`${id}-dv`}
-        label={dvLabel ?? strings.widgets.variableTable.dvLabel}
-        rows={values.dv}
-        bounds={bounds.dv}
-        nameHeader={nameH}
-        symbolHeader={symbolH}
-        unitHeader={unitH}
-        addLabel={addDvLabel ?? strings.widgets.variableTable.addDvLabel}
-        removeAriaLabel={removeDvAriaLabel ?? strings.widgets.variableTable.removeDvAriaLabel}
-        rowAriaLabel={dvRowAriaLabel ?? strings.widgets.variableTable.dvRowAriaLabel}
-        onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
-        onAdd={() => addRow('dv')}
-        onRemove={(idx) => removeRow('dv', idx)}
-        getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
-        getCorrect={(s) => rowCorrectFor('dv', dvExpectedArr, errors?.dv, s)}
-        cellCorrectAriaLabel={resolvedCellCorrectAria}
-        missingMessages={dvMissing}
-        allowPaste={allowPaste}
-      />
-      <RowGroupSection
-        sectionId="constants"
-        idPrefix={`${id}-c`}
-        label={constantsLabel ?? strings.widgets.variableTable.constantsLabel}
-        rows={values.constants}
-        bounds={bounds.constants}
-        nameHeader={nameH}
-        symbolHeader={symbolH}
-        unitHeader={unitH}
-        addLabel={addConstantLabel ?? strings.widgets.variableTable.addConstantLabel}
-        removeAriaLabel={
-          removeConstantAriaLabel ?? strings.widgets.variableTable.removeConstantAriaLabel
-        }
-        rowAriaLabel={constantRowAriaLabel ?? strings.widgets.variableTable.constantRowAriaLabel}
-        onChange={(idx, field, next) => updateRow('constants', idx, field, next)}
-        onAdd={() => addRow('constants')}
-        onRemove={(idx) => removeRow('constants', idx)}
-        getHints={(s) => rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)}
-        getCorrect={(s) =>
-          rowCorrectFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
-        }
-        cellCorrectAriaLabel={resolvedCellCorrectAria}
-        missingMessages={constantsMissing}
-        allowPaste={allowPaste}
-      />
+    <div className="my-4 w-fit max-w-full space-y-4">
+      <div className="overflow-hidden rounded-md border border-slate-200">
+        {/* Single column-header band — desktop only; on mobile each input
+            carries its own visible label (the stacked layout needs it). The
+            slate-50 tint seats it as a header zone above the input sections. */}
+        <div
+          aria-hidden="true"
+          className="hidden gap-3 border-b border-slate-200 bg-slate-100 px-3 py-2 sm:grid sm:grid-cols-[minmax(10rem,16rem)_6rem_6rem_2rem]"
+        >
+          <div className="text-sm font-medium text-slate-600">{nameH}</div>
+          <div className="text-sm font-medium text-slate-600">{symbolH}</div>
+          <div className="text-sm font-medium text-slate-600">{unitH}</div>
+        </div>
+        <div className="divide-y divide-slate-100">
+          <RowGroupSection
+            sectionId="iv"
+            idPrefix={`${id}-iv`}
+            label={ivLabel ?? strings.widgets.variableTable.ivLabel}
+            rows={values.iv}
+            bounds={bounds.iv}
+            nameHeader={nameH}
+            symbolHeader={symbolH}
+            unitHeader={unitH}
+            addLabel={addIvLabel ?? strings.widgets.variableTable.addIvLabel}
+            removeAriaLabel={removeIvAriaLabel ?? strings.widgets.variableTable.removeIvAriaLabel}
+            rowAriaLabel={ivRowAriaLabel ?? strings.widgets.variableTable.ivRowAriaLabel}
+            onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
+            onAdd={() => addRow('iv')}
+            onRemove={(idx) => removeRow('iv', idx)}
+            getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
+            getCorrect={(s) => rowCorrectFor('iv', ivExpectedArr, errors?.iv, s)}
+            cellCorrectAriaLabel={resolvedCellCorrectAria}
+            missingMessages={ivMissing}
+            allowPaste={allowPaste}
+          />
+          <RowGroupSection
+            sectionId="dv"
+            idPrefix={`${id}-dv`}
+            label={dvLabel ?? strings.widgets.variableTable.dvLabel}
+            rows={values.dv}
+            bounds={bounds.dv}
+            nameHeader={nameH}
+            symbolHeader={symbolH}
+            unitHeader={unitH}
+            addLabel={addDvLabel ?? strings.widgets.variableTable.addDvLabel}
+            removeAriaLabel={removeDvAriaLabel ?? strings.widgets.variableTable.removeDvAriaLabel}
+            rowAriaLabel={dvRowAriaLabel ?? strings.widgets.variableTable.dvRowAriaLabel}
+            onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
+            onAdd={() => addRow('dv')}
+            onRemove={(idx) => removeRow('dv', idx)}
+            getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
+            getCorrect={(s) => rowCorrectFor('dv', dvExpectedArr, errors?.dv, s)}
+            cellCorrectAriaLabel={resolvedCellCorrectAria}
+            missingMessages={dvMissing}
+            allowPaste={allowPaste}
+          />
+          <RowGroupSection
+            sectionId="constants"
+            idPrefix={`${id}-c`}
+            label={constantsLabel ?? strings.widgets.variableTable.constantsLabel}
+            rows={values.constants}
+            bounds={bounds.constants}
+            nameHeader={nameH}
+            symbolHeader={symbolH}
+            unitHeader={unitH}
+            addLabel={addConstantLabel ?? strings.widgets.variableTable.addConstantLabel}
+            removeAriaLabel={
+              removeConstantAriaLabel ?? strings.widgets.variableTable.removeConstantAriaLabel
+            }
+            rowAriaLabel={
+              constantRowAriaLabel ?? strings.widgets.variableTable.constantRowAriaLabel
+            }
+            onChange={(idx, field, next) => updateRow('constants', idx, field, next)}
+            onAdd={() => addRow('constants')}
+            onRemove={(idx) => removeRow('constants', idx)}
+            getHints={(s) =>
+              rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
+            }
+            getCorrect={(s) =>
+              rowCorrectFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
+            }
+            cellCorrectAriaLabel={resolvedCellCorrectAria}
+            missingMessages={constantsMissing}
+            allowPaste={allowPaste}
+          />
+        </div>
+      </div>
       {expected && (!footerActive || showAriaStatus) && (
         <div className="mt-2 flex items-center justify-end gap-3">
           {showAriaStatus && (
@@ -708,8 +727,8 @@ function RowGroupSection({
   const canAdd = rows.length < bounds.max;
   const canRemove = rows.length > bounds.min;
   return (
-    <div className="rounded-md border border-slate-200 p-3">
-      <div className="mb-2 text-sm font-medium text-slate-800">{label}</div>
+    <div className="p-3">
+      <div className="mb-2 text-sm font-semibold text-navy">{label}</div>
       {rows.map((row, i) => (
         <RepeatableRow
           // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a row in this section
@@ -723,7 +742,6 @@ function RowGroupSection({
           symbolHeader={symbolHeader}
           unitHeader={unitHeader}
           rowAriaLabel={rowAriaLabel}
-          showHeaders={i === 0}
           removeAriaLabel={removeAriaLabel}
           hints={getHints(i)}
           correct={getCorrect(i)}
@@ -762,7 +780,6 @@ interface RepeatableRowProps {
   unitHeader: string;
   /** Template with {n} and {field} placeholders for repeated-row aria labels. */
   rowAriaLabel: string;
-  showHeaders: boolean;
   removeAriaLabel: string;
   hints: Record<Cell, string | null>;
   correct: Record<Cell, boolean>;
@@ -781,26 +798,27 @@ function RepeatableRow({
   symbolHeader,
   unitHeader,
   rowAriaLabel,
-  showHeaders,
   removeAriaLabel,
   hints,
   correct,
   cellCorrectAriaLabel,
   allowPaste,
 }: RepeatableRowProps) {
-  // When headers are hidden (rows 2+), each input still needs a programmatic
-  // label so screen readers don't announce three anonymous text fields.
+  // Every input carries a section-aware programmatic label: the visible
+  // per-input <label> is mobile-only, and the desktop header band is
+  // aria-hidden, so without this the inputs would be anonymous to SR.
   const rowAria = (field: string) => format(rowAriaLabel, { n: rowIndex + 1, field });
   const hasRemove = onRemove !== undefined;
-  const gridClass = hasRemove
-    ? 'mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]'
-    : 'mb-2 grid grid-cols-1 gap-3 sm:grid-cols-3';
+  // One grid template for every row in every section: name flexes (capped),
+  // symbol/unit are narrow fixed tracks, and a fixed remove-button gutter is
+  // always reserved (empty on non-removable rows) so every row lines up under
+  // the single header band.
   return (
-    <div className={gridClass}>
+    <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(10rem,16rem)_6rem_6rem_2rem]">
       <Field
         id={`${id}-name`}
-        label={showHeaders ? nameHeader : undefined}
-        ariaLabel={showHeaders ? undefined : rowAria(nameHeader)}
+        label={nameHeader}
+        ariaLabel={rowAria(nameHeader)}
         value={entry.name}
         onChange={(v) => onChange('name', v)}
         hint={hints.name}
@@ -810,8 +828,8 @@ function RepeatableRow({
       />
       <Field
         id={`${id}-symbol`}
-        label={showHeaders ? symbolHeader : undefined}
-        ariaLabel={showHeaders ? undefined : rowAria(symbolHeader)}
+        label={symbolHeader}
+        ariaLabel={rowAria(symbolHeader)}
         value={entry.symbol}
         onChange={(v) => onChange('symbol', v)}
         hint={hints.symbol}
@@ -821,8 +839,8 @@ function RepeatableRow({
       />
       <Field
         id={`${id}-unit`}
-        label={showHeaders ? unitHeader : undefined}
-        ariaLabel={showHeaders ? undefined : rowAria(unitHeader)}
+        label={unitHeader}
+        ariaLabel={rowAria(unitHeader)}
         value={entry.unit}
         onChange={(v) => onChange('unit', v)}
         hint={hints.unit}
@@ -835,7 +853,7 @@ function RepeatableRow({
           type="button"
           onClick={onRemove}
           aria-label={format(removeAriaLabel, { n: rowIndex + 1 })}
-          className={`${showHeaders ? 'mt-5' : ''} self-start rounded px-2 py-1 text-sm text-slate-500 hover:text-red-600`}
+          className="self-start rounded px-2 py-1 text-sm text-slate-500 hover:text-red-600"
         >
           ×
         </button>
@@ -846,11 +864,12 @@ function RepeatableRow({
 
 interface FieldProps {
   id: string;
-  label?: string;
-  /** Programmatic label used when no visual `label` is rendered (repeated
-   *  rows). Either `label` or `ariaLabel` should be set so the input is never
-   *  anonymous to assistive tech. */
-  ariaLabel?: string;
+  /** Column label, rendered as a mobile-only `<label>` (the desktop column
+   *  headers live in the table's single header band). */
+  label: string;
+  /** Programmatic label — always set so each input carries a section-aware
+   *  accessible name on desktop, where the visible `<label>` is hidden. */
+  ariaLabel: string;
   value: string;
   onChange: (next: string) => void;
   /** Resolved hint text shown directly below the input. `null` = no hint. */
@@ -881,12 +900,10 @@ function Field({
   const inputClass = showGreen ? 'w-full ring-1 ring-emerald-300' : 'w-full';
   const ariaDescribedBy = showGreen ? `${id}-correct` : undefined;
   return (
-    <div data-correct={showGreen ? 'true' : undefined}>
-      {label && (
-        <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">
-          {label}
-        </label>
-      )}
+    <div className="min-w-0" data-correct={showGreen ? 'true' : undefined}>
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600 sm:hidden">
+        {label}
+      </label>
       <ProtectedInput
         id={id}
         type="text"
