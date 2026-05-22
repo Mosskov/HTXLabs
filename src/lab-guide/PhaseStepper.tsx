@@ -70,7 +70,7 @@ export function PhaseStepper({ phases }: { phases: Phase[] }) {
                   current: isCurrent ? strings.phaseStepper.currentSuffix : '',
                 })}
                 className={`
-                  shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-medium
+                  shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-sm font-medium
                   transition-colors
                   ${circleClasses}
                 `}

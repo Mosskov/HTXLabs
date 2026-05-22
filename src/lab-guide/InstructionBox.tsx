@@ -1,6 +1,6 @@
 // Instruction-box card: the phase checklist above a phase body. Renders
 // `intro` as a plain sentence, string-only `steps` as the legacy lettered
-// list, and object-form `steps` as a circle progress tracker reflecting each
+// list, and object-form `steps` as a checklist tracker reflecting each
 // step's completion read live from the widget registry.
 import type { Phase, PhaseStep } from '@/lib/schema';
 import { useRunner } from './RunnerContext';
@@ -76,16 +76,15 @@ export function InstructionBox({ phase, phaseNumber }: { phase: Phase; phaseNumb
   );
 }
 
-/** One tracked step: a state circle (mirrors PhaseStepper's circle visual,
- *  scaled down) + the step text. The circle + ✓ are decorative; the state is
- *  conveyed to assistive tech via a visually-hidden suffix. */
+/** One tracked step: a marker glyph + the step text — `✓` done, `➔` active,
+ *  `–` locked. Deliberately not circles: the instruction box is a checklist,
+ *  not navigation. The marker is decorative; the state is conveyed to assistive
+ *  tech via a visually-hidden suffix. */
 function StepRow({ step, state }: { step: NormalizedStep; state: StepState }) {
-  const circleClass =
-    state === 'done'
-      ? 'bg-accent-100 border-accent-400 text-accent'
-      : state === 'active'
-        ? 'bg-white border-accent-400 text-accent'
-        : 'bg-slate-100 border-slate-300 text-slate-400';
+  const marker = state === 'done' ? '✓' : state === 'active' ? '➔' : '–';
+  const markerClass = state === 'locked' ? 'text-slate-300' : 'text-accent';
+  // The `active` ➔ glyph reads heavier than ✓/–, so it's sized down a notch.
+  const glyphSize = state === 'active' ? 'text-sm' : 'text-base';
   const textClass =
     state === 'done' ? 'text-slate-500' : state === 'locked' ? 'text-slate-400' : 'text-slate-900';
   const suffix =
@@ -106,9 +105,9 @@ function StepRow({ step, state }: { step: NormalizedStep; state: StepState }) {
     <li className="flex items-start gap-2">
       <span
         aria-hidden
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-medium ${circleClass}`}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center ${glyphSize} font-medium ${markerClass}`}
       >
-        {state === 'done' ? '✓' : ''}
+        {marker}
       </span>
       {state === 'locked' ? (
         <Tooltip content={step.lockedHint ?? strings.instructionBox.stepLockedHint}>

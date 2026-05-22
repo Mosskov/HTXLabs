@@ -1,5 +1,5 @@
 // Tests for InstructionBox: legacy string-step rendering vs the object-step
-// circle tracker, and per-step done/active/locked projection from the widget
+// checklist tracker, and per-step done/active/locked projection from the widget
 // registry.
 import { InstructionBox } from '@/lab-guide/InstructionBox';
 import { RunnerProvider } from '@/lab-guide/RunnerContext';
@@ -44,7 +44,7 @@ const trackedPhase: Phase = {
   ],
 };
 
-describe('InstructionBox — object-step circle tracker', () => {
+describe('InstructionBox — object-step checklist tracker', () => {
   it('renders the auto "Fase N – title:" header', () => {
     render(<Harness phase={trackedPhase} />);
     expect(screen.getByText('Fase 1 – Planlæg:')).toBeInTheDocument();
