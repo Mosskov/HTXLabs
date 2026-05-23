@@ -1,0 +1,9 @@
+## Formål
+Hurtigt visuelt overblik over alle ikoner i `src/icons/` — så man kan opdage
+størrelses- eller palette-drift når et ikon redigeres eller et nyt tilføjes.
+
+## Konvention
+Ikoner er håndskrevne `.tsx`-komponenter med `viewBox="0 0 24 24"`.
+Forbrugeren bestemmer størrelsen via Tailwind (`w-5 h-5`, `w-8 h-8`, …).
+Branded ikoner (bog, pendul) har deres egen palette med dark-mode override;
+monokrome ikoner arver `currentColor` fra forælderen.

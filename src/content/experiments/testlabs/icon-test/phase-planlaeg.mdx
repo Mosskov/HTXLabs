@@ -1,0 +1,34 @@
+import { TheoryOpen } from '@/icons/TheoryOpen';
+import { TheoryClosed } from '@/icons/TheoryClosed';
+import { SimulationOpen } from '@/icons/SimulationOpen';
+import { SimulationClosed } from '@/icons/SimulationClosed';
+
+export const icons = [
+  { name: 'TheoryOpen', Comp: TheoryOpen },
+  { name: 'TheoryClosed', Comp: TheoryClosed },
+  { name: 'SimulationOpen', Comp: SimulationOpen },
+  { name: 'SimulationClosed', Comp: SimulationClosed },
+];
+
+export const sizes = [
+  { label: 'w-5 h-5 (20px)', cls: 'w-5 h-5' },
+  { label: 'w-8 h-8 (32px)', cls: 'w-8 h-8' },
+  { label: 'w-12 h-12 (48px)', cls: 'w-12 h-12' },
+  { label: 'w-16 h-16 (64px)', cls: 'w-16 h-16' },
+];
+
+<div className="space-y-8">
+  {icons.map(({ name, Comp }) => (
+    <section key={name} className="border border-slate-200 rounded p-4">
+      <h3 className="font-mono text-sm text-navy mb-3">{name}</h3>
+      <div className="flex items-end gap-8">
+        {sizes.map(({ label, cls }) => (
+          <div key={label} className="flex flex-col items-center gap-2">
+            <Comp className={cls} />
+            <span className="text-xs text-slate-500">{label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  ))}
+</div>
