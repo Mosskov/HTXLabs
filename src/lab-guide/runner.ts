@@ -4,6 +4,13 @@ import type { VariableTableValues } from './widgets/VariableTable';
 
 export type { LabMode, Mode };
 
+/** Framework default for the per-phase request-driven hint pool. Author
+ *  override is `phase.hintPoolSize`. */
+export const DEFAULT_HINT_POOL_SIZE = 3;
+/** Framework default for the active-phase hint replenish cadence (minutes).
+ *  Author override is `phase.hintReplenishMinutes`; `0` disables. */
+export const DEFAULT_HINT_REPLENISH_MINUTES = 2;
+
 export interface DataRow {
   [columnKey: string]: string;
 }
@@ -47,11 +54,33 @@ export interface RunnerState {
    *  `constants.0.name`). Mirrors `rubricHintTiers`. Incremented on Tjek
    *  click for cells that still have an error in the just-snapshotted values. */
   variableTableHintTiers: Record<string, Record<string, number>>;
+  /** Per-VariableTable widget per-cell list of revealed paid hint *strings*.
+   *  The reducer pushes the text surfaced at each spend (computed by the
+   *  widget from the cell's ladder at spend-time), so later edits — including
+   *  clearing the cell to retry — don't drop hints the student has paid for.
+   *  `length` mirrors `variableTableHintTiers`'s counter for the same cellKey. */
+  variableTableHintReveals: Record<string, Record<string, string[]>>;
   /** Snapshot of the values committed at the most recent Tjek per
    *  VariableTable widget. Absence means the widget has never been Tjek'd;
    *  the widget derives both `tjekStatus` and the published `correct` bit
    *  from this snapshot so reload preserves the checked state. */
   variableTableLastChecked: Record<string, VariableTableValues>;
+  /** Per-phase current token count for the request-driven hint system.
+   *  Absent = "never entered or never spent in this phase"; bucketView
+   *  treats absence as `cap` (full) so first paint is correct without a
+   *  seeding dispatch. Driven by `SPEND_AND_REVEAL_*` and `LAZY_REPLENISH`. */
+  hintTokens: Record<string, number>;
+  /** Per-phase ms-epoch anchor for replenishment math. `null`/absent means the
+   *  timer is not running for that phase. `ANCHOR_HINT_TIMER` re-anchors on
+   *  phase entry; spend actions re-anchor on the spend timestamp. */
+  hintLastReplenishAt: Record<string, number | null>;
+  /** Total hints spent in this lab so far — for a future "you used N hints"
+   *  display widget. Reveal costs count as 2. */
+  hintUsageTotal: number;
+  /** Per-phase hint usage counter. Same accounting as `hintUsageTotal`. */
+  hintUsageByPhase: Record<string, number>;
+  /** Per-target hint usage counter — key is `${widgetId}::${criterionId|cellKey}`. */
+  hintUsageByTarget: Record<string, number>;
 }
 
 interface SerializedRunnerState {
@@ -69,7 +98,13 @@ interface SerializedRunnerState {
   simulationState: unknown;
   rubricHintTiers: Record<string, Record<string, number>>;
   variableTableHintTiers: Record<string, Record<string, number>>;
+  variableTableHintReveals?: Record<string, Record<string, string[]>>;
   variableTableLastChecked: Record<string, VariableTableValues>;
+  hintTokens?: Record<string, number>;
+  hintLastReplenishAt?: Record<string, number | null>;
+  hintUsageTotal?: number;
+  hintUsageByPhase?: Record<string, number>;
+  hintUsageByTarget?: Record<string, number>;
 }
 
 const storageKey = (experimentId: string) => `htxlabs:state:${experimentId}`;
@@ -97,7 +132,13 @@ export function emptyState(
     simulationState: null,
     rubricHintTiers: {},
     variableTableHintTiers: {},
+    variableTableHintReveals: {},
     variableTableLastChecked: {},
+    hintTokens: {},
+    hintLastReplenishAt: {},
+    hintUsageTotal: 0,
+    hintUsageByPhase: {},
+    hintUsageByTarget: {},
   };
 }
 
@@ -129,7 +170,13 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     simulationState: raw.simulationState ?? null,
     rubricHintTiers: raw.rubricHintTiers ?? {},
     variableTableHintTiers: raw.variableTableHintTiers ?? {},
+    variableTableHintReveals: raw.variableTableHintReveals ?? {},
     variableTableLastChecked: raw.variableTableLastChecked ?? {},
+    hintTokens: raw.hintTokens ?? {},
+    hintLastReplenishAt: raw.hintLastReplenishAt ?? {},
+    hintUsageTotal: raw.hintUsageTotal ?? 0,
+    hintUsageByPhase: raw.hintUsageByPhase ?? {},
+    hintUsageByTarget: raw.hintUsageByTarget ?? {},
   };
 }
 

@@ -22,16 +22,28 @@
 // recent Tjek click — typing correct values without clicking Tjek keeps
 // `correct: false`, and editing any cell after a passing Tjek flips it back
 // to `false`. The matching logic lives in `variableTableCorrectness.ts`.
+//
+// Hint system: when `expected` is set, the widget participates in the
+// request-driven hint system. Auto-bump on Tjek is gone — students arm spend
+// mode via the bucket and click a lightbulb on a failing cell to unlock its
+// next tier. Free diagnostics (case-mismatch + whitespace-internal) appear in
+// the focus popup without a token cost, gated on the same checked-and-not-
+// dirty rule as paid hints.
 import { useRef } from 'react';
+import { useHintSpend } from '../HintSpendContext';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
+import { useRegisteredHintEligibility } from '../useRegisteredHintEligibility';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
+import { HintBucket } from './HintBucket';
+import { HintLightbulb } from './HintLightbulb';
+import { HintPopup, type HintPopupEntry } from './HintPopup';
 import { ProtectedInput } from './ProtectedInput';
-import { TieredHintList } from './TieredHintList';
 import {
   type Cell,
+  type CellError,
   type CellSpec,
   type CorrectnessReport,
   type ExpectedVariables,
@@ -42,7 +54,7 @@ import {
   evaluateTable,
   isCorrect,
   maxTierForCell,
-  resolveCellHint,
+  resolveLadder,
 } from './variableTableCorrectness';
 
 export interface VariableEntry {
@@ -249,24 +261,35 @@ function rowCorrect(
   return result;
 }
 
-/** Project a row's resolved hint per cell. Returns `null` for any cell
- *  with no error or no resolvable hint at the current tier. */
-function rowHints(
-  errors: VariableRowErrors | undefined,
-  rowExpected: { name?: CellSpec; symbol?: CellSpec; unit?: CellSpec } | undefined,
-  tierFor: (cellKind: Cell) => number,
-): Record<Cell, string | null> {
-  const result: Record<Cell, string | null> = { name: null, symbol: null, unit: null };
-  if (!errors || !rowExpected) return result;
-  const cells: Cell[] = ['name', 'symbol', 'unit'];
-  for (const c of cells) {
-    const err = errors[c];
-    if (!err) continue;
-    const tier = tierFor(c);
-    if (tier <= 0) continue;
-    result[c] = resolveCellHint(err, tier, rowExpected[c], c);
-  }
-  return result;
+/** Compact per-cell info aggregated for the row renderer. `cap === 0` means
+ *  no hint ladder for this cell (e.g. `empty` error with no author hints) —
+ *  no lightbulb is rendered. `freeDiagnostic` is the case-mismatch /
+ *  whitespace-internal text (no token cost). `popupEntries` holds the
+ *  revealed-tier paid hints for the focus popup. */
+interface CellHintInfo {
+  cap: number;
+  /** Next tier the lightbulb would unlock (1..cap). `null` when no advance is
+   *  possible (cap reached or no error). */
+  nextTier: number | null;
+  freeDiagnostic: string | null;
+  popupEntries: HintPopupEntry[];
+}
+
+const EMPTY_CELL_INFO: CellHintInfo = {
+  cap: 0,
+  nextTier: null,
+  freeDiagnostic: null,
+  popupEntries: [],
+};
+
+function freeDiagnosticFor(err: CellError | undefined, cell: Cell): string | null {
+  if (!err) return null;
+  if (err.type !== 'case-mismatch' && err.type !== 'whitespace-internal') return null;
+  const tableHints = strings.widgets.variableTable.hints[cell] as
+    | Record<string, readonly string[] | undefined>
+    | undefined;
+  const ladder = tableHints?.[err.type] ?? [];
+  return ladder[0] ?? null;
 }
 
 export function VariableTable({
@@ -300,8 +323,8 @@ export function VariableTable({
   checkedAriaStatusLabel,
   allowPaste,
 }: Props) {
-  const { state, setWidgetValue, incrementVariableTableTier, setVariableTableLastChecked } =
-    useRunner();
+  const { state, setWidgetValue, spendAndRevealVtTier, setVariableTableLastChecked } = useRunner();
+  const { spendMode } = useHintSpend();
 
   const bounds = {
     iv: resolveBounds(ivConfig, DEFAULT_IV_BOUNDS),
@@ -326,6 +349,10 @@ export function VariableTable({
     warnMalformed(id, 'dv', dvExpectedArr);
     if (constantsExpectedArr) warnMalformed(id, 'constants', constantsExpectedArr);
   }
+
+  // Register as hint-eligible only when `expected` is set (no answer key →
+  // no ladder → nothing to spend on).
+  useRegisteredHintEligibility(id, expected !== undefined, 'vtCell');
 
   const ivFilled = sectionFilled(values.iv, bounds.iv, requireUnits);
   const dvFilled = sectionFilled(values.dv, bounds.dv, requireUnits);
@@ -415,35 +442,11 @@ export function VariableTable({
     });
   }
 
+  // Tjek is now snapshot-only — no auto-tier-bump. Students must arm spend
+  // mode and click a lightbulb to advance a cell's ladder.
   function handleTjek() {
     if (!expected || !errors) return;
     setVariableTableLastChecked(id, values);
-    const cells: Cell[] = ['name', 'symbol', 'unit'];
-    const bumpPartial = (
-      cm: RowMatch,
-      sectionPrefix: 'iv' | 'dv' | 'constants',
-      sectionExpected: ReadonlyArray<{
-        name?: CellSpec;
-        symbol?: CellSpec;
-        unit?: CellSpec;
-      }>,
-    ) => {
-      if (cm.status !== 'partial') return;
-      const rowExpected = sectionExpected[cm.expectedIndex];
-      if (!rowExpected) return;
-      for (const c of cells) {
-        const err = cm.errors[c];
-        if (!err) continue;
-        const cap = maxTierForCell(err, rowExpected[c], c);
-        if (cap <= 0) continue;
-        incrementVariableTableTier(id, `${sectionPrefix}.${cm.expectedIndex}.${c}`, cap);
-      }
-    };
-    for (const m of errors.iv) bumpPartial(m, 'iv', ivExpectedArr);
-    for (const m of errors.dv) bumpPartial(m, 'dv', dvExpectedArr);
-    if (errors.constants && constantsExpectedArr) {
-      for (const m of errors.constants) bumpPartial(m, 'constants', constantsExpectedArr);
-    }
   }
 
   // Footer-check opt-in: when `checkInFooter` is set (and `expected` exists,
@@ -463,21 +466,20 @@ export function VariableTable({
   checkRef.current.run = handleTjek;
   useRegisteredWidgetCheck(id, footerActive, checkRef, 0);
 
-  // Hint + green resolution per cell — surfaced only when `expected` is set
-  // and the section's values match the most recent Tjek snapshot. Keyed per
-  // section (not the whole table): editing one section hides only its own
-  // hints/green, so a sibling section that was validated earlier keeps them.
-  // While a section is dirty its errors are recomputed live on every render,
-  // so showing its hints would leak answer guidance between Tjek clicks. The
-  // tier counter survives reload so previously-revealed hints keep showing.
   const tiers = state.variableTableHintTiers[id] ?? {};
-  const showHints = {
+  const reveals = state.variableTableHintReveals?.[id] ?? {};
+  // Per-section "clean snapshot" gate — Tjek was run and values haven't been
+  // edited since. Used for live diagnostics + lightbulb (spending mid-edit
+  // hides what the student is paying for). Revealed paid strings ignore this
+  // gate — once spent, the hint is paid for and stays visible through every
+  // subsequent edit, including clearing the cell to retry.
+  const sectionClean = {
     iv: expected !== undefined && sectionChecked.iv,
     dv: expected !== undefined && sectionChecked.dv,
     constants: expected !== undefined && sectionChecked.constants,
   };
 
-  function rowHintsFor(
+  function cellInfoFor(
     section: 'iv' | 'dv' | 'constants',
     sectionExpected: ReadonlyArray<{
       name?: CellSpec;
@@ -486,13 +488,65 @@ export function VariableTable({
     }>,
     matches: RowMatch[] | undefined,
     studentIndex: number,
-  ): Record<Cell, string | null> {
-    if (!showHints[section] || !matches) return { name: null, symbol: null, unit: null };
-    const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
-    if (!cm || cm.status !== 'partial') return { name: null, symbol: null, unit: null };
-    const rowExp = sectionExpected[cm.expectedIndex];
-    if (!rowExp) return { name: null, symbol: null, unit: null };
-    return rowHints(cm.errors, rowExp, (c) => tiers[`${section}.${cm.expectedIndex}.${c}`] ?? 0);
+    cell: Cell,
+  ): CellHintInfo {
+    if (expected === undefined) return EMPTY_CELL_INFO;
+    // Try to pair the student row to its expected row via the current matcher.
+    // If the cell has been cleared or the row dropped out of `partial`, cm is
+    // undefined — we still want to surface previously-revealed paid strings.
+    // Fall back to `expectedIndex = studentIndex` (correct for the single-row
+    // sections that are the default; multi-row sections that reshuffle pairing
+    // are a known limitation).
+    const cm = matches?.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
+    const expectedIndex = cm?.expectedIndex ?? studentIndex;
+    const cellKey = `${section}.${expectedIndex}.${cell}`;
+    const revealsForCell = reveals[cellKey] ?? [];
+
+    let cap = 0;
+    let nextTier: number | null = null;
+    let freeDiagnostic: string | null = null;
+    const popupEntries: HintPopupEntry[] = [];
+
+    if (cm && cm.status === 'partial') {
+      const rowExp = sectionExpected[cm.expectedIndex];
+      const err: CellError | undefined = rowExp
+        ? (cm.errors as VariableRowErrors)[cell]
+        : undefined;
+      if (rowExp && err) {
+        const cellSpec = rowExp[cell];
+        cap = maxTierForCell(err, cellSpec, cell);
+        const tier = tiers[cellKey] ?? 0;
+        // Lightbulb only available on a clean section — spending mid-edit
+        // would charge the student for a hint about an error type that may
+        // shift on the next keystroke.
+        nextTier = sectionClean[section] && cap > 0 && tier < cap ? tier + 1 : null;
+        // Free diagnostic only surfaces on a clean section — it diagnoses
+        // the live value, so showing it mid-edit would be noisy.
+        if (sectionClean[section]) {
+          freeDiagnostic = freeDiagnosticFor(err, cell);
+          if (freeDiagnostic !== null) {
+            popupEntries.push({
+              key: `free-${section}-${cm.expectedIndex}-${cell}`,
+              text: freeDiagnostic,
+              tone: 'misconception',
+            });
+          }
+        }
+      }
+    }
+
+    // Paid revealed strings — always surfaced, regardless of dirty state and
+    // even if the current error type / row pairing has shifted. They were
+    // paid for at spend-time; the student keeps reading them.
+    revealsForCell.forEach((text, i) => {
+      popupEntries.push({
+        key: `paid-${section}-${expectedIndex}-${cell}-${i + 1}`,
+        text,
+        tone: 'hint',
+      });
+    });
+
+    return { cap, nextTier, freeDiagnostic, popupEntries };
   }
 
   // Per-cell green is gated on the same per-section condition as hints:
@@ -509,7 +563,7 @@ export function VariableTable({
     matches: RowMatch[] | undefined,
     studentIndex: number,
   ): Record<Cell, boolean> {
-    if (!showHints[section] || !matches) return { name: false, symbol: false, unit: false };
+    if (!sectionClean[section] || !matches) return { name: false, symbol: false, unit: false };
     const cm = matches.find((m) => m.status !== 'missing' && m.studentIndex === studentIndex);
     if (!cm || cm.status === 'missing') return { name: false, symbol: false, unit: false };
     return rowCorrect(cm, sectionExpected[cm.expectedIndex]);
@@ -523,7 +577,7 @@ export function VariableTable({
     matches: RowMatch[] | undefined,
     template: string,
   ): string[] {
-    if (!showHints[section] || !matches || !sectionExpected) return [];
+    if (!sectionClean[section] || !matches || !sectionExpected) return [];
     const out: string[] = [];
     for (const m of matches) {
       if (m.status !== 'missing') continue;
@@ -572,15 +626,57 @@ export function VariableTable({
     constantMissingMessage ?? strings.widgets.variableTable.hints.constantMissing,
   );
 
+  const armed =
+    expected !== undefined &&
+    spendMode.kind === 'active' &&
+    spendMode.phaseId === state.currentPhaseId;
+
+  const onSpendCell = (section: 'iv' | 'dv' | 'constants', studentIndex: number, cell: Cell) => {
+    const expectedArr =
+      section === 'iv' ? ivExpectedArr : section === 'dv' ? dvExpectedArr : constantsExpectedArr;
+    if (!expectedArr) return;
+    const matches =
+      section === 'iv' ? errors?.iv : section === 'dv' ? errors?.dv : errors?.constants;
+    if (!matches) return;
+    const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
+    if (!cm || cm.status !== 'partial') return;
+    const rowExp = expectedArr[cm.expectedIndex];
+    if (!rowExp) return;
+    const err: CellError | undefined = (cm.errors as VariableRowErrors)[cell];
+    if (!err) return;
+    const cellSpec = rowExp[cell];
+    const cap = maxTierForCell(err, cellSpec, cell);
+    if (cap <= 0) return;
+    // Compute the hint text at spend-time from the current (F7-sliced) ladder
+    // and pass it to the reducer. The text is then stored in
+    // `variableTableHintReveals` so subsequent edits — including clearing the
+    // cell — don't drop the paid string.
+    const cellKey = `${section}.${cm.expectedIndex}.${cell}`;
+    const currentTier = tiers[cellKey] ?? 0;
+    if (currentTier >= cap) return;
+    const ladder = resolveLadder(err, cellSpec, cell);
+    const revealedText = ladder[currentTier];
+    if (revealedText === undefined) return;
+    spendAndRevealVtTier({
+      widgetId: id,
+      cellKey,
+      revealedText,
+      hintCap: cap,
+    });
+  };
+
   return (
     <div className="my-4 w-fit max-w-full space-y-4">
-      <div className="overflow-hidden rounded-md border border-slate-200">
+      <div className="rounded-md border border-slate-200">
         {/* Single column-header band — desktop only; on mobile each input
             carries its own visible label (the stacked layout needs it). The
-            slate-50 tint seats it as a header zone above the input sections. */}
+            slate-50 tint seats it as a header zone above the input sections.
+            `rounded-t-md` clips the header band's slate-100 fill to match the
+            wrapper's rounded corners — required because the wrapper drops
+            `overflow-hidden` so HintPopup can escape downward. */}
         <div
           aria-hidden="true"
-          className="hidden gap-3 border-b border-slate-200 bg-slate-100 px-3 py-2 sm:grid sm:grid-cols-[minmax(10rem,16rem)_6rem_6rem_2rem]"
+          className="hidden gap-3 rounded-t-md border-b border-slate-200 bg-slate-100 px-3 py-2 sm:grid sm:grid-cols-[minmax(10rem,16rem)_6rem_6rem_2rem]"
         >
           <div className="text-sm font-medium text-slate-600">{nameH}</div>
           <div className="text-sm font-medium text-slate-600">{symbolH}</div>
@@ -602,11 +698,13 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
             onAdd={() => addRow('iv')}
             onRemove={(idx) => removeRow('iv', idx)}
-            getHints={(s) => rowHintsFor('iv', ivExpectedArr, errors?.iv, s)}
+            getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
             getCorrect={(s) => rowCorrectFor('iv', ivExpectedArr, errors?.iv, s)}
             cellCorrectAriaLabel={resolvedCellCorrectAria}
             missingMessages={ivMissing}
             allowPaste={allowPaste}
+            armed={armed}
+            onSpend={(s, cell) => onSpendCell('iv', s, cell)}
           />
           <RowGroupSection
             sectionId="dv"
@@ -623,11 +721,13 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
             onAdd={() => addRow('dv')}
             onRemove={(idx) => removeRow('dv', idx)}
-            getHints={(s) => rowHintsFor('dv', dvExpectedArr, errors?.dv, s)}
+            getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
             getCorrect={(s) => rowCorrectFor('dv', dvExpectedArr, errors?.dv, s)}
             cellCorrectAriaLabel={resolvedCellCorrectAria}
             missingMessages={dvMissing}
             allowPaste={allowPaste}
+            armed={armed}
+            onSpend={(s, cell) => onSpendCell('dv', s, cell)}
           />
           <RowGroupSection
             sectionId="constants"
@@ -648,8 +748,8 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('constants', idx, field, next)}
             onAdd={() => addRow('constants')}
             onRemove={(idx) => removeRow('constants', idx)}
-            getHints={(s) =>
-              rowHintsFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
+            getInfo={(s, cell) =>
+              cellInfoFor('constants', constantsExpectedArr ?? [], errors?.constants, s, cell)
             }
             getCorrect={(s) =>
               rowCorrectFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
@@ -657,6 +757,8 @@ export function VariableTable({
             cellCorrectAriaLabel={resolvedCellCorrectAria}
             missingMessages={constantsMissing}
             allowPaste={allowPaste}
+            armed={armed}
+            onSpend={(s, cell) => onSpendCell('constants', s, cell)}
           />
         </div>
       </div>
@@ -668,13 +770,16 @@ export function VariableTable({
             </output>
           )}
           {!footerActive && (
-            <button
-              type="button"
-              onClick={handleTjek}
-              className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
-            >
-              {checkLabel ?? strings.widgets.variableTable.checkLabel}
-            </button>
+            <>
+              <HintBucket placement="inline" />
+              <button
+                type="button"
+                onClick={handleTjek}
+                className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
+              >
+                {checkLabel ?? strings.widgets.variableTable.checkLabel}
+              </button>
+            </>
           )}
         </div>
       )}
@@ -697,11 +802,13 @@ interface RowGroupProps {
   onChange: (idx: number, field: keyof VariableEntry, next: string) => void;
   onAdd: () => void;
   onRemove: (idx: number) => void;
-  getHints: (studentIndex: number) => Record<Cell, string | null>;
+  getInfo: (studentIndex: number, cell: Cell) => CellHintInfo;
   getCorrect: (studentIndex: number) => Record<Cell, boolean>;
   cellCorrectAriaLabel: string;
   missingMessages: string[];
   allowPaste?: boolean;
+  armed: boolean;
+  onSpend: (studentIndex: number, cell: Cell) => void;
 }
 
 function RowGroupSection({
@@ -718,11 +825,13 @@ function RowGroupSection({
   onChange,
   onAdd,
   onRemove,
-  getHints,
+  getInfo,
   getCorrect,
   cellCorrectAriaLabel,
   missingMessages,
   allowPaste,
+  armed,
+  onSpend,
 }: RowGroupProps) {
   const canAdd = rows.length < bounds.max;
   const canRemove = rows.length > bounds.min;
@@ -743,10 +852,16 @@ function RowGroupSection({
           unitHeader={unitHeader}
           rowAriaLabel={rowAriaLabel}
           removeAriaLabel={removeAriaLabel}
-          hints={getHints(i)}
+          info={{
+            name: getInfo(i, 'name'),
+            symbol: getInfo(i, 'symbol'),
+            unit: getInfo(i, 'unit'),
+          }}
           correct={getCorrect(i)}
           cellCorrectAriaLabel={cellCorrectAriaLabel}
           allowPaste={allowPaste}
+          armed={armed}
+          onSpend={(cell) => onSpend(i, cell)}
         />
       ))}
       {missingMessages.length > 0 && (
@@ -781,11 +896,13 @@ interface RepeatableRowProps {
   /** Template with {n} and {field} placeholders for repeated-row aria labels. */
   rowAriaLabel: string;
   removeAriaLabel: string;
-  hints: Record<Cell, string | null>;
+  info: Record<Cell, CellHintInfo>;
   correct: Record<Cell, boolean>;
   /** Template with {field} placeholder for the sr-only correctness aria label. */
   cellCorrectAriaLabel: string;
   allowPaste?: boolean;
+  armed: boolean;
+  onSpend: (cell: Cell) => void;
 }
 
 function RepeatableRow({
@@ -799,10 +916,12 @@ function RepeatableRow({
   unitHeader,
   rowAriaLabel,
   removeAriaLabel,
-  hints,
+  info,
   correct,
   cellCorrectAriaLabel,
   allowPaste,
+  armed,
+  onSpend,
 }: RepeatableRowProps) {
   // Every input carries a section-aware programmatic label: the visible
   // per-input <label> is mobile-only, and the desktop header band is
@@ -821,10 +940,12 @@ function RepeatableRow({
         ariaLabel={rowAria(nameHeader)}
         value={entry.name}
         onChange={(v) => onChange('name', v)}
-        hint={hints.name}
+        info={info.name}
         correct={correct.name}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: nameHeader })}
         allowPaste={allowPaste}
+        armed={armed}
+        onSpend={() => onSpend('name')}
       />
       <Field
         id={`${id}-symbol`}
@@ -832,10 +953,12 @@ function RepeatableRow({
         ariaLabel={rowAria(symbolHeader)}
         value={entry.symbol}
         onChange={(v) => onChange('symbol', v)}
-        hint={hints.symbol}
+        info={info.symbol}
         correct={correct.symbol}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: symbolHeader })}
         allowPaste={allowPaste}
+        armed={armed}
+        onSpend={() => onSpend('symbol')}
       />
       <Field
         id={`${id}-unit`}
@@ -843,10 +966,12 @@ function RepeatableRow({
         ariaLabel={rowAria(unitHeader)}
         value={entry.unit}
         onChange={(v) => onChange('unit', v)}
-        hint={hints.unit}
+        info={info.unit}
         correct={correct.unit}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: unitHeader })}
         allowPaste={allowPaste}
+        armed={armed}
+        onSpend={() => onSpend('unit')}
       />
       {hasRemove && (
         <button
@@ -872,16 +997,18 @@ interface FieldProps {
   ariaLabel: string;
   value: string;
   onChange: (next: string) => void;
-  /** Resolved hint text shown directly below the input. `null` = no hint. */
-  hint: string | null;
+  /** Hint resolution for this cell — popup entries (free + paid) + the
+   *  remaining ladder length. */
+  info: CellHintInfo;
   /** True iff this cell was confirmed correct on the most recent Tjek (and
    *  the live value still matches the snapshot). Renders a subtle emerald
-   *  ring on the input. Hints take precedence visually — if `hint` is set,
-   *  `correct` should never also be true (the derivation enforces this). */
+   *  ring on the input. */
   correct: boolean;
   /** Resolved sr-only label announced on focus when `correct === true`. */
   correctAriaLabel: string;
   allowPaste?: boolean;
+  armed: boolean;
+  onSpend: () => void;
 }
 
 function Field({
@@ -890,37 +1017,44 @@ function Field({
   ariaLabel,
   value,
   onChange,
-  hint,
+  info,
   correct,
   correctAriaLabel,
   allowPaste,
+  armed,
+  onSpend,
 }: FieldProps) {
-  // Defense-in-depth: hint wins visually if both signals collide.
-  const showGreen = correct && !hint;
+  const hasHint = info.popupEntries.length > 0 || info.freeDiagnostic !== null;
+  const showGreen = correct && !hasHint;
   const inputClass = showGreen ? 'w-full ring-1 ring-emerald-300' : 'w-full';
   const ariaDescribedBy = showGreen ? `${id}-correct` : undefined;
+  const showLightbulb = armed && info.nextTier !== null;
   return (
     <div className="min-w-0" data-correct={showGreen ? 'true' : undefined}>
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600 sm:hidden">
         {label}
       </label>
-      <ProtectedInput
-        id={id}
-        type="text"
-        value={value}
-        aria-label={ariaLabel}
-        aria-describedby={ariaDescribedBy}
-        allowPaste={allowPaste}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputClass}
-      />
+      <HintPopup entries={info.popupEntries}>
+        <ProtectedInput
+          id={id}
+          type="text"
+          value={value}
+          aria-label={ariaLabel}
+          aria-describedby={ariaDescribedBy}
+          allowPaste={allowPaste}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+        />
+      </HintPopup>
       {showGreen && (
         <span id={`${id}-correct`} className="sr-only">
           {correctAriaLabel}
         </span>
       )}
-      {hint && (
-        <TieredHintList variant="inline" failedHints={[{ key: `${id}-hint`, text: hint }]} />
+      {showLightbulb && info.nextTier !== null && (
+        <div className="mt-1">
+          <HintLightbulb nextTier={info.nextTier} cap={info.cap} onSpend={onSpend} />
+        </div>
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import { useRunner } from './RunnerContext';
 import { Tooltip } from './Tooltip';
 import { gateMessage, isGateSatisfied, widgetSatisfied } from './gates';
 import { strings } from './strings.da';
+import { HintBucket } from './widgets/HintBucket';
 import { ToastContext } from './widgets/ToastContext';
 
 interface Props {
@@ -137,8 +138,11 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">{middleActions}</div>
-        <div className="flex-1 flex justify-end">
+        <div className="flex items-center gap-2">
+          <HintBucket placement="footer" />
+          {middleActions}
+        </div>
+        <div className="flex-1 flex items-center justify-end gap-2">
           {disabledReason != null ? (
             <Tooltip content={disabledReason} align="right">
               {nextButton}

@@ -545,7 +545,7 @@ export function isCorrect(report: CorrectnessReport): boolean {
   return true;
 }
 
-/** Build the hint ladder for a (cell-kind, error) pair. Order:
+/** Build the **paid** hint ladder for a (cell-kind, error) pair. Order:
  *    1. Generic ladder from `strings.widgets.variableTable.hints[cellKind][errorType]`.
  *       For `common-mistake`, the generic source is the `'mismatch'` ladder.
  *    2. If error is a `common-mistake` and the matched mistake has a `hint`,
@@ -554,7 +554,11 @@ export function isCorrect(report: CorrectnessReport): boolean {
  *       extend the ladder, they do not replace generic entries. Skipped for
  *       `empty` errors: an empty cell needs "type something here", not three
  *       levels of nuance about which value to type.
- *  An empty ladder is legal and means "no hint to surface for this cell". */
+ *    4. For `case-mismatch` / `whitespace-internal` errors the first generic
+ *       entry is already surfaced for FREE in the popup (see
+ *       `freeDiagnosticFor` in VariableTable.tsx) — drop it from the paid
+ *       ladder so spending a token never re-shows the same string.
+ *  An empty ladder is legal and means "no paid hint to surface for this cell". */
 export function resolveLadder(
   error: CellError,
   cellSpec: CellSpec | undefined,
@@ -564,7 +568,11 @@ export function resolveLadder(
     | Record<string, readonly string[] | undefined>
     | undefined;
   const genericKey = error.type === 'common-mistake' ? 'mismatch' : error.type;
-  const generic: readonly string[] = tableHints?.[genericKey] ?? [];
+  const rawGeneric: readonly string[] = tableHints?.[genericKey] ?? [];
+  const freeGenericDropped =
+    (error.type === 'case-mismatch' || error.type === 'whitespace-internal') &&
+    rawGeneric.length > 0;
+  const generic: readonly string[] = freeGenericDropped ? rawGeneric.slice(1) : rawGeneric;
   const author = error.type === 'empty' ? [] : cellAuthorHints(cellSpec);
 
   let base: string[] = [...generic];

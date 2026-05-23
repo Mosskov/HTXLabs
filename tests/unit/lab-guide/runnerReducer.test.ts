@@ -19,7 +19,13 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     simulationState: null,
     rubricHintTiers: {},
     variableTableHintTiers: {},
+    variableTableHintReveals: {},
     variableTableLastChecked: {},
+    hintTokens: {},
+    hintLastReplenishAt: {},
+    hintUsageTotal: 0,
+    hintUsageByPhase: {},
+    hintUsageByTarget: {},
     ...overrides,
   };
 }
@@ -219,111 +225,260 @@ describe('runnerReducer', () => {
     });
   });
 
-  describe('INCREMENT_RUBRIC_TIER', () => {
-    it('creates a widget bucket and sets tier=1 on first fire', () => {
+  describe('SPEND_AND_REVEAL_RUBRIC_TIER', () => {
+    it('first spend on a fresh phase decrements from poolCap (absent === full)', () => {
       const next = runnerReducer(makeState(), {
-        type: 'INCREMENT_RUBRIC_TIER',
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'iv',
-        cap: 3,
+        criterionId: 'c1',
+        op: { kind: 'tier' },
+        hintCap: 3,
+        poolCap: 3,
+        now: 1_000,
       });
-      expect(next.rubricHintTiers).toEqual({ w1: { iv: 1 } });
+      expect(next.rubricHintTiers.w1?.c1).toBe(1);
+      expect(next.hintTokens.planlaeg).toBe(2);
+      expect(next.hintLastReplenishAt.planlaeg).toBe(1_000);
+      expect(next.hintUsageTotal).toBe(1);
+      expect(next.hintUsageByPhase.planlaeg).toBe(1);
+      expect(next.hintUsageByTarget['w1::c1']).toBe(1);
     });
 
-    it('increments until the cap and then becomes a no-op (idempotent)', () => {
-      let s = makeState();
-      const action: RunnerAction = {
-        type: 'INCREMENT_RUBRIC_TIER',
+    it('is a no-op when the tier ceiling is already reached', () => {
+      const s = makeState({
+        rubricHintTiers: { w1: { c1: 3 } },
+        hintTokens: { planlaeg: 2 },
+      });
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'iv',
-        cap: 2,
+        criterionId: 'c1',
+        op: { kind: 'tier' },
+        hintCap: 3,
+        poolCap: 3,
+        now: 2_000,
+      });
+      expect(next).toBe(s);
+    });
+
+    it('is a no-op when tokens are insufficient (atomic re-validation)', () => {
+      const s = makeState({ hintTokens: { planlaeg: 0 } });
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
+        widgetId: 'w1',
+        criterionId: 'c1',
+        op: { kind: 'tier' },
+        hintCap: 3,
+        poolCap: 3,
+        now: 1_000,
+      });
+      expect(next).toBe(s);
+    });
+
+    it('rapid double-click reveals exactly one tier and decrements once', () => {
+      // Same stale snapshot, two dispatches in a row: the reducer re-reads
+      // state on the second action and refuses because the ceiling moved.
+      let s = makeState();
+      const action = {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER' as const,
+        phaseId: 'planlaeg',
+        widgetId: 'w1',
+        criterionId: 'c1',
+        op: { kind: 'tier' as const },
+        hintCap: 1,
+        poolCap: 3,
+        now: 1_000,
       };
       s = runnerReducer(s, action);
       s = runnerReducer(s, action);
-      expect(s.rubricHintTiers.w1?.iv).toBe(2);
-      // Third fire stays at cap and returns the same state reference.
-      const prev = s;
-      s = runnerReducer(s, action);
-      expect(s).toBe(prev);
-      expect(s.rubricHintTiers.w1?.iv).toBe(2);
+      expect(s.rubricHintTiers.w1?.c1).toBe(1);
+      expect(s.hintTokens.planlaeg).toBe(2);
     });
 
-    it('tracks independent counters per widget and per criterion', () => {
-      let s = makeState();
-      s = runnerReducer(s, {
-        type: 'INCREMENT_RUBRIC_TIER',
+    it('reveal moves tier from hintCap to hintCap + 1 and costs `op.cost`', () => {
+      const s = makeState({
+        rubricHintTiers: { w1: { c1: 3 } },
+        hintTokens: { planlaeg: 3 },
+      });
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'iv',
-        cap: 3,
+        criterionId: 'c1',
+        op: { kind: 'reveal', cost: 2 },
+        hintCap: 3,
+        poolCap: 3,
+        now: 5_000,
       });
-      s = runnerReducer(s, {
-        type: 'INCREMENT_RUBRIC_TIER',
+      expect(next.rubricHintTiers.w1?.c1).toBe(4);
+      expect(next.hintTokens.planlaeg).toBe(1);
+      expect(next.hintUsageTotal).toBe(2);
+    });
+
+    it('reveal fails when prior tier < hintCap (must finish ladder first)', () => {
+      const s = makeState({
+        rubricHintTiers: { w1: { c1: 1 } },
+        hintTokens: { planlaeg: 3 },
+      });
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'dv',
-        cap: 3,
+        criterionId: 'c1',
+        op: { kind: 'reveal', cost: 2 },
+        hintCap: 3,
+        poolCap: 3,
+        now: 5_000,
       });
-      s = runnerReducer(s, {
-        type: 'INCREMENT_RUBRIC_TIER',
-        widgetId: 'w2',
-        criterionId: 'iv',
-        cap: 3,
+      expect(next).toBe(s);
+    });
+
+    it('insufficient-token reveal is a no-op', () => {
+      const s = makeState({
+        rubricHintTiers: { w1: { c1: 3 } },
+        hintTokens: { planlaeg: 1 },
       });
-      expect(s.rubricHintTiers).toEqual({
-        w1: { iv: 1, dv: 1 },
-        w2: { iv: 1 },
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId: 'planlaeg',
+        widgetId: 'w1',
+        criterionId: 'c1',
+        op: { kind: 'reveal', cost: 2 },
+        hintCap: 3,
+        poolCap: 3,
+        now: 5_000,
       });
+      expect(next).toBe(s);
     });
   });
 
-  describe('INCREMENT_VARIABLE_TABLE_TIER', () => {
-    it('bumps a per-cell tier counter using array-shaped keys', () => {
-      let s = makeState();
-      s = runnerReducer(s, {
-        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+  describe('SPEND_AND_REVEAL_VT_TIER', () => {
+    it('bumps the per-cell tier counter, appends the revealed string, and decrements one token', () => {
+      const next = runnerReducer(makeState(), {
+        type: 'SPEND_AND_REVEAL_VT_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'vars',
         cellKey: 'iv.0.symbol',
-        cap: 3,
+        revealedText: 'paid tier 1 text',
+        hintCap: 3,
+        poolCap: 3,
+        now: 1_000,
       });
-      s = runnerReducer(s, {
-        type: 'INCREMENT_VARIABLE_TABLE_TIER',
-        widgetId: 'vars',
-        cellKey: 'iv.0.symbol',
-        cap: 3,
-      });
-      expect(s.variableTableHintTiers.vars?.['iv.0.symbol']).toBe(2);
+      expect(next.variableTableHintTiers.vars?.['iv.0.symbol']).toBe(1);
+      expect(next.variableTableHintReveals.vars?.['iv.0.symbol']).toEqual(['paid tier 1 text']);
+      expect(next.hintTokens.planlaeg).toBe(2);
+      expect(next.hintUsageByTarget['vars::iv.0.symbol']).toBe(1);
     });
 
-    it('caps at the supplied limit (idempotent at cap)', () => {
-      let s = makeState();
-      for (let i = 0; i < 5; i++) {
-        s = runnerReducer(s, {
-          type: 'INCREMENT_VARIABLE_TABLE_TIER',
-          widgetId: 'vars',
-          cellKey: 'dv.1.unit',
-          cap: 2,
-        });
-      }
-      expect(s.variableTableHintTiers.vars?.['dv.1.unit']).toBe(2);
-    });
-
-    it('tracks independent counters per cell key', () => {
-      let s = makeState();
-      s = runnerReducer(s, {
-        type: 'INCREMENT_VARIABLE_TABLE_TIER',
+    it('caps at hintCap (idempotent at cap)', () => {
+      const s = makeState({
+        variableTableHintTiers: { vars: { 'iv.0.symbol': 2 } },
+        hintTokens: { planlaeg: 3 },
+      });
+      const next = runnerReducer(s, {
+        type: 'SPEND_AND_REVEAL_VT_TIER',
+        phaseId: 'planlaeg',
         widgetId: 'vars',
         cellKey: 'iv.0.symbol',
-        cap: 3,
+        revealedText: 'ignored — at cap',
+        hintCap: 2,
+        poolCap: 3,
+        now: 1_000,
       });
-      s = runnerReducer(s, {
-        type: 'INCREMENT_VARIABLE_TABLE_TIER',
-        widgetId: 'vars',
-        cellKey: 'constants.0.name',
-        cap: 3,
+      expect(next).toBe(s);
+    });
+  });
+
+  describe('LAZY_REPLENISH', () => {
+    it('grants tokens when the anchor matches', () => {
+      const s = makeState({
+        hintTokens: { planlaeg: 1 },
+        hintLastReplenishAt: { planlaeg: 1_000 },
       });
-      expect(s.variableTableHintTiers.vars).toEqual({
-        'iv.0.symbol': 1,
-        'constants.0.name': 1,
+      const next = runnerReducer(s, {
+        type: 'LAZY_REPLENISH',
+        phaseId: 'planlaeg',
+        fromLastReplenishAt: 1_000,
+        newLastReplenishAt: 121_000,
+        grants: 1,
+        poolCap: 3,
       });
+      expect(next.hintTokens.planlaeg).toBe(2);
+      expect(next.hintLastReplenishAt.planlaeg).toBe(121_000);
+    });
+
+    it('is a no-op when the anchor has moved (idempotency guard)', () => {
+      const s = makeState({
+        hintTokens: { planlaeg: 1 },
+        hintLastReplenishAt: { planlaeg: 2_000 },
+      });
+      const next = runnerReducer(s, {
+        type: 'LAZY_REPLENISH',
+        phaseId: 'planlaeg',
+        fromLastReplenishAt: 1_000, // stale snapshot
+        newLastReplenishAt: 121_000,
+        grants: 1,
+        poolCap: 3,
+      });
+      expect(next).toBe(s);
+    });
+
+    it('caps grants at poolCap', () => {
+      const s = makeState({
+        hintTokens: { planlaeg: 2 },
+        hintLastReplenishAt: { planlaeg: 1_000 },
+      });
+      const next = runnerReducer(s, {
+        type: 'LAZY_REPLENISH',
+        phaseId: 'planlaeg',
+        fromLastReplenishAt: 1_000,
+        newLastReplenishAt: 360_000,
+        grants: 5,
+        poolCap: 3,
+      });
+      // hintTokens caps at poolCap regardless of inflated grants.
+      expect(next.hintTokens.planlaeg).toBe(3);
+    });
+  });
+
+  describe('ANCHOR_HINT_TIMER', () => {
+    it('anchors a partial bucket on phase entry', () => {
+      const s = makeState({
+        hintTokens: { planlaeg: 2 },
+        hintLastReplenishAt: { planlaeg: 0 },
+      });
+      const next = runnerReducer(s, {
+        type: 'ANCHOR_HINT_TIMER',
+        phaseId: 'planlaeg',
+        now: 9_999,
+        poolCap: 3,
+      });
+      expect(next.hintLastReplenishAt.planlaeg).toBe(9_999);
+    });
+
+    it('is a no-op when the bucket is full', () => {
+      const s = makeState({ hintTokens: { planlaeg: 3 } });
+      const next = runnerReducer(s, {
+        type: 'ANCHOR_HINT_TIMER',
+        phaseId: 'planlaeg',
+        now: 9_999,
+        poolCap: 3,
+      });
+      expect(next).toBe(s);
+    });
+
+    it('is a no-op when the bucket is absent (fresh phase, never spent)', () => {
+      const s = makeState();
+      const next = runnerReducer(s, {
+        type: 'ANCHOR_HINT_TIMER',
+        phaseId: 'planlaeg',
+        now: 9_999,
+        poolCap: 3,
+      });
+      expect(next).toBe(s);
     });
   });
 

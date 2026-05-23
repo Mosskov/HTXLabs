@@ -1,89 +1,59 @@
-// Shared tiered-hint list: bullet list + dedup + bonus panel. Consumed by
-// RubricResponse and VariableTable.
+// Passive bullet-list renderer used as the body of HintPopup. Takes a
+// pre-resolved list of entries (misconceptions at the top, then revealed
+// criterion / cell tiers, then reveal text if any). The consumer owns the
+// resolution + dedup; this component just paints.
 //
-// `variant='list'` (default): full bulleted list of failed hints + optional
-// misconception color + optional bonus panel. Caller pre-dedupes via the
-// `key` field — first-producer-wins is enforced upstream.
-// `variant='inline'`: single inline hint paragraph (no <ul>, no bonus, no
-// misconception color). Falls back to empty render when no hints.
-import { strings } from '../strings.da';
-
-export interface TieredHint {
-  key: string;
-  text: string;
-}
-
-export interface TieredMisconception {
-  key: string;
-  text: string;
-}
+// No inline rendering elsewhere — the request-driven hint system surfaces all
+// revealed tiers through HintPopup, never below a field or inside the widget.
+import type { HintPopupEntry } from './HintPopup';
 
 interface Props {
-  /** Pre-deduped failing-criteria hint entries. */
-  failedHints: TieredHint[];
-  /** Pre-resolved misconception entries (orange text in list variant). */
-  misconceptions?: TieredMisconception[];
-  /** Pre-deduped optional-criteria bonus hints. When non-empty, list variant
-   *  renders a separate bonus panel below the main list. */
-  bonusHints?: TieredHint[];
-  /** Title for the bonus panel; falls back to a Danish default. */
-  bonusTitle?: string;
-  /** `aria-label` for the main hint list. Falls back to a Danish default. */
-  ariaLabel?: string;
-  /** `'list'` = bulleted list + bonus panel. `'inline'` = single hint paragraph
-   *  (uses the first entry in `failedHints` only; ignores misconceptions and
-   *  bonus). */
-  variant?: 'list' | 'inline';
+  entries: HintPopupEntry[];
 }
 
-export function TieredHintList({
-  failedHints,
-  misconceptions = [],
-  bonusHints = [],
-  bonusTitle,
-  ariaLabel,
-  variant = 'list',
-}: Props) {
-  if (variant === 'inline') {
-    const first = failedHints[0];
-    if (!first) return null;
-    return <p className="mt-1 text-sm text-slate-600">{first.text}</p>;
+export function TieredHintList({ entries }: Props) {
+  if (entries.length === 0) return null;
+  // Group consecutive entries with the same `group` under one header. Pure
+  // mirror of HintPopup's grouping so the two stay visually consistent.
+  const groups: { header?: string; items: HintPopupEntry[] }[] = [];
+  for (const e of entries) {
+    const last = groups[groups.length - 1];
+    if (last && last.header === e.group) {
+      last.items.push(e);
+    } else {
+      groups.push({ header: e.group, items: [e] });
+    }
   }
-
-  const showHints = failedHints.length > 0 || misconceptions.length > 0;
-  const showBonus = bonusHints.length > 0;
-  if (!showHints && !showBonus) return null;
-
   return (
     <>
-      {showHints && (
-        <ul
-          aria-label={ariaLabel ?? strings.widgets.rubric.hintsLabel}
-          aria-live="polite"
-          className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"
+      {groups.map((g, gi) => (
+        <div
+          key={`${g.header ?? ''}-${gi}-${g.items[0]?.key ?? ''}`}
+          className={gi > 0 ? 'mt-2' : undefined}
         >
-          {failedHints.map((h) => (
-            <li key={h.key}>{h.text}</li>
-          ))}
-          {misconceptions.map((m) => (
-            <li key={m.key} className="text-orange-800">
-              {m.text}
-            </li>
-          ))}
-        </ul>
-      )}
-      {showBonus && (
-        <div className="mt-3 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-          <h3 className="mb-1 font-semibold text-sm">
-            {bonusTitle ?? strings.widgets.rubric.bonusPanelTitle}
-          </h3>
-          <ul aria-live="polite" className="list-disc space-y-1 pl-5">
-            {bonusHints.map((h) => (
-              <li key={h.key}>{h.text}</li>
+          {g.header && (
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {g.header}
+            </div>
+          )}
+          <ul className="list-disc space-y-1 pl-4">
+            {g.items.map((item) => (
+              <li
+                key={item.key}
+                className={
+                  item.tone === 'misconception'
+                    ? 'text-orange-800'
+                    : item.tone === 'reveal'
+                      ? 'text-emerald-800'
+                      : 'text-slate-700'
+                }
+              >
+                {item.text}
+              </li>
             ))}
           </ul>
         </div>
-      )}
+      ))}
     </>
   );
 }

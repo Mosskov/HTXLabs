@@ -1,3 +1,5 @@
+import { HintSpendProvider } from '@/lab-guide/HintSpendContext';
+import { PhaseScopeProvider } from '@/lab-guide/PhaseScopeContext';
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { isGateSatisfied } from '@/lab-guide/gates';
 import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
@@ -270,7 +272,10 @@ describe('RubricResponse — tiered hints', () => {
   };
   const empty = new MockEmbedder({});
 
-  it('reveals tier-1 hint after first failing tjek, deduped across criteria', async () => {
+  it('does NOT auto-reveal any hint tier on Tjek (request-driven model)', async () => {
+    // Old behaviour was to auto-bump every failing criterion's tier counter on
+    // Tjek. The new request-driven system only reveals tiers when the student
+    // arms spend mode + clicks a lightbulb — Tjek by itself surfaces nothing.
     const user = userEvent.setup();
     render(
       <Harness experimentId="rrt/1">
@@ -279,44 +284,12 @@ describe('RubricResponse — tiered hints', () => {
     );
     await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt her');
     await user.click(screen.getByRole('button', { name: /tjek/i }));
-    expect(await screen.findByText('shared-t1')).toBeInTheDocument();
-    // Only one bullet for the shared tier-1 hint — dedupe.
-    expect(screen.getAllByText('shared-t1')).toHaveLength(1);
-    // Tier 2/3 not yet revealed.
+    expect(screen.queryByText('shared-t1')).not.toBeInTheDocument();
     expect(screen.queryByText('shared-t2')).not.toBeInTheDocument();
     expect(screen.queryByText('iv-t3')).not.toBeInTheDocument();
   });
 
-  it('stacks hints tier 1 → 1+2 → 1+2+3 across repeated tjek, caps at 3', async () => {
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="rrt/2">
-        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
-      </Harness>,
-    );
-    const button = screen.getByRole('button', { name: /tjek/i });
-    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt her');
-
-    await user.click(button);
-    expect(await screen.findByText('shared-t1')).toBeInTheDocument();
-
-    await user.click(button);
-    expect(await screen.findByText('shared-t2')).toBeInTheDocument();
-    expect(screen.getByText('shared-t1')).toBeInTheDocument();
-
-    await user.click(button);
-    expect(await screen.findByText('iv-t3')).toBeInTheDocument();
-    expect(screen.getByText('dv-t3')).toBeInTheDocument();
-    expect(screen.getByText('shared-t1')).toBeInTheDocument();
-    expect(screen.getByText('shared-t2')).toBeInTheDocument();
-
-    // Fourth click — caps; no new bullets.
-    await user.click(button);
-    expect(screen.getAllByText('iv-t3')).toHaveLength(1);
-    expect(screen.getAllByText('dv-t3')).toHaveLength(1);
-  });
-
-  it('shows the bonus panel when required pass and the optional has tiered hints', async () => {
+  it('does not surface any optional/bonus criterion content on Tjek', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="rrt/3">
@@ -326,41 +299,10 @@ describe('RubricResponse — tiered hints', () => {
     await user.type(screen.getByRole('textbox'), 'min uafhængig og min afhængig variabel er klare');
     await user.click(screen.getByRole('button', { name: /tjek/i }));
     expect(await screen.findByText(/godkendt/i)).toBeInTheDocument();
-    expect(screen.getByText(/vil du gøre svaret stærkere/i)).toBeInTheDocument();
-    expect(screen.getByText('bonus-t1')).toBeInTheDocument();
-    expect(screen.queryByText('bonus-t2')).not.toBeInTheDocument();
-  });
-
-  it('hides the bonus panel on required regression but preserves the tier', async () => {
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="rrt/4">
-        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={empty} />
-      </Harness>,
-    );
-    const textbox = screen.getByRole('textbox');
-    await user.type(textbox, 'min uafhængig og min afhængig variabel er klare');
-    await user.click(screen.getByRole('button', { name: /tjek/i }));
-    expect(await screen.findByText('bonus-t1')).toBeInTheDocument();
-
-    // Edit to break the dv keyword (replace "afhængig" → drop it entirely).
-    await user.clear(textbox);
-    await user.type(textbox, 'kun min uafhængig variabel er klar');
-    await user.click(screen.getByRole('button', { name: /tjek/i }));
-
-    // Required regression: bonus panel hides; required failure hint surfaces.
-    await screen.findByText('shared-t1');
-    expect(screen.queryByText(/vil du gøre svaret stærkere/i)).not.toBeInTheDocument();
+    // No automatic bonus surface — the student would have to spend tokens on
+    // the optional criterion to see its tier-1 text.
     expect(screen.queryByText('bonus-t1')).not.toBeInTheDocument();
-
-    // Re-pass required → bonus tier preserved across the regression cycle and
-    // increments again on this new tjek with bonus still failing. If the tier
-    // had been reset to 0 on regression, only bonus-t1 would surface here.
-    await user.clear(textbox);
-    await user.type(textbox, 'min uafhængig og min afhængig variabel er klare igen');
-    await user.click(screen.getByRole('button', { name: /tjek/i }));
-    expect(await screen.findByText('bonus-t2')).toBeInTheDocument();
-    expect(screen.getByText('bonus-t1')).toBeInTheDocument();
+    expect(screen.queryByText('bonus-t2')).not.toBeInTheDocument();
   });
 
   it('does not escalate or render a semantic-only bonus while the embedder is down', async () => {
@@ -413,6 +355,132 @@ describe('RubricResponse — tiered hints', () => {
     // No bonus panel surfaced — the criterion was skipped, not failing.
     expect(screen.queryByText(/vil du gøre svaret stærkere/i)).not.toBeInTheDocument();
     expect(screen.queryByText('bonus-t1')).not.toBeInTheDocument();
+  });
+});
+
+describe('RubricResponse — spend mode (integration)', () => {
+  // Same rubric shape as the tiered-hints suite, plus a semantic-only bonus
+  // exposed under a flaky embedder. Required criteria are literal-only so they
+  // can fail or pass without touching the embedder.
+  const tieredRubric = {
+    id: 'tiered-int',
+    version: 1,
+    title: 'Tiered integration',
+    criteria: [
+      {
+        id: 'iv',
+        label: 'IV',
+        hints: ['hint-iv-1', 'hint-iv-2', 'hint-iv-3'],
+        any: [{ kind: 'literal', terms: ['uafhængig'] }],
+      },
+      {
+        id: 'bonus',
+        label: 'Bonus',
+        required: false,
+        hints: ['bonus-t1'],
+        any: [{ kind: 'literal', terms: ['ekstra'] }],
+      },
+    ],
+  };
+
+  function IntegrationHarness({
+    experimentId,
+    children,
+  }: {
+    experimentId: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[phase]}>
+        <HintSpendProvider>
+          <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+        </HintSpendProvider>
+      </RunnerProvider>
+    );
+  }
+
+  it('bucket → lightbulb → popup: spending one token reveals tier 1 in the popup', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-spend/1">
+        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+
+    // Tjek with an answer that fails both required + bonus criteria.
+    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+
+    // Bucket renders with the full default pool. No lightbulbs yet — the
+    // request-driven model never auto-reveals.
+    const bucket = await screen.findByRole('button', { name: /hint-pulje:\s*3\s*af\s*3/i });
+    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
+
+    // Click bucket → spend mode armed → lightbulb on the failing required
+    // criterion ('IV'). The bonus is failing too, but required-not-satisfied
+    // suppresses bonus-criterion lightbulbs.
+    await user.click(bucket);
+    const lightbulbs = screen.getAllByLabelText(/få et hint/i);
+    expect(lightbulbs).toHaveLength(1);
+
+    // Click → tier 1 unlocks → token decrements → spend mode exits.
+    await user.click(lightbulbs[0]);
+    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /hint-pulje:\s*2\s*af\s*3/i })).toBeInTheDocument();
+
+    // Focus the textarea → popup opens showing the freshly-paid tier-1 hint.
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByText('hint-iv-1')).toBeInTheDocument();
+    expect(screen.queryByText('hint-iv-2')).not.toBeInTheDocument();
+  });
+
+  it('does NOT show a lightbulb on a semantic-only bonus while the embedder is down', async () => {
+    const semanticBonusRubric = {
+      id: 'sem-bonus-int',
+      version: 1,
+      title: 'Sem bonus integration',
+      criteria: [
+        {
+          id: 'iv',
+          label: 'IV',
+          hints: ['hint-iv-1'],
+          any: [{ kind: 'literal', terms: ['uafhængig'] }],
+        },
+        {
+          id: 'bonus',
+          label: 'Bonus',
+          required: false,
+          hints: ['bonus-t1'],
+          any: [{ kind: 'semantic', threshold: 0.5, anchors: ['something'] }],
+        },
+      ],
+    };
+    const flaky = {
+      async embed() {
+        throw new Error('embed server down');
+      },
+    };
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-spend/2">
+        <RubricResponse id="hyp" prompt="?" rubric={semanticBonusRubric} embedder={flaky} />
+      </IntegrationHarness>,
+    );
+
+    // Pass the required criterion so the bonus would normally be eligible —
+    // but the embedder outage makes the bonus !evaluable, suppressing its
+    // lightbulb even in spend mode.
+    await user.type(screen.getByRole('textbox'), 'min uafhængig variabel er X');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await screen.findByText(/semantiske vurdering/i);
+
+    const bucket = screen.getByRole('button', { name: /hint-pulje/i });
+    await user.click(bucket);
+
+    // No lightbulb on the bonus criterion — it would surface unreachable hint
+    // text under the outage. (Required is satisfied, so it doesn't render one
+    // either — `c.satisfied` filter.)
+    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
   });
 });
 

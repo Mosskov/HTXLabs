@@ -111,6 +111,13 @@ export const Phase = z
     intro: z.string().optional(),
     steps: z.array(z.union([z.string().min(1), PhaseStep])).optional(),
     gate: Gate.default({ type: 'always' }),
+    /** Per-phase token pool size for the request-driven hint system. Defaults
+     *  to `DEFAULT_HINT_POOL_SIZE` (3) when omitted; `0` disables hints for
+     *  this phase. Author-edits ARE a version-bump-required schema change. */
+    hintPoolSize: z.number().int().min(0).max(20).optional(),
+    /** Per-phase replenishment cadence in minutes. Defaults to
+     *  `DEFAULT_HINT_REPLENISH_MINUTES` (2); `0` disables the timer. */
+    hintReplenishMinutes: z.number().min(0).max(60).optional(),
   })
   .refine((p) => !(p.intro && p.steps), {
     message:

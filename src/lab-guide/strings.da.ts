@@ -107,6 +107,33 @@ export const strings = {
     blocked: 'Indsæt er deaktiveret — skriv selv dit svar.',
   },
   widgets: {
+    hints: {
+      /** Aria label on the bucket button when spend mode is idle. Vars:
+       *  {tokens} = current count, {pool} = cap. */
+      bucketAriaLabel: 'Hint-pulje: {tokens} af {pool} hints tilbage',
+      /** Aria label on the bucket button while spend mode is armed — tells
+       *  the student what to do next. */
+      bucketSpendModeAriaLabel:
+        'Vælg hvor du vil bruge et hint, eller tryk Escape for at annullere',
+      /** Tooltip shown on a click against an empty bucket (no countdown). */
+      bucketEmpty: 'Hint-puljen er tom',
+      /** Tooltip / status when the bucket is empty but a refill is coming.
+       *  Vars: {time} = formatted M:SS. */
+      bucketCountdown: 'Næste hint om {time}',
+      /** Tooltip when the phase carries `hintPoolSize: 0`. */
+      bucketDisabled: 'Hints er ikke tilgængelige i denne fase',
+      /** Aria label on a per-field lightbulb. Vars: {tier} = next-tier digit,
+       *  {cap} = ladder length. */
+      lightbulbAriaLabel: 'Få et hint ({tier} af {cap})',
+      /** Visible label on the reveal pill — the 4th-tier "show the answer"
+       *  affordance. Vars: {cost} = token cost (always 2 today). */
+      revealLabel: 'Vis svar ({cost})',
+      revealAriaLabel: 'Brug {cost} hints for at se svaret',
+      /** Aria label on the popup container that opens on focus. */
+      popupAriaLabel: 'Tilgængelige hints',
+      /** Tooltip on a disabled reveal pill (bucket below cost). */
+      insufficientHints: 'Du har ikke nok hints.',
+    },
     freeText: {
       placeholder: 'Skriv dit svar her...',
       /** Vars: {n} = minWords threshold */
@@ -146,7 +173,6 @@ export const strings = {
         'Den semantiske vurdering er ikke tilgængelig lige nu — start embed-serveren og prøv igen.',
       statusPassed: 'Godkendt',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
-      bonusPanelTitle: 'Vil du gøre svaret stærkere?',
       hintsLabel: 'Tips til de manglende krav',
     },
     variableTable: {

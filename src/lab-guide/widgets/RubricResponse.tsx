@@ -6,16 +6,27 @@
 // `result` (just-evaluated) or the persisted pass record (cross-reload).
 // Editing the text — or changing `dependsOn` — flips `dirty:true` → the gate
 // re-closes without us touching the persisted record. Feedback to the student
-// comes from the tier hint list (on fail) and the Next-phase button enabling
-// (on pass); an sr-only `<output>` announces "Godkendt" once for AT users.
+// comes from a focus-triggered HintPopup beside the textarea (misconceptions
+// always free + orange; revealed criterion tiers stacked underneath) plus the
+// Next-phase button enabling on pass; an sr-only `<output>` announces
+// "Godkendt" once for AT users.
 //
 // Reload-safety: each completed evaluate writes a minimal pass record to
 // `widgetValues[`${id}:result`]` containing
 //   `{ lastCheckedText, lastCheckedDependsOn, requiredSatisfied, embedderDown }`.
 // On reload, that record hydrates the gate + pill so a prior pass survives
-// without forcing a re-Tjek. The full `RubricResult` (criteria, hints) is
-// component-state only — hints disappear on reload and reappear on next Tjek,
-// which is the accepted trade-off vs. persisting embedder vectors.
+// without forcing a re-Tjek. The full `RubricResult` (criteria, hints,
+// misconceptions) is component-state only — the popup will render empty until
+// the next Tjek, but spent tier counters survive in `state.rubricHintTiers`
+// so the very next Tjek immediately re-paints every paid tier without
+// spending again. This is the accepted trade-off vs. persisting embedder
+// vectors.
+//
+// Hint system: request-driven, per-phase token bucket. Auto-bump on Tjek is
+// gone — students opt into seeing a tier by clicking the bucket (arms spend
+// mode) and then a per-criterion lightbulb. The widget registers itself as
+// hint-eligible against the PhaseScopeContext so the runner ticker / bucket
+// know which phase owns it.
 import { DEV_EMBEDDER_URL, type Embedder, HttpEmbedder } from '@/lib/rubric/embedder';
 import {
   CHECK_STATUSES,
@@ -26,16 +37,22 @@ import {
 } from '@/lib/rubric/engine';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
+import { useHintSpend } from '../HintSpendContext';
 import { useRunner } from '../RunnerContext';
 import { Tooltip } from '../Tooltip';
 import { format, strings } from '../strings.da';
+import { useRegisteredHintEligibility } from '../useRegisteredHintEligibility';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
+import { HintBucket } from './HintBucket';
+import { HintLightbulb } from './HintLightbulb';
+import { HintPopup, type HintPopupEntry } from './HintPopup';
 import { ProtectedTextarea } from './ProtectedInput';
-import { TieredHintList } from './TieredHintList';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
+
+const REVEAL_COST = 2;
 
 // Persisted across reload via `widgetValues[${id}:result]`. Validated with
 // Zod so a future shape change (or hand-edited localStorage) lands as a
@@ -80,10 +97,6 @@ interface Props {
   tooShortMessage?: string;
   tooLongMessage?: string;
   embedderDownMessage?: string;
-  /** Title for the bonus panel surfaced when required criteria all pass but
-   *  optional criteria still carry tiered hints. Defaults to
-   *  `strings.widgets.rubric.bonusPanelTitle`. */
-  bonusPanelTitle?: string;
   /** Opaque dependency string. When it changes after a check, `dirty` flips on
    *  (same as editing the text) and the gate re-closes. Use it to bind the
    *  pass to external context the prompt depends on — e.g. variable symbols
@@ -110,12 +123,12 @@ export function RubricResponse({
   tooShortMessage,
   tooLongMessage,
   embedderDownMessage,
-  bonusPanelTitle,
   dependsOn,
   allowPaste,
   embedder = defaultEmbedder,
 }: Props) {
-  const { state, setWidgetValue, incrementRubricTier } = useRunner();
+  const { state, setWidgetValue, spendAndRevealRubricTier, bucketView } = useRunner();
+  const { spendMode } = useHintSpend();
   const text = (state.widgetValues[id] as string | undefined) ?? '';
   const tiers = state.rubricHintTiers[id] ?? {};
   const dependsOnNorm = dependsOn ?? null;
@@ -124,6 +137,12 @@ export function RubricResponse({
   const persistedRaw = readPersisted(state.widgetValues[persistedKey]);
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
+
+  // Hint eligibility — registers against the surrounding PhaseScopeContext.
+  // Only enabled when the rubric parsed (a bad rubric has no ladder, so no
+  // hint surface either). The hook cleans up on unmount.
+  useRegisteredHintEligibility(id, parsed.ok, 'rubric');
+
   // Ignore the persisted record if it was written against a different rubric
   // (different id) or an older version — stale criteria must not keep the
   // gate open after the author edits the rubric JSON.
@@ -255,19 +274,6 @@ export function RubricResponse({
           embedderDown: skipped,
         };
         setWidgetValue(persistedKey, record);
-        // Post-resolve tier bump for criteria still failing. Required
-        // criteria always count; optional criteria only count once required
-        // all pass AND the optional criterion was actually evaluable — an
-        // embedder outage on a semantic-only bonus must not ratchet the tier,
-        // since the student can't make progress against a skipped check.
-        for (const c of r.criteria) {
-          if (c.satisfied || c.hints.length === 0) continue;
-          if (c.required) {
-            incrementRubricTier(id, c.id, c.hints.length);
-          } else if (r.requiredSatisfied && c.evaluable) {
-            incrementRubricTier(id, c.id, c.hints.length);
-          }
-        }
       }
     } finally {
       pendingRef.current = false;
@@ -323,81 +329,99 @@ export function RubricResponse({
 
   const checkDisabled = pending || !nonEmpty || !meetsMinWords || overMaxWords;
 
-  const triggeredMisconceptions =
-    result && !dirty && !pending
-      ? result.criteria.flatMap((c) =>
-          c.misconceptions
-            .filter((m) => m.status === VETO_STATUSES.TRIGGERED)
-            .map((m) => ({
-              key: `mis-${c.id}-${m.hint}`,
-              text: m.hint,
-            })),
-        )
-      : [];
-  // Tiered hint stack for failing required criteria. Each criterion contributes
-  // its first `tier` hints; we dedupe by text so e.g. a shared tier-1 nudge
-  // collapses to one bullet across iv/dv/relation. First producer wins the key.
-  const failedHints = (() => {
-    if (!result || dirty || pending) return [] as { key: string; text: string }[];
-    const entries: { criterionId: string; tier: number; text: string }[] = [];
+  // Surface a fresh result (live or persisted-shaped) for the popup, gated on
+  // the same "feedback only" rule: result present, not dirty, not mid-check.
+  // `lastCheckedText !== null` keeps stale local `result` from driving popups
+  // after `resetLab` clears the persisted record without remounting the widget.
+  const showFeedback = !!result && lastCheckedText !== null && !dirty && !pending;
+
+  // Build the popup entries from the latest result + persisted tier counters.
+  // - Misconceptions are free and always appear at the top in orange.
+  // - For each criterion with `tier > 0`: render its tier texts under a header
+  //   with the criterion label. Reveal text (tier === hintCap + 1) appears
+  //   underneath in distinct tone.
+  const popupEntries: HintPopupEntry[] = (() => {
+    if (!showFeedback || !result) return [];
+    const entries: HintPopupEntry[] = [];
+    // Misconceptions — free, always shown when result is fresh.
     for (const c of result.criteria) {
-      if (c.satisfied || !c.required) continue;
-      const tier = tiers[c.id] ?? 0;
-      if (tier === 0 || c.hints.length === 0) continue;
-      for (let i = 0; i < Math.min(tier, c.hints.length); i++) {
-        const text = c.hints[i];
-        if (text !== undefined) entries.push({ criterionId: c.id, tier: i + 1, text });
+      for (const m of c.misconceptions) {
+        if (m.status !== VETO_STATUSES.TRIGGERED) continue;
+        entries.push({
+          key: `mis-${c.id}-${m.hint}`,
+          text: m.hint,
+          tone: 'misconception',
+        });
       }
     }
-    const seen = new Set<string>();
-    const out: { key: string; text: string }[] = [];
-    for (const e of entries) {
-      if (seen.has(e.text)) continue;
-      seen.add(e.text);
-      out.push({ key: `fail-${e.criterionId}-${e.tier}`, text: e.text });
-    }
-    return out;
-  })();
-  // Bonus panel hints — same dedupe pass over optional unsatisfied criteria.
-  // Non-evaluable optional criteria are skipped: when the embedder is down a
-  // semantic-only bonus would otherwise surface unreachable advice.
-  const bonusHints = (() => {
-    if (!result || dirty || pending || !result.requiredSatisfied) {
-      return [] as { key: string; text: string }[];
-    }
-    const entries: { criterionId: string; tier: number; text: string }[] = [];
+    // Paid tier reveals per criterion. Walk criteria in author order so the
+    // popup reads consistently across re-evaluations.
     for (const c of result.criteria) {
-      if (c.satisfied || c.required || !c.evaluable) continue;
       const tier = tiers[c.id] ?? 0;
-      if (tier === 0 || c.hints.length === 0) continue;
-      for (let i = 0; i < Math.min(tier, c.hints.length); i++) {
+      if (tier <= 0) continue;
+      const cap = c.hints.length;
+      const ladderTier = Math.min(tier, cap);
+      for (let i = 0; i < ladderTier; i++) {
         const text = c.hints[i];
-        if (text !== undefined) entries.push({ criterionId: c.id, tier: i + 1, text });
+        if (text === undefined) continue;
+        entries.push({
+          key: `tier-${c.id}-${i + 1}`,
+          text,
+          tone: 'hint',
+          group: c.label,
+        });
+      }
+      if (tier > cap && c.reveal !== undefined) {
+        entries.push({
+          key: `reveal-${c.id}`,
+          text: c.reveal,
+          tone: 'reveal',
+          group: c.label,
+        });
       }
     }
-    const seen = new Set<string>();
-    const out: { key: string; text: string }[] = [];
-    for (const e of entries) {
-      if (seen.has(e.text)) continue;
-      seen.add(e.text);
-      out.push({ key: `bonus-${e.criterionId}-${e.tier}`, text: e.text });
-    }
-    return out;
+    return entries;
   })();
-  const showHints =
-    !!result &&
-    !dirty &&
-    !pending &&
-    (failedHints.length > 0 || triggeredMisconceptions.length > 0);
+
   const showEmbedderBanner = embedderDown && !dirty;
 
   const helpId = `rr-${id}-help`;
 
-  // Visible status pill removed — feedback now comes from the tier hint list
-  // (on fail) and the Next-phase button enabling (on pass). The sr-only
-  // live region preserves the AT-side "Godkendt" announcement on pass so
-  // screen-reader users still hear that the rubric accepted their answer.
+  // Visible status pill removed — feedback now comes from the popup (on fail)
+  // and the Next-phase button enabling (on pass). The sr-only live region
+  // preserves the AT-side "Godkendt" announcement on pass.
   const showAriaStatus = !pending && !dirty && satisfied;
+
+  // Spend mode: render lightbulbs alongside failing criteria. Only the active
+  // phase's widget shows them — spend-mode's `phaseId` is the active phase,
+  // and PhaseScopeContext ensures only the active phase body is visible.
+  const armed =
+    spendMode.kind === 'active' && spendMode.phaseId === state.currentPhaseId && showFeedback;
+  const currentPhase = state.currentPhaseId;
+  const bucket = bucketView(currentPhase);
+
+  const failingCriteria = (() => {
+    if (!result)
+      return [] as { id: string; label: string; cap: number; tier: number; reveal?: string }[];
+    // Eligibility mirrors the old auto-bump rule: required criteria always
+    // count; optional ones only once `requiredSatisfied` AND `evaluable` so
+    // an embedder outage on a semantic-only bonus doesn't surface unreachable
+    // hints — the verdict on the bonus isn't real when the system can't
+    // evaluate it.
+    return result.criteria
+      .filter((c) => {
+        if (c.satisfied || c.hints.length === 0) return false;
+        if (c.required) return true;
+        return result.requiredSatisfied && c.evaluable;
+      })
+      .map((c) => ({
+        id: c.id,
+        label: c.label,
+        cap: c.hints.length,
+        tier: tiers[c.id] ?? 0,
+        reveal: c.reveal,
+      }));
+  })();
 
   // In-widget check button (shown when the footer isn't driving the check —
   // open mode, or `checkInFooter` not set). Wrapped in a Tooltip when the word
@@ -427,16 +451,18 @@ export function RubricResponse({
       <label htmlFor={`rr-${id}`} className="block text-sm font-medium text-slate-800 mb-1">
         {prompt}
       </label>
-      <ProtectedTextarea
-        id={`rr-${id}`}
-        value={text}
-        maxLength={maxChars}
-        placeholder={placeholder ?? strings.widgets.rubric.placeholder}
-        aria-describedby={helpId}
-        aria-invalid={tooShort || overMaxWords || undefined}
-        allowPaste={allowPaste}
-        onChange={(e) => onTextChange(e.target.value)}
-      />
+      <HintPopup entries={popupEntries}>
+        <ProtectedTextarea
+          id={`rr-${id}`}
+          value={text}
+          maxLength={maxChars}
+          placeholder={placeholder ?? strings.widgets.rubric.placeholder}
+          aria-describedby={helpId}
+          aria-invalid={tooShort || overMaxWords || undefined}
+          allowPaste={allowPaste}
+          onChange={(e) => onTextChange(e.target.value)}
+        />
+      </HintPopup>
       <div id={helpId} aria-live="polite" className="contents">
         {typeof maxChars === 'number' && (
           <div className="mt-1 text-xs text-slate-500 text-right">
@@ -459,14 +485,18 @@ export function RubricResponse({
               {strings.widgets.rubric.statusPassed}
             </output>
           )}
-          {!footerActive &&
-            (wordCountHint != null ? (
-              <Tooltip content={wordCountHint} align="right">
-                {checkButton}
-              </Tooltip>
-            ) : (
-              checkButton
-            ))}
+          {!footerActive && (
+            <>
+              <HintBucket placement="inline" />
+              {wordCountHint != null ? (
+                <Tooltip content={wordCountHint} align="right">
+                  {checkButton}
+                </Tooltip>
+              ) : (
+                checkButton
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -476,12 +506,54 @@ export function RubricResponse({
         </div>
       )}
 
-      <TieredHintList
-        failedHints={showHints ? failedHints : []}
-        misconceptions={showHints ? triggeredMisconceptions : []}
-        bonusHints={bonusHints}
-        bonusTitle={bonusPanelTitle}
-      />
+      {armed && failingCriteria.length > 0 && (
+        <ul
+          aria-label={strings.widgets.rubric.hintsLabel}
+          className="mt-3 list-none space-y-2 pl-0 text-sm text-slate-700"
+        >
+          {failingCriteria.map((c) => {
+            const atCap = c.tier >= c.cap;
+            // Reveal pill renders only at the boundary (tier === cap). Once the
+            // reveal is unlocked (tier > cap) the criterion has nothing left to
+            // spend on — the reveal text is already in the popup.
+            const revealAvailable = c.tier === c.cap && c.reveal !== undefined;
+            const insufficient = revealAvailable && bucket.tokens < REVEAL_COST;
+            return (
+              <li key={c.id} className="flex items-center gap-2">
+                <span className="font-medium text-slate-800">{c.label}</span>
+                {revealAvailable ? (
+                  <HintLightbulb
+                    variant="reveal"
+                    cost={REVEAL_COST}
+                    disabled={insufficient}
+                    onSpend={() =>
+                      spendAndRevealRubricTier({
+                        widgetId: id,
+                        criterionId: c.id,
+                        op: { kind: 'reveal', cost: REVEAL_COST },
+                        hintCap: c.cap,
+                      })
+                    }
+                  />
+                ) : atCap ? null : (
+                  <HintLightbulb
+                    nextTier={c.tier + 1}
+                    cap={c.cap}
+                    onSpend={() =>
+                      spendAndRevealRubricTier({
+                        widgetId: id,
+                        criterionId: c.id,
+                        op: { kind: 'tier' },
+                        hintCap: c.cap,
+                      })
+                    }
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

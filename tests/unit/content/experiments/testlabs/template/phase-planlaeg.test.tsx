@@ -150,20 +150,26 @@ describe('template phase 1 — happy path', () => {
 });
 
 describe('template phase 1 — negative paths', () => {
-  it('lowercase symbols: footer stays on "Tjek variable" with case-mismatch hints', async () => {
+  it('lowercase symbols: footer stays on "Tjek variable"; popup surfaces case-mismatch hint on focus', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/lowercase');
 
     // Canonical IV/DV symbols are uppercase X/Y; lowercase x/y trips the
-    // case-mismatch ladder (precedence wins over the lowercase commonMistake).
+    // case-mismatch diagnostic (free, surfaced in the focus popup post-Tjek).
     await fillVariables({ ivSymbol: 'x', dvSymbol: 'y' });
     await user.click(footerButton());
-    expect(
-      screen.getAllByText(/tjek dette symbol — er stort\/lille bogstav rigtigt\?/i).length,
-    ).toBeGreaterThanOrEqual(1);
     expect(document.getElementById('rr-hypotese')).toBeNull();
     // The table never reported correct → the button stays on state 1.
     expect(footerButton()).toHaveTextContent(/tjek variable/i);
+
+    // Focus the IV symbol → popup opens with the free case-mismatch
+    // diagnostic. (The hint moved from inline to popup with the request-driven
+    // hint rework.)
+    const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    ivSymbol.focus();
+    expect(
+      await screen.findByText(/tjek dette symbol — er stort\/lille bogstav rigtigt\?/i),
+    ).toBeInTheDocument();
   });
 
   it('empty symbols: footer stays on "Tjek variable", no empty-cell hint', async () => {

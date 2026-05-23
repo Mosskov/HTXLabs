@@ -2,9 +2,11 @@
 import type { ExperimentFrontmatter, Phase } from '@/lib/schema';
 import type { SimulationModule } from '@/sim-contract';
 import type { ComponentType, ReactNode } from 'react';
+import { HintSpendProvider } from './HintSpendContext';
 import { InstructionBox } from './InstructionBox';
 import { LabBreadcrumb } from './LabBreadcrumb';
 import { PhaseFooter } from './PhaseFooter';
+import { PhaseScopeProvider } from './PhaseScopeContext';
 import { PhaseStepper } from './PhaseStepper';
 import { RunnerProvider, useRunner } from './RunnerContext';
 import { SimulationPanel } from './SimulationPanel';
@@ -70,7 +72,9 @@ export function LabGuide(props: LabGuideProps) {
         simulation={simulation}
         initialMode={mode}
       >
-        <LabGuideInner {...props} phases={phases} />
+        <HintSpendProvider>
+          <LabGuideInner {...props} phases={phases} />
+        </HintSpendProvider>
       </RunnerProvider>
     </ToastProvider>
   );
@@ -149,7 +153,7 @@ function LabGuideInner({
         <div className="prose max-w-none px-4 text-sm">
           {phases.map((p) => (
             <section key={p.id} hidden={p.id !== state.currentPhaseId}>
-              {phaseBodies[p.id]}
+              <PhaseScopeProvider phaseId={p.id}>{phaseBodies[p.id]}</PhaseScopeProvider>
             </section>
           ))}
         </div>

@@ -1,105 +1,62 @@
+import type { HintPopupEntry } from '@/lab-guide/widgets/HintPopup';
 import { TieredHintList } from '@/lab-guide/widgets/TieredHintList';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-describe('TieredHintList — list variant (default)', () => {
-  it('renders nothing when given no hints and no bonus', () => {
-    const { container } = render(<TieredHintList failedHints={[]} />);
+describe('TieredHintList', () => {
+  it('renders nothing for an empty entries list', () => {
+    const { container } = render(<TieredHintList entries={[]} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders the failed hints as a bulleted list', () => {
-    render(
-      <TieredHintList
-        failedHints={[
-          { key: 'a', text: 'tip A' },
-          { key: 'b', text: 'tip B' },
-        ]}
-      />,
-    );
+  it('renders entries as a bulleted list', () => {
+    const entries: HintPopupEntry[] = [
+      { key: 'a', text: 'tip A', tone: 'hint' },
+      { key: 'b', text: 'tip B', tone: 'hint' },
+    ];
+    render(<TieredHintList entries={entries} />);
     expect(screen.getByText('tip A')).toBeInTheDocument();
     expect(screen.getByText('tip B')).toBeInTheDocument();
-  });
-
-  it('caller supplies dedupe — each unique key renders once', () => {
-    // The component itself does not deduplicate; first-producer-wins is
-    // enforced by the upstream `failedHints` builder.
-    render(
-      <TieredHintList
-        failedHints={[
-          { key: 'a', text: 'shared tip' },
-          { key: 'b', text: 'unique tip' },
-        ]}
-      />,
-    );
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
-  it('renders misconceptions with orange styling alongside hints', () => {
-    render(
-      <TieredHintList
-        failedHints={[{ key: 'a', text: 'tip' }]}
-        misconceptions={[{ key: 'm', text: 'misconception text' }]}
-      />,
-    );
-    const mis = screen.getByText('misconception text');
-    expect(mis).toBeInTheDocument();
-    // Misconception entries carry the orange color class.
+  it('renders misconception entries with orange styling', () => {
+    const entries: HintPopupEntry[] = [
+      { key: 'm', text: 'common misconception', tone: 'misconception' },
+      { key: 'h', text: 'paid hint', tone: 'hint' },
+    ];
+    render(<TieredHintList entries={entries} />);
+    const mis = screen.getByText('common misconception');
     expect(mis.className).toContain('text-orange-800');
   });
 
-  it('renders the bonus panel only when bonusHints is non-empty', () => {
-    const { rerender } = render(
-      <TieredHintList failedHints={[{ key: 'a', text: 'tip' }]} bonusHints={[]} />,
-    );
-    // No bonus heading on first render.
-    expect(screen.queryByText(/Vil du gøre svaret stærkere/)).not.toBeInTheDocument();
-
-    rerender(
-      <TieredHintList
-        failedHints={[{ key: 'a', text: 'tip' }]}
-        bonusHints={[{ key: 'b1', text: 'bonus item' }]}
-      />,
-    );
-    expect(screen.getByText('bonus item')).toBeInTheDocument();
+  it('renders reveal entries with distinct (emerald) styling', () => {
+    const entries: HintPopupEntry[] = [
+      { key: 'r', text: 'the full answer', tone: 'reveal' },
+    ];
+    render(<TieredHintList entries={entries} />);
+    const reveal = screen.getByText('the full answer');
+    expect(reveal.className).toContain('text-emerald-800');
   });
 
-  it('honors a custom bonusTitle', () => {
-    render(
-      <TieredHintList
-        failedHints={[]}
-        bonusHints={[{ key: 'b', text: 'b' }]}
-        bonusTitle="Tilføj dette"
-      />,
-    );
-    expect(screen.getByText('Tilføj dette')).toBeInTheDocument();
-  });
-});
-
-describe('TieredHintList — inline variant', () => {
-  it('renders the first hint as a paragraph (no <ul>)', () => {
-    render(<TieredHintList variant="inline" failedHints={[{ key: 'a', text: 'inline tip' }]} />);
-    const p = screen.getByText('inline tip');
-    expect(p.tagName).toBe('P');
-    expect(p.className).toContain('text-slate-600');
+  it('groups consecutive entries with the same `group` under one header', () => {
+    const entries: HintPopupEntry[] = [
+      { key: 'a', text: 'tier 1', tone: 'hint', group: 'Criterion B' },
+      { key: 'b', text: 'tier 2', tone: 'hint', group: 'Criterion B' },
+      { key: 'c', text: 'tier 1', tone: 'hint', group: 'Criterion C' },
+    ];
+    render(<TieredHintList entries={entries} />);
+    expect(screen.getAllByText('Criterion B')).toHaveLength(1);
+    expect(screen.getAllByText('Criterion C')).toHaveLength(1);
   });
 
-  it('renders nothing when failedHints is empty', () => {
-    const { container } = render(<TieredHintList variant="inline" failedHints={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('ignores misconceptions and bonusHints', () => {
-    render(
-      <TieredHintList
-        variant="inline"
-        failedHints={[{ key: 'a', text: 'just this' }]}
-        misconceptions={[{ key: 'm', text: 'misconception (ignored)' }]}
-        bonusHints={[{ key: 'b', text: 'bonus (ignored)' }]}
-      />,
-    );
-    expect(screen.getByText('just this')).toBeInTheDocument();
-    expect(screen.queryByText('misconception (ignored)')).not.toBeInTheDocument();
-    expect(screen.queryByText('bonus (ignored)')).not.toBeInTheDocument();
+  it('does not render a header when entries have no group', () => {
+    const entries: HintPopupEntry[] = [
+      { key: 'a', text: 'one', tone: 'hint' },
+      { key: 'b', text: 'two', tone: 'misconception' },
+    ];
+    const { container } = render(<TieredHintList entries={entries} />);
+    // No uppercase-tracking header div.
+    expect(container.querySelectorAll('.uppercase')).toHaveLength(0);
   });
 });

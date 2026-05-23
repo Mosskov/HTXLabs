@@ -1,4 +1,5 @@
 // React context wrapping runner state + dispatch + widget/sim live registries.
+import { computeReplenishGrants } from '@/lib/hintReplenish';
 import type { Phase } from '@/lib/schema';
 import type { ProgressEvent, SimulationModule } from '@/sim-contract';
 import {
@@ -14,6 +15,8 @@ import {
 } from 'react';
 import type { GateCtx, WidgetState } from './gates';
 import {
+  DEFAULT_HINT_POOL_SIZE,
+  DEFAULT_HINT_REPLENISH_MINUTES,
   type DataRow,
   type LabMode,
   type Mode,
@@ -24,9 +27,29 @@ import {
   save,
   wipe,
 } from './runner';
-import { runnerReducer } from './runnerReducer';
+import { type RubricSpendOp, runnerReducer } from './runnerReducer';
 import type { WidgetCheck } from './widgetCheck';
 import type { VariableTableValues } from './widgets/VariableTable';
+
+/** A widget eligible to participate in the request-driven hint system —
+ *  currently only `<RubricResponse>` and `<VariableTable expected>`. */
+export type HintEligibilityKind = 'rubric' | 'vtCell';
+export interface HintEligibility {
+  phaseId: string;
+  kind: HintEligibilityKind;
+}
+
+/** Bucket projection consumed by `HintBucket` and the centralized replenish
+ *  effect. `tokens` reflects the absent-as-full rule; `msUntilNext` is `null`
+ *  when the bucket is full or the timer is disabled. */
+export interface BucketView {
+  tokens: number;
+  cap: number;
+  msUntilNext: number | null;
+  /** True when `cap === 0` (`hintPoolSize: 0` author override) — bucket is
+   *  rendered disabled with the appropriate copy. */
+  disabled: boolean;
+}
 
 interface RunnerApi {
   state: RunnerState;
@@ -42,14 +65,35 @@ interface RunnerApi {
   setDataTable: (id: string, rows: DataRow[]) => void;
   bumpAttempts: (id: string) => number;
   fireMilestone: (id: string) => void;
-  /** Bump the tier counter for a RubricResponse widget's failing criterion.
-   *  Capped at `cap` (the criterion's `hints.length`). Idempotent at cap. */
-  incrementRubricTier: (widgetId: string, criterionId: string, cap: number) => void;
-  /** Bump the tier counter for a VariableTable widget's failing cell. Capped
-   *  at `cap` (the cell's resolved hint-ladder length). Idempotent at cap.
-   *  `cellKey` is a uniform dot-path `<section>.<expectedIndex>.<cell>` —
-   *  e.g. `iv.0.symbol`, `dv.1.unit`, `constants.0.name`. */
-  incrementVariableTableTier: (widgetId: string, cellKey: string, cap: number) => void;
+  /** Atomic spend-and-reveal for a RubricResponse criterion. Caller supplies
+   *  the criterion id, the operation (`{ kind: 'tier' }` or
+   *  `{ kind: 'reveal', cost }`), and the hint ladder cap. The context layer
+   *  resolves `phaseId` from `currentPhaseId`, `now` from `Date.now()`, and
+   *  `poolCap` from the current phase's `hintPoolSize` override. The reducer
+   *  re-validates token sufficiency + the tier ceiling against the latest
+   *  state, so rapid double-clicks reveal at most one tier. */
+  spendAndRevealRubricTier: (args: {
+    widgetId: string;
+    criterionId: string;
+    op: RubricSpendOp;
+    hintCap: number;
+  }) => void;
+  /** Atomic spend-and-reveal for a VariableTable cell ladder. Same shape as
+   *  the rubric variant but VT has no reveal tier — every spend is a single
+   *  tier advance. */
+  spendAndRevealVtTier: (args: {
+    widgetId: string;
+    cellKey: string;
+    /** The hint text the widget would surface at this tier (already F7-sliced
+     *  by `resolveLadder`). Stored verbatim in `variableTableHintReveals` so
+     *  later cell edits don't lose paid hints. */
+    revealedText: string;
+    hintCap: number;
+  }) => void;
+  /** Bucket projection for `phaseId` (defaults to `currentPhaseId`). Reads
+   *  `hintTokens` / `hintLastReplenishAt` and applies the absent-as-full
+   *  rule + replenishment math. */
+  bucketView: (phaseId?: string) => BucketView;
   /** Snapshot the current VariableTable values as the most recent Tjek
    *  result. Overwrites any prior snapshot for that widget id. */
   setVariableTableLastChecked: (widgetId: string, values: VariableTableValues) => void;
@@ -59,6 +103,17 @@ interface RunnerApi {
   /** Register (or, with `null`, clear) a widget's footer-invokable check
    *  action. Parallel to `registerWidgetState` — see `widgetChecks`. */
   registerWidgetCheck: (id: string, check: WidgetCheck | null) => void;
+  /** Register (or, with `null`, clear) a widget's hint eligibility. Structural
+   *  — separate from value-bearing widget state — so the ticker/effect can
+   *  decide which phase has hint-eligible widgets mounted under its scope. */
+  registerHintEligibility: (id: string, eligibility: HintEligibility | null) => void;
+  /** True iff some widget has registered hint eligibility for the named
+   *  phase. Drives ticker mount + bucket visibility. */
+  phaseHasHintEligibleWidgets: (phaseId: string) => boolean;
+  /** Widget ids registered as hint-eligible for the named phase. Currently
+   *  consumed defensively by `HintLightbulb` to confirm the rendering widget
+   *  belongs to the active phase. */
+  phaseHintEligibleWidgetIds: (phaseId: string) => string[];
   /** Live map of widget id → check action, read by `PhaseFooter` to drive the
    *  merged check button. Kept separate from `gateCtx.widgets` so the pure
    *  gate evaluators never see a React callback. Footer consumers re-render on
@@ -118,12 +173,18 @@ export function RunnerProvider({
   // Parallel registry for footer-invokable widget check actions. Same ref-not-
   // -state pattern as `widgetStateRef`; read by `PhaseFooter`.
   const widgetCheckRef = useRef<Record<string, WidgetCheck>>({});
+  // Hint-eligibility registry — separate from value-bearing widget state
+  // because it is structural (phase ownership) not value-bearing.
+  const hintEligibilityRef = useRef<Record<string, HintEligibility>>({});
   // Seed from persisted state so sim-mirror consumers (sim-mode DataTable)
   // render the restored rows on the first paint, not after the sim's first
   // post-mount `onState` publish.
   const simulationStateRef = useRef<unknown>(state.simulationState);
   // Tick to force gate-evaluating subscribers to re-render after widget changes.
   const [tick, setTick] = useState(0);
+  // Independent 1 Hz tick for the hint bucket countdown — kept separate so the
+  // gate ctx (and every subscriber to it) doesn't re-evaluate every second.
+  const [hintTick, setHintTick] = useState(0);
   const [resetKey, setResetKey] = useState(0);
 
   // Track latest committed state + pending in-render bumps so `bumpAttempts`
@@ -135,6 +196,27 @@ export function RunnerProvider({
     stateRef.current = state;
     pendingBumpsRef.current = {};
   }, [state]);
+
+  // Phase-config lookup by id — used to resolve `hintPoolSize` /
+  // `hintReplenishMinutes` overrides when dispatching hint actions.
+  const phaseById = useMemo(() => {
+    const map = new Map<string, Phase>();
+    for (const p of phases) map.set(p.id, p);
+    return map;
+  }, [phases]);
+
+  const poolCapFor = useCallback(
+    (phaseId: string) => phaseById.get(phaseId)?.hintPoolSize ?? DEFAULT_HINT_POOL_SIZE,
+    [phaseById],
+  );
+  const replenishMsFor = useCallback(
+    (phaseId: string) => {
+      const minutes =
+        phaseById.get(phaseId)?.hintReplenishMinutes ?? DEFAULT_HINT_REPLENISH_MINUTES;
+      return Math.max(0, minutes) * 60_000;
+    },
+    [phaseById],
+  );
 
   const setCurrentPhase = useCallback((id: string) => {
     dispatch({ type: 'SET_CURRENT_PHASE', id });
@@ -169,15 +251,58 @@ export function RunnerProvider({
     dispatch({ type: 'FIRE_MILESTONE', id });
   }, []);
 
-  const incrementRubricTier = useCallback((widgetId: string, criterionId: string, cap: number) => {
-    dispatch({ type: 'INCREMENT_RUBRIC_TIER', widgetId, criterionId, cap });
-  }, []);
-
-  const incrementVariableTableTier = useCallback(
-    (widgetId: string, cellKey: string, cap: number) => {
-      dispatch({ type: 'INCREMENT_VARIABLE_TABLE_TIER', widgetId, cellKey, cap });
+  const spendAndRevealRubricTier = useCallback(
+    ({
+      widgetId,
+      criterionId,
+      op,
+      hintCap,
+    }: {
+      widgetId: string;
+      criterionId: string;
+      op: RubricSpendOp;
+      hintCap: number;
+    }) => {
+      const phaseId = stateRef.current.currentPhaseId;
+      dispatch({
+        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+        phaseId,
+        widgetId,
+        criterionId,
+        op,
+        hintCap,
+        poolCap: poolCapFor(phaseId),
+        now: Date.now(),
+      });
     },
-    [],
+    [poolCapFor],
+  );
+
+  const spendAndRevealVtTier = useCallback(
+    ({
+      widgetId,
+      cellKey,
+      revealedText,
+      hintCap,
+    }: {
+      widgetId: string;
+      cellKey: string;
+      revealedText: string;
+      hintCap: number;
+    }) => {
+      const phaseId = stateRef.current.currentPhaseId;
+      dispatch({
+        type: 'SPEND_AND_REVEAL_VT_TIER',
+        phaseId,
+        widgetId,
+        cellKey,
+        revealedText,
+        hintCap,
+        poolCap: poolCapFor(phaseId),
+        now: Date.now(),
+      });
+    },
+    [poolCapFor],
   );
 
   const setVariableTableLastChecked = useCallback(
@@ -257,6 +382,62 @@ export function RunnerProvider({
     setTick((t) => t + 1);
   }, []);
 
+  const registerHintEligibility = useCallback((id: string, eligibility: HintEligibility | null) => {
+    if (eligibility === null) {
+      delete hintEligibilityRef.current[id];
+    } else {
+      hintEligibilityRef.current[id] = eligibility;
+    }
+    // Force gateCtx subscribers to re-render so the footer bucket appears
+    // when the first eligible widget mounts (and vice versa on unmount).
+    setTick((t) => t + 1);
+  }, []);
+
+  const phaseHasHintEligibleWidgets = useCallback((phaseId: string) => {
+    for (const eligibility of Object.values(hintEligibilityRef.current)) {
+      if (eligibility.phaseId === phaseId) return true;
+    }
+    return false;
+  }, []);
+
+  const phaseHintEligibleWidgetIds = useCallback((phaseId: string) => {
+    const out: string[] = [];
+    for (const [id, eligibility] of Object.entries(hintEligibilityRef.current)) {
+      if (eligibility.phaseId === phaseId) out.push(id);
+    }
+    return out;
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hintTick is an explicit 1 Hz refresh signal — without it the countdown text is stale between dispatch boundaries
+  const bucketView = useCallback(
+    (phaseId?: string): BucketView => {
+      const pid = phaseId ?? state.currentPhaseId;
+      const cap = poolCapFor(pid);
+      const replenishMs = replenishMsFor(pid);
+      if (cap === 0) {
+        return { tokens: 0, cap: 0, msUntilNext: null, disabled: true };
+      }
+      const rawTokens = state.hintTokens[pid];
+      const tokens = rawTokens ?? cap;
+      const lastAt = state.hintLastReplenishAt[pid] ?? null;
+      let msUntilNext: number | null = null;
+      if (tokens < cap && lastAt !== null && replenishMs > 0) {
+        const elapsed = Date.now() - lastAt;
+        const remainder = elapsed % replenishMs;
+        msUntilNext = Math.max(0, replenishMs - remainder);
+      }
+      return { tokens, cap, msUntilNext, disabled: false };
+    },
+    [
+      state.currentPhaseId,
+      state.hintTokens,
+      state.hintLastReplenishAt,
+      poolCapFor,
+      replenishMsFor,
+      hintTick,
+    ],
+  );
+
   const resetLab = useCallback(() => {
     // Cancel any pending sim-state persist so a late trailing-edge dispatch
     // can't resurrect the wiped state with a stale snapshot.
@@ -279,6 +460,87 @@ export function RunnerProvider({
     [state, tick],
   );
 
+  // === Hint-system effects ===
+  //
+  // Three effects, all gated on "current phase has hint-eligible widgets":
+  //   1. 1 Hz hintTick — refreshes the bucket countdown text without mutating
+  //      reducer state.
+  //   2. ANCHOR_HINT_TIMER on phase change — discards off-phase wall-clock
+  //      elapsed time so the student can't park elsewhere to grind tokens.
+  //   3. Centralized LAZY_REPLENISH dispatcher — single owner per phase,
+  //      idempotency-guarded in the reducer.
+  //
+  // The "has eligible widgets" predicate is read from the ref via `tick` so
+  // registrations during mount immediately gate these effects.
+
+  const currentPhaseId = state.currentPhaseId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` carries registration changes so the predicate re-evaluates when an eligible widget mounts/unmounts
+  const hasEligibleHere = useMemo(
+    () => phaseHasHintEligibleWidgets(currentPhaseId),
+    [currentPhaseId, tick, phaseHasHintEligibleWidgets],
+  );
+
+  // 1 Hz countdown tick.
+  useEffect(() => {
+    if (!hasEligibleHere) return;
+    const handle = setInterval(() => setHintTick((t) => t + 1), 1000);
+    return () => clearInterval(handle);
+  }, [hasEligibleHere]);
+
+  // Phase-entry anchor: discard off-phase wall-clock for partial buckets.
+  useEffect(() => {
+    if (!hasEligibleHere) return;
+    dispatch({
+      type: 'ANCHOR_HINT_TIMER',
+      phaseId: currentPhaseId,
+      now: Date.now(),
+      poolCap: poolCapFor(currentPhaseId),
+    });
+  }, [hasEligibleHere, currentPhaseId, poolCapFor]);
+
+  // Centralized LAZY_REPLENISH. Reads state via the ref to avoid stale-closure
+  // grants, and uses `fromLastReplenishAt` as an idempotency guard in the
+  // reducer. The dependency on hintTick is what makes this re-evaluate ~1/s;
+  // the dependencies on state.hintTokens and state.hintLastReplenishAt make
+  // it re-evaluate immediately after a spend (so the post-spend anchor isn't
+  // ignored until the next 1 Hz tick).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hintTick + state.hintTokens + state.hintLastReplenishAt are explicit refresh signals — without them the effect waits a full second after a spend or skips ticks
+  useEffect(() => {
+    if (!hasEligibleHere) return;
+    const cap = poolCapFor(currentPhaseId);
+    const replenishMs = replenishMsFor(currentPhaseId);
+    if (cap === 0 || replenishMs <= 0) return;
+    const current = stateRef.current;
+    const tokens = current.hintTokens[currentPhaseId] ?? cap;
+    if (tokens >= cap) return;
+    const lastAt = current.hintLastReplenishAt[currentPhaseId] ?? null;
+    if (lastAt === null) return;
+    const { grants, newLastAt } = computeReplenishGrants(
+      Date.now(),
+      lastAt,
+      replenishMs,
+      tokens,
+      cap,
+    );
+    if (grants <= 0) return;
+    dispatch({
+      type: 'LAZY_REPLENISH',
+      phaseId: currentPhaseId,
+      fromLastReplenishAt: lastAt,
+      newLastReplenishAt: newLastAt,
+      grants,
+      poolCap: cap,
+    });
+  }, [
+    hasEligibleHere,
+    currentPhaseId,
+    hintTick,
+    poolCapFor,
+    replenishMsFor,
+    state.hintTokens,
+    state.hintLastReplenishAt,
+  ]);
+
   const api: RunnerApi = {
     state,
     phases,
@@ -291,13 +553,17 @@ export function RunnerProvider({
     setDataTable,
     bumpAttempts,
     fireMilestone,
-    incrementRubricTier,
-    incrementVariableTableTier,
+    spendAndRevealRubricTier,
+    spendAndRevealVtTier,
+    bucketView,
     setVariableTableLastChecked,
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,
     registerWidgetCheck,
+    registerHintEligibility,
+    phaseHasHintEligibleWidgets,
+    phaseHintEligibleWidgetIds,
     widgetChecks: widgetCheckRef.current,
     simulationStateRef,
     gateCtx,

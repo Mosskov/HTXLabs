@@ -2,7 +2,10 @@
 // hints, status pill, commonMistakes integration.
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { VariableTable } from '@/lab-guide/widgets/VariableTable';
-import type { ExpectedVariables } from '@/lab-guide/widgets/variableTableCorrectness';
+import {
+  type ExpectedVariables,
+  resolveLadder,
+} from '@/lab-guide/widgets/variableTableCorrectness';
 import type { Phase } from '@/lib/schema';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -133,45 +136,61 @@ describe('VariableTable Tjek flow', () => {
     expect(readCorrect()).toBe(false);
   });
 
-  it('Tjek with wrong commonMistake value: tier-1 hint matches the mistake hint', async () => {
+  it('Tjek does NOT auto-reveal any ladder hint (request-driven model)', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj/common-mistake">
+      <Harness experimentId="vtj/no-auto-tier">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
     await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Q'); // matches commonMistake.wrong
+    await typeInto('variables-iv0-symbol', 'Z'); // wrong — generic mismatch ladder
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('wrong-letter mistake hint')).toBeInTheDocument();
+    // Inline ladder hints are removed; popup is closed until focus + spend.
+    expect(screen.queryByText('Tjek dit symbol.')).not.toBeInTheDocument();
   });
 
-  it('Tjek twice with persistent error: tier escalates from 1 to 2', async () => {
+  it('focus after Tjek opens a popup with the free case-mismatch diagnostic', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj/tier-escalate">
+      <Harness experimentId="vtj/free-case-popup">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
     await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z'); // not a commonMistake, just wrong — uses generic mismatch ladder
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch (expected 'X')
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
-
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // First tier of generic symbol/mismatch ladder ("Tjek dit symbol.")
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Second tier of the generic ladder.
+    // Popup is closed until the student focuses the cell.
+    expect(screen.queryByText(/tjek dette symbol — er stort\/lille bogstav rigtigt/i)).not
+      .toBeInTheDocument();
+    const input = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    input.focus();
     expect(
-      screen.getByText('Brug det symbol teorien introducerer for denne størrelse.'),
+      await screen.findByText(/tjek dette symbol — er stort\/lille bogstav rigtigt/i),
     ).toBeInTheDocument();
   });
 
-  it('empty cell shows no hint after Tjek (the empty ladder was dropped)', async () => {
+  it('popup does NOT open on focus before any Tjek (feedback-only rule)', async () => {
+    render(
+      <Harness experimentId="vtj/feedback-only">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch — but no Tjek yet
+    const input = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    input.focus();
+    // Pre-Tjek focus must not surface diagnostics — violates the locked
+    // "feedback only / no pre-attempt scaffolding" decision.
+    expect(screen.queryByText(/tjek dette symbol — er stort\/lille bogstav rigtigt/i)).not
+      .toBeInTheDocument();
+  });
+
+  it('empty cell shows no popup after Tjek (the empty ladder was dropped)', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj/empty-no-hint">
@@ -191,109 +210,101 @@ describe('VariableTable Tjek flow', () => {
     expect(ivSymbol.closest('div')?.textContent).toBe('Symbol');
   });
 
-  it('author hint appears after generic ladder is exhausted', async () => {
+  it('editing a checked section hides its popup diagnostics until re-Tjek', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj/author-hint">
+      <Harness experimentId="vtj/dirty-hides-popup">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
     await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z'); // generic mismatch — ladder length 2
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
 
-    // Tjek 1 → tier 1 (generic[0])
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Tjek 2 → tier 2 (generic[1])
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Tjek 3 → tier 3 (author hint 1)
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('author iv hint 1')).toBeInTheDocument();
-  });
-
-  it('unit row-swapped: surfaces a row-swapped hint under the unit cell', async () => {
-    const expectedWithUnits: ExpectedVariables = {
-      iv: { name: 'højde', symbol: 'h', unit: 'm' },
-      dv: { name: 'acceleration', symbol: 'a', unit: 'm/s²' },
-    };
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/unit-row-swapped">
-        <VariableTable id="variables" requireUnits expected={expectedWithUnits} />
-      </Harness>,
-    );
-    await typeInto('variables-iv0-name', 'højde');
-    await typeInto('variables-iv0-symbol', 'h');
-    await typeInto('variables-iv0-unit', 'm/s²'); // belongs to DV
-    await typeInto('variables-dv0-name', 'acceleration');
-    await typeInto('variables-dv0-symbol', 'a');
-    await typeInto('variables-dv0-unit', 'm'); // belongs to IV
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    // Both IV and DV units are row-swapped → expect the hint to surface twice.
-    expect(screen.getAllByText('Denne enhed hører til den anden variabel.')).toHaveLength(2);
-  });
-
-  it('unit whitespace-internal: surfaces a whitespace-internal hint under the unit cell', async () => {
-    const expectedWithUnit: ExpectedVariables = {
-      iv: { name: 'højde', symbol: 'h', unit: 'm' },
-      dv: { name: 'acceleration', symbol: 'a', unit: 'm/s²' },
-    };
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/unit-whitespace">
-        <VariableTable id="variables" requireUnits expected={expectedWithUnit} />
-      </Harness>,
-    );
-    await typeInto('variables-iv0-name', 'højde');
-    await typeInto('variables-iv0-symbol', 'h');
-    await typeInto('variables-iv0-unit', 'm');
-    await typeInto('variables-dv0-name', 'acceleration');
-    await typeInto('variables-dv0-symbol', 'a');
-    await typeInto('variables-dv0-unit', 'm / s²'); // internal whitespace
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    const input = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    input.focus();
     expect(
-      screen.getByText('Enheden er korrekt, men der er et ekstra mellemrum indeni.'),
+      await screen.findByText(/tjek dette symbol — er stort\/lille bogstav rigtigt/i),
     ).toBeInTheDocument();
+
+    // Editing the section flips it dirty → popup must not surface stale
+    // feedback until a fresh Tjek.
+    input.blur();
+    await typeInto('variables-iv0-name', 'X');
+    input.focus();
+    expect(
+      screen.queryByText(/tjek dette symbol — er stort\/lille bogstav rigtigt/i),
+    ).not.toBeInTheDocument();
   });
 
-  it('editing a cell in a section hides that section\'s hints (per-section dirty)', async () => {
+  it('F7: paid tier 1 on a case-mismatch is NOT the same text as the free tier 0 diagnostic', () => {
+    // Unit-level guarantee: the paid ladder for a case-mismatch starts AFTER
+    // the free entry. The integration test below relies on this.
+    const ladder = resolveLadder({ type: 'case-mismatch' }, undefined, 'symbol');
+    expect(ladder[0]).toBe('Brug samme store/små bogstav som i teorien.');
+    expect(ladder).not.toContain('Tjek dette symbol — er stort/lille bogstav rigtigt?');
+  });
+
+  it('F6: revealed paid tier survives clearing the cell to retry', async () => {
     const user = userEvent.setup();
+    // Stub probe lets the test dispatch a spend without driving the bucket +
+    // lightbulb UI. The Spender computes `revealedText` the same way the
+    // widget's `onSpendCell` does — via `resolveLadder` on the live error —
+    // so the integration covers the F7 slice end-to-end too.
+    function Spender() {
+      const { spendAndRevealVtTier } = useRunner();
+      return (
+        <button
+          type="button"
+          data-testid="spend-dv-symbol"
+          onClick={() => {
+            const ladder = resolveLadder({ type: 'case-mismatch' }, undefined, 'symbol');
+            spendAndRevealVtTier({
+              widgetId: 'variables',
+              cellKey: 'dv.0.symbol',
+              revealedText: ladder[0] as string,
+              hintCap: ladder.length,
+            });
+          }}
+        >
+          spend
+        </button>
+      );
+    }
     render(
-      <Harness experimentId="vtj/dirty-hides-hints">
+      <Harness experimentId="vtj/f6-paid-survives-clear">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
+        <Spender />
       </Harness>,
     );
     await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z'); // wrong → IV mismatch hint
+    await typeInto('variables-iv0-symbol', 'X');
     await typeInto('variables-dv0-name', 'Acceleration');
-    await typeInto('variables-dv0-symbol', 'Y');
+    await typeInto('variables-dv0-symbol', 'y'); // case-mismatch (expected 'Y')
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
+    await user.click(screen.getByTestId('spend-dv-symbol'));
 
-    // Editing an IV cell flips IV to dirty → the IV hint vanishes until the
-    // next Tjek, so live error guidance doesn't leak.
-    await typeInto('variables-iv0-name', 'x');
-    expect(screen.queryByText('Tjek dit symbol.')).not.toBeInTheDocument();
-  });
+    const dvSymbol = document.getElementById('variables-dv0-symbol') as HTMLInputElement;
+    dvSymbol.focus();
+    // Sanity: paid hint visible on clean section.
+    expect(
+      await screen.findByText('Brug samme store/små bogstav som i teorien.'),
+    ).toBeInTheDocument();
+    dvSymbol.blur();
 
-  it('editing one section keeps a sibling section\'s hints (per-section dirty)', async () => {
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/sibling-keeps-hints">
-        <VariableTable id="variables" expected={expectedSymbolsOnly} />
-      </Harness>,
-    );
-    await typeInto('variables-iv0-name', 'Force');
-    await typeInto('variables-iv0-symbol', 'Z'); // wrong → IV mismatch hint
-    await typeInto('variables-dv0-name', 'Acceleration');
-    await typeInto('variables-dv0-symbol', 'Y');
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
-
-    // Editing a DV cell must NOT dirty IV — the IV hint stays put.
-    await typeInto('variables-dv0-name', 'x');
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
+    // Genuine F6 repro: clear the DV symbol cell to retry. The error type now
+    // flips from `case-mismatch` to `empty` — the paid hint must still surface.
+    await user.clear(dvSymbol);
+    dvSymbol.focus();
+    expect(
+      await screen.findByText('Brug samme store/små bogstav som i teorien.'),
+    ).toBeInTheDocument();
+    // Free diagnostic for case-mismatch is gone (current error is now `empty`).
+    expect(
+      screen.queryByText('Tjek dette symbol — er stort/lille bogstav rigtigt?'),
+    ).not.toBeInTheDocument();
   });
 
   it('missing constant: surfaces a "Du mangler en konstant" message after Tjek', async () => {
@@ -319,54 +330,6 @@ describe('VariableTable Tjek flow', () => {
     ).toBeInTheDocument();
   });
 
-  it('out-of-order partial constant: hint renders on the actual student row', async () => {
-    // Two expected constants. The student enters them in reverse order and
-    // makes a unit typo on the second-expected one (g). The partial-match
-    // hint must surface on the actual student row (row 0), not the row that
-    // happens to share its index with the expectedIndex.
-    const expectedTwoConstants: ExpectedVariables = {
-      iv: { name: 'højde', symbol: 'h' },
-      dv: { name: 'tid', symbol: 't' },
-      constants: [
-        { name: 'masse', symbol: 'm', unit: 'kg' },
-        { name: 'tyngdeacceleration', symbol: 'g', unit: 'm/s²' },
-      ],
-    };
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/constant-out-of-order">
-        <VariableTable id="variables" expected={expectedTwoConstants} />
-      </Harness>,
-    );
-    await typeInto('variables-iv0-name', 'højde');
-    await typeInto('variables-iv0-symbol', 'h');
-    await typeInto('variables-dv0-name', 'tid');
-    await typeInto('variables-dv0-symbol', 't');
-
-    // Add two constant rows.
-    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
-    await user.click(screen.getByRole('button', { name: /tilføj konstant/i }));
-
-    // Row 0 = g (the second-expected constant), with a wrong unit.
-    await typeInto('variables-c0-name', 'tyngdeacceleration');
-    await typeInto('variables-c0-symbol', 'g');
-    await typeInto('variables-c0-unit', 'wrong');
-    // Row 1 = m (the first-expected constant), fully correct.
-    await typeInto('variables-c1-name', 'masse');
-    await typeInto('variables-c1-symbol', 'm');
-    await typeInto('variables-c1-unit', 'kg');
-
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-
-    // The unit-mismatch hint should appear under student row 0's unit cell,
-    // not under row 1 (whose index matches the expectedIndex of g).
-    const row0Unit = document.getElementById('variables-c0-unit') as HTMLInputElement;
-    const row0UnitWrapper = row0Unit.closest('div');
-    expect(row0UnitWrapper?.textContent ?? '').toContain('Tjek enheden.');
-    const row1Unit = document.getElementById('variables-c1-unit') as HTMLInputElement;
-    const row1UnitWrapper = row1Unit.closest('div');
-    expect(row1UnitWrapper?.textContent ?? '').not.toContain('Tjek enheden.');
-  });
 
   it('array expected.iv: order-independent matching pairs by symbol key', async () => {
     const expectedArr: import('@/lab-guide/widgets/variableTableCorrectness').ExpectedVariables = {
@@ -398,27 +361,6 @@ describe('VariableTable Tjek flow', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Godkendt');
   });
 
-  it('tier keys for array IV use iv.<expectedIndex>.<cell>', async () => {
-    const expectedArr: import('@/lab-guide/widgets/variableTableCorrectness').ExpectedVariables = {
-      iv: [{ symbol: 'h' }, { symbol: 't' }],
-      dv: { symbol: 'v' },
-    };
-    const user = userEvent.setup();
-    render(
-      <Harness experimentId="vtj/array-iv-tier">
-        <VariableTable id="variables" iv={{ count: 2 }} expected={expectedArr} />
-      </Harness>,
-    );
-    // Row 0 (positional → expectedIndex 0) has wrong symbol; row 1 has correct.
-    await typeInto('variables-iv0-name', 'a');
-    await typeInto('variables-iv0-symbol', 'Z'); // wrong → mismatch
-    await typeInto('variables-iv1-name', 'b');
-    await typeInto('variables-iv1-symbol', 't');
-    await typeInto('variables-dv0-name', 'c');
-    await typeInto('variables-dv0-symbol', 'v');
-    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
-  });
 });
 
 describe('VariableTable per-cell green confirmation', () => {
@@ -450,7 +392,7 @@ describe('VariableTable per-cell green confirmation', () => {
     expect(cellMarker('variables-dv0-name')).toBeNull();
   });
 
-  it('mixed Tjek: only error-free expected-defined cells get the marker; wrong cell has hint, not green', async () => {
+  it('mixed Tjek: only error-free expected-defined cells get the green marker', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj-green/mixed">
@@ -464,8 +406,6 @@ describe('VariableTable per-cell green confirmation', () => {
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(cellMarker('variables-iv0-symbol')).toBeNull();
     expect(cellMarker('variables-dv0-symbol')).toBe('true');
-    // Hint surfaces under the wrong cell — green and hint are mutually exclusive.
-    expect(screen.getByText('Tjek dit symbol.')).toBeInTheDocument();
   });
 
   it('editing a section after a passing Tjek clears its green but keeps siblings', async () => {

@@ -8,6 +8,9 @@
     /* biome-ignore lint/correctness/noUnknownFunction: Tailwind v3 theme() helper */
     /* biome-ignore lint/a11y/useGenericFontNames: Tailwind theme() resolves to a stack with generic fallback */
     font-family: theme("fontFamily.sans");
+    /* Reserve the vertical scrollbar gutter so toggling tall content (Theory,
+       Sim panels) doesn't shift the 768px column horizontally. */
+    scrollbar-gutter: stable;
   }
   body {
     @apply bg-slate-50;
