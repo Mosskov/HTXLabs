@@ -47,6 +47,7 @@
 import {
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
   type TouchEvent,
   useEffect,
   useRef,
@@ -767,7 +768,24 @@ export function VariableTable({
     checkedAriaStatusLabel ?? strings.widgets.variableTable.checkedAriaStatusLabel;
   const resolvedArmedAria =
     armedSpendableAriaDescription ?? strings.widgets.hints.armedSpendableAriaDescription;
-  const lockedTooltipText = lockedTooltip ?? strings.widgets.variableTable.lockedTooltip;
+  // Author override (`lockedTooltip` prop) renders verbatim as a string — the
+  // override is opaque content the author committed to and should not be
+  // split. The default path renders structured content: a ✓ glyph (visual)
+  // paired with an sr-only "Korrekt." prefix (AT) — see strings.da.ts for the
+  // split keys. CLAUDE.md note about the leading `Korrekt.` doubling as the
+  // AT announcement still holds; the sr-only span carries it.
+  const lockedTooltipContent: ReactNode =
+    lockedTooltip !== undefined ? (
+      lockedTooltip
+    ) : (
+      <>
+        <span aria-hidden="true">✓</span>
+        <span className="sr-only">
+          {strings.widgets.variableTable.lockedTooltipScreenReaderPrefix}
+        </span>{' '}
+        {strings.widgets.variableTable.lockedTooltipRest}
+      </>
+    );
 
   const ivMissing = missingMessagesFor(
     'iv',
@@ -891,7 +909,7 @@ export function VariableTable({
             getFlash={(s, cell) => flashForStudent('iv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
-            lockedTooltipText={lockedTooltipText}
+            lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={ivMissing}
             allowPaste={allowPaste}
@@ -919,7 +937,7 @@ export function VariableTable({
             getFlash={(s, cell) => flashForStudent('dv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
-            lockedTooltipText={lockedTooltipText}
+            lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={dvMissing}
             allowPaste={allowPaste}
@@ -953,7 +971,7 @@ export function VariableTable({
             getFlash={(s, cell) => flashForStudent('constants', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
-            lockedTooltipText={lockedTooltipText}
+            lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={constantsMissing}
             allowPaste={allowPaste}
@@ -1008,7 +1026,7 @@ interface RowGroupProps {
   getFlash: (studentIndex: number, cell: Cell) => 'correct' | 'wrong' | null;
   flashNonce: number;
   flashWithTransition: boolean;
-  lockedTooltipText: string;
+  lockedTooltipContent: ReactNode;
   armedSpendableAriaDescription: string;
   missingMessages: string[];
   allowPaste?: boolean;
@@ -1036,7 +1054,7 @@ function RowGroupSection({
   getFlash,
   flashNonce,
   flashWithTransition,
-  lockedTooltipText,
+  lockedTooltipContent,
   armedSpendableAriaDescription,
   missingMessages,
   allowPaste,
@@ -1080,7 +1098,7 @@ function RowGroupSection({
           }}
           flashNonce={flashNonce}
           flashWithTransition={flashWithTransition}
-          lockedTooltipText={lockedTooltipText}
+          lockedTooltipContent={lockedTooltipContent}
           armedSpendableAriaDescription={armedSpendableAriaDescription}
           allowPaste={allowPaste}
           armed={armed}
@@ -1125,7 +1143,7 @@ interface RepeatableRowProps {
   flash: Record<Cell, 'correct' | 'wrong' | null>;
   flashNonce: number;
   flashWithTransition: boolean;
-  lockedTooltipText: string;
+  lockedTooltipContent: ReactNode;
   /** Already-resolved sr-only description for an armed-spendable cell. */
   armedSpendableAriaDescription: string;
   allowPaste?: boolean;
@@ -1150,7 +1168,7 @@ function RepeatableRow({
   flash,
   flashNonce,
   flashWithTransition,
-  lockedTooltipText,
+  lockedTooltipContent,
   armedSpendableAriaDescription,
   allowPaste,
   armed,
@@ -1179,7 +1197,7 @@ function RepeatableRow({
         flash={flash.name}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
-        lockedTooltipText={lockedTooltipText}
+        lockedTooltipContent={lockedTooltipContent}
         armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
@@ -1197,7 +1215,7 @@ function RepeatableRow({
         flash={flash.symbol}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
-        lockedTooltipText={lockedTooltipText}
+        lockedTooltipContent={lockedTooltipContent}
         armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
@@ -1215,7 +1233,7 @@ function RepeatableRow({
         flash={flash.unit}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
-        lockedTooltipText={lockedTooltipText}
+        lockedTooltipContent={lockedTooltipContent}
         armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
@@ -1263,7 +1281,7 @@ interface FieldProps {
    *  for the 1.5s window, but the fade transition is skipped. */
   flashWithTransition: boolean;
   /** Combined tooltip + sr-only prefix text for the locked branch. */
-  lockedTooltipText: string;
+  lockedTooltipContent: ReactNode;
   /** Resolved sr-only description announced when the cell is armed-spendable. */
   armedSpendableAriaDescription: string;
   allowPaste?: boolean;
@@ -1283,7 +1301,7 @@ function Field({
   flash,
   flashNonce,
   flashWithTransition,
-  lockedTooltipText,
+  lockedTooltipContent,
   armedSpendableAriaDescription,
   allowPaste,
   armed,
@@ -1431,7 +1449,7 @@ function Field({
       >
         <span key={flashNonce} className={`block w-full ${flashClass}`}>
           {locked ? (
-            <Tooltip content={lockedTooltipText} openDelayMs={500}>
+            <Tooltip content={lockedTooltipContent} openDelayMs={500} fullWidth>
               <input
                 id={id}
                 type="text"

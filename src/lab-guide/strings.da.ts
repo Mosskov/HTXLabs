@@ -200,10 +200,18 @@ export const strings = {
       ivRowAriaLabel: 'Uafhængig variabel {n}, {field}',
       dvRowAriaLabel: 'Afhængig variabel {n}, {field}',
       checkLabel: 'Tjek mine variable',
-      /** Tooltip on a locked cell (hover + focus). The leading `Korrekt.`
-       *  doubles as the AT announcement of why the cell is read-only; the
-       *  unlock affordance is the visible imperative. */
+      /** Tooltip on a locked cell (hover + focus) — full string form.
+       *  Used as the fallback when an author passes a `lockedTooltip` prop
+       *  override (which keeps the verbal "Korrekt." prefix verbatim). The
+       *  default-rendering path splits this into the two keys below so
+       *  sighted users see a checkmark glyph and AT users still hear
+       *  "Korrekt." via an sr-only span. */
       lockedTooltip: 'Korrekt. Dobbeltklik for at åbne',
+      /** Sr-only prefix carrying the AT announcement when the default
+       *  structured tooltip is rendered (✓ visually + "Korrekt." for AT). */
+      lockedTooltipScreenReaderPrefix: 'Korrekt.',
+      /** Visible imperative paired with the ✓ glyph in the default tooltip. */
+      lockedTooltipRest: 'Dobbeltklik for at åbne',
       /** Sr-only live-region announcement fired the moment a passing Tjek
        *  hides the visible status pill, so assistive-tech users still hear
        *  that the table was accepted. Reuses the existing `status.checked`

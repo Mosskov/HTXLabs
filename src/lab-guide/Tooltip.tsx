@@ -10,6 +10,7 @@
 import {
   type KeyboardEvent,
   type ReactElement,
+  type ReactNode,
   cloneElement,
   useEffect,
   useId,
@@ -19,8 +20,10 @@ import {
 } from 'react';
 
 interface Props {
-  /** Tooltip text — shown to sighted and assistive-tech users alike. */
-  content: string;
+  /** Tooltip content — shown to sighted and assistive-tech users alike. A
+   *  string is the common case; a ReactNode allows decorative glyphs paired
+   *  with sr-only text (e.g. `<><span aria-hidden>✓</span><span className="sr-only">Korrekt.</span> Dobbeltklik …</>`). */
+  content: ReactNode;
   /** Single trigger element; cloned to receive handlers + aria-describedby. */
   children: ReactElement;
   className?: string;
@@ -33,9 +36,22 @@ interface Props {
    *  always-mounted aria-describedby ignore the delay so keyboard + AT users
    *  see the description immediately. Default `0`. */
   openDelayMs?: number;
+  /** When `true`, the outer wrapper renders `block w-full` instead of the
+   *  default `inline-block`. Use for triggers that should occupy their
+   *  parent's full column width (e.g. a `w-full` input inside a table cell);
+   *  the default `inline-block` collapses around the trigger's content width
+   *  and would visibly shrink such a child. */
+  fullWidth?: boolean;
 }
 
-export function Tooltip({ content, children, className, align = 'left', openDelayMs = 0 }: Props) {
+export function Tooltip({
+  content,
+  children,
+  className,
+  align = 'left',
+  openDelayMs = 0,
+  fullWidth = false,
+}: Props) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
@@ -118,7 +134,10 @@ export function Tooltip({ content, children, className, align = 'left', openDela
   });
 
   return (
-    <span ref={spanRef} className={`relative inline-block${className ? ` ${className}` : ''}`}>
+    <span
+      ref={spanRef}
+      className={`${fullWidth ? 'relative block w-full' : 'relative inline-block'}${className ? ` ${className}` : ''}`}
+    >
       {trigger}
       {/* Always mounted so a focused trigger always announces the reason;
           sr-only when closed, positioned above/below the trigger when open. */}
