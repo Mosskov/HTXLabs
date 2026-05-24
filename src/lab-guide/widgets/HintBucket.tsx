@@ -65,10 +65,10 @@ export function HintBucket({ placement }: Props) {
     : format(strings.widgets.hints.bucketAriaLabel, { tokens, pool: cap });
 
   const colorClass = armed
-    ? 'border-accent bg-accent/10 text-accent'
+    ? 'border-accent-400 bg-accent-50 text-slate-700'
     : canArm
-      ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-      : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed';
+      ? 'border-accent-400 bg-white text-slate-700 hover:bg-accent-50'
+      : 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed';
 
   const button = (
     <button
@@ -81,7 +81,7 @@ export function HintBucket({ placement }: Props) {
       aria-label={ariaLabel}
       aria-pressed={armed}
       aria-disabled={!canArm || undefined}
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm font-medium ${colorClass}`}
+      className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${colorClass}`}
     >
       <span aria-hidden="true" className="text-base leading-none">
         💡

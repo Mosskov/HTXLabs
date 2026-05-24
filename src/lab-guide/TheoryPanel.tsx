@@ -14,7 +14,7 @@ export function TheoryPanel({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full h-12 flex items-center gap-2 px-4 text-left text-base font-medium text-navy rounded-md no-print border-2 border-accent-400 bg-white hover:bg-accent-50 transition-colors"
+        className="w-full h-12 flex items-center gap-2 px-3 text-left text-base font-medium text-slate-700 rounded-md no-print border border-accent-400 bg-white hover:bg-accent-50 transition-colors"
         aria-expanded={open}
       >
         {open ? <TheoryOpen className="w-8 h-8" /> : <TheoryClosed className="w-8 h-8" />}

@@ -21,7 +21,7 @@ export function SimulationPanel({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full h-12 flex items-center gap-2 px-4 text-left text-base font-medium text-navy rounded-md border-2 border-accent-400 bg-white hover:bg-accent-50 transition-colors"
+        className="w-full h-12 flex items-center gap-2 px-3 text-left text-base font-medium text-slate-700 rounded-md border border-accent-400 bg-white hover:bg-accent-50 transition-colors"
         aria-expanded={open}
       >
         {open ? <SimulationOpen className="w-8 h-8" /> : <SimulationClosed className="w-8 h-8" />}

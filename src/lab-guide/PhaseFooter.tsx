@@ -97,7 +97,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
       disabled={buttonDisabled && disabledReason == null}
       aria-disabled={disabledReason != null || undefined}
       className={`
-        px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-colors
+        px-3 py-1.5 rounded-md text-sm font-medium border transition-colors
         ${
           !buttonDisabled
             ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'

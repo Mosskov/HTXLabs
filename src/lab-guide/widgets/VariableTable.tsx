@@ -994,7 +994,7 @@ export function VariableTable({
               <button
                 type="button"
                 onClick={handleTjek}
-                className="rounded border border-accent bg-white px-4 py-1.5 text-sm font-medium text-accent hover:bg-accent/5"
+                className="px-3 py-1.5 rounded-md text-sm font-medium border transition-colors bg-white border-accent-400 text-slate-700 hover:bg-accent-50"
               >
                 {checkLabel ?? strings.widgets.variableTable.checkLabel}
               </button>
@@ -1321,7 +1321,7 @@ function Field({
 
   const inputClass = armedSpendable
     ? 'w-full border-amber-400 ring-1 ring-amber-300 cursor-pointer'
-    : 'w-full';
+    : 'w-full hover:bg-accent-50 focus:border-accent-400 focus:!ring-0';
 
   const armedDescId = `${id}-armed`;
   const ariaDescribedBy = armedSpendable ? armedDescId : undefined;
