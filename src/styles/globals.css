@@ -50,6 +50,15 @@
     content: "";
     @apply absolute left-0 top-2 w-2 h-2 rounded-full bg-accent;
   }
+  /* Suppress the prose blue-dot inside the hint popup — TieredHintList renders
+     its own amber bullet that echoes the cell-side idle dot. Specificity
+     `(0,2,3)` beats the prose rule's `(0,1,3)` so no `!important` is needed. */
+  .prose .hint-popup ul > li::before {
+    content: none;
+  }
+  .prose .hint-popup ul > li {
+    padding-left: 0;
+  }
 }
 
 @layer components {
@@ -65,20 +74,33 @@
 }
 
 /* VariableTable Tjek flash: the cell wrapper paints bg-emerald-100 /
-   bg-rose-100 via its static class on mount, and this keyframe fades the
-   background-color to transparent over 1500ms. `forwards` holds the final
-   transparent state until the next remount restarts the animation. The
-   keyframe has no explicit `from` so the user agent uses the underlying
-   value of the property (i.e. the static class colour) as the starting
-   point — that's how a single animation works for both emerald and rose. */
+   bg-rose-100 via its static class on mount, and these keyframes fade the
+   background-color over 1500ms. `forwards` holds the final state until the
+   next remount restarts the animation. The keyframes have no explicit
+   `from` so the user agent uses the underlying value of the property (i.e.
+   the static class colour) as the starting point. Two end-states because
+   the steady-state behind the flash differs per branch: the locked-cell
+   input is `bg-transparent` (page bg shows through) so emerald fades to
+   transparent and lands on page bg seamlessly; the editable-cell input is
+   `bg-white` (forced transparent during flash so the wrapper bleeds
+   through) so rose fades to white and lands on the input's restored
+   bg-white without a jump. */
 @keyframes vt-flash-fade {
   to {
     background-color: transparent;
   }
 }
+@keyframes vt-flash-fade-to-white {
+  to {
+    background-color: white;
+  }
+}
 @layer utilities {
   .animate-vt-flash-fade {
     animation: vt-flash-fade 1500ms ease-out forwards;
+  }
+  .animate-vt-flash-fade-to-white {
+    animation: vt-flash-fade-to-white 1500ms ease-out forwards;
   }
 }
 

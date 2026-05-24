@@ -144,12 +144,10 @@ interface Props {
    *  open mode (the in-widget button stays so free-advance keeps self-check).
    *  Default `false`. */
   checkInFooter?: boolean;
-  /** Tooltip on a locked cell (SPEC §17). Default explains the unlock
-   *  affordances (double-click, Enter, long-press). */
+  /** Tooltip on a locked cell (SPEC §17). Leading `Korrekt.` doubles as the
+   *  AT announcement of the locked/correct state; the rest carries the
+   *  unlock affordance. */
   lockedTooltip?: string;
-  /** Sr-only prefix folded into the locked-cell tooltip so AT users hear the
-   *  cell is read-only. Default `"Låst."`. */
-  lockedAriaPrefix?: string;
   /** SR-only description on an armed-spendable cell — surfaced via
    *  aria-describedby while spend mode is armed AND the cell has an unspent
    *  tier. Tells AT users the whole input rectangle is the spend target. */
@@ -343,7 +341,6 @@ export function VariableTable({
   checkLabel,
   checkInFooter = false,
   lockedTooltip,
-  lockedAriaPrefix,
   armedSpendableAriaDescription,
   checkedAriaStatusLabel,
   allowPaste,
@@ -770,13 +767,7 @@ export function VariableTable({
     checkedAriaStatusLabel ?? strings.widgets.variableTable.checkedAriaStatusLabel;
   const resolvedArmedAria =
     armedSpendableAriaDescription ?? strings.widgets.hints.armedSpendableAriaDescription;
-  const resolvedLockedTooltip = lockedTooltip ?? strings.widgets.variableTable.lockedTooltip;
-  const resolvedLockedAriaPrefix =
-    lockedAriaPrefix ?? strings.widgets.variableTable.lockedAriaPrefix;
-  // The Tooltip primitive announces a single string via its aria-describedby
-  // chain; fold the sr-only "Låst." prefix into the visible+spoken tooltip
-  // text so AT users hear both the lock state and the unlock affordance.
-  const lockedTooltipText = `${resolvedLockedAriaPrefix} ${resolvedLockedTooltip}`;
+  const lockedTooltipText = lockedTooltip ?? strings.widgets.variableTable.lockedTooltip;
 
   const ivMissing = missingMessagesFor(
     'iv',
@@ -1402,8 +1393,27 @@ function Field({
   // restarts the animation on repeat-Tjek with identical keys.
   const flashBg =
     flash === 'correct' ? 'bg-emerald-100' : flash === 'wrong' ? 'bg-rose-100' : 'bg-transparent';
-  const flashAnim = flash !== null && flashWithTransition ? ' animate-vt-flash-fade' : '';
+  // Emerald fades to transparent (locked input is bg-transparent → page bg
+  // shows through both during and after the fade). Rose fades to white
+  // (editable input is forced transparent during flash, so the wrapper
+  // bleeds through; the input regains its native bg-white when flash clears
+  // — fading the wrapper to white makes that transition seamless).
+  const flashAnim =
+    flash !== null && flashWithTransition
+      ? flash === 'wrong'
+        ? ' animate-vt-flash-fade-to-white'
+        : ' animate-vt-flash-fade'
+      : '';
   const flashClass = `rounded ${flashBg}${flashAnim}`;
+  // ProtectedInput hardcodes `bg-white`, which would cover the wrapper's
+  // rose flash on the unlocked branch. Force the input transparent for the
+  // flash window so the wrapper's animated rose bleeds through and fades
+  // alongside the keyframe (a static `!bg-rose-100` on the input would
+  // *defeat* the animation — `!important` beats the keyframe's intermediate
+  // values, so the colour would snap on/off instead of fading). The locked
+  // branch's input is already `bg-transparent`, so the emerald flash works
+  // the same way; this just makes the editable branch behave identically.
+  const inputFlashClass = flash === 'wrong' && !locked ? ' !bg-transparent' : '';
 
   return (
     <div className="min-w-0" data-locked={locked ? 'true' : undefined}>
@@ -1421,7 +1431,7 @@ function Field({
       >
         <span key={flashNonce} className={`block w-full ${flashClass}`}>
           {locked ? (
-            <Tooltip content={lockedTooltipText}>
+            <Tooltip content={lockedTooltipText} openDelayMs={500}>
               <input
                 id={id}
                 type="text"
@@ -1429,7 +1439,7 @@ function Field({
                 readOnly
                 aria-label={ariaLabel}
                 tabIndex={0}
-                className="block w-full cursor-default rounded border border-transparent bg-transparent px-3 py-1.5 text-sm text-slate-800 read-only:focus:outline-none read-only:focus:ring-1 read-only:focus:ring-slate-300"
+                className="block w-full cursor-default rounded border border-slate-200 bg-transparent px-3 py-1.5 text-sm text-slate-800 read-only:focus:outline-none read-only:focus:ring-1 read-only:focus:ring-slate-300"
                 style={{ WebkitTouchCallout: 'none', userSelect: 'none' }}
                 onChange={() => {}}
               />
@@ -1446,7 +1456,7 @@ function Field({
                 onChange={(e) => onChange(e.target.value)}
                 onMouseDown={handleMouseDown}
                 onKeyDown={handleInputKeyDown}
-                className={inputClass}
+                className={`${inputClass}${inputFlashClass}`}
               />
             </HintPopup>
           )}

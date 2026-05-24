@@ -200,14 +200,10 @@ export const strings = {
       ivRowAriaLabel: 'Uafhængig variabel {n}, {field}',
       dvRowAriaLabel: 'Afhængig variabel {n}, {field}',
       checkLabel: 'Tjek mine variable',
-      /** Tooltip on a locked cell (hover + focus). Touch users perceive it
-       *  via focus-after-tap. Includes the keyboard affordance (Enter) so
-       *  the unlock path is self-documenting for keyboard-only students. */
-      lockedTooltip: 'Dobbeltklik, tryk Enter eller hold inde for at ændre',
-      /** Sr-only prefix that announces the locked cell is read-only. Folded
-       *  into the tooltip text so the Tooltip primitive's aria-describedby
-       *  chain announces both the lock state and the unlock affordance. */
-      lockedAriaPrefix: 'Låst.',
+      /** Tooltip on a locked cell (hover + focus). The leading `Korrekt.`
+       *  doubles as the AT announcement of why the cell is read-only; the
+       *  unlock affordance is the visible imperative. */
+      lockedTooltip: 'Korrekt. Dobbeltklik for at åbne',
       /** Sr-only live-region announcement fired the moment a passing Tjek
        *  hides the visible status pill, so assistive-tech users still hear
        *  that the table was accepted. Reuses the existing `status.checked`

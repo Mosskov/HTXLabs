@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
   cloneElement,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -28,14 +29,36 @@ interface Props {
    *  the trigger sits near the right edge of the layout (e.g. the footer
    *  button) so the bubble grows inward instead of off-screen. */
   align?: 'left' | 'right';
+  /** Hover-open delay in ms (pointerenter only). Focus, click, and the
+   *  always-mounted aria-describedby ignore the delay so keyboard + AT users
+   *  see the description immediately. Default `0`. */
+  openDelayMs?: number;
 }
 
-export function Tooltip({ content, children, className, align = 'left' }: Props) {
+export function Tooltip({ content, children, className, align = 'left', openDelayMs = 0 }: Props) {
   const tipId = useId();
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
   const spanRef = useRef<HTMLSpanElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+
+  const clearHoverTimer = () => {
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
+  // Cleanup any pending hover-open timer on unmount.
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   // On open, pick the vertical side: below by default, flipped above when the
   // bubble would overflow the viewport bottom and there is more room above.
@@ -58,14 +81,37 @@ export function Tooltip({ content, children, className, align = 'left' }: Props)
   const trigger = cloneElement(children, {
     'aria-describedby': tipId,
     tabIndex: children.props.tabIndex ?? 0,
-    onPointerEnter: () => setOpen(true),
-    onPointerLeave: () => setOpen(false),
-    onFocus: () => setOpen(true),
-    onBlur: () => setOpen(false),
-    onClick: () => setOpen(true),
+    onPointerEnter: () => {
+      if (openDelayMs > 0) {
+        clearHoverTimer();
+        hoverTimerRef.current = window.setTimeout(() => {
+          hoverTimerRef.current = null;
+          setOpen(true);
+        }, openDelayMs);
+      } else {
+        setOpen(true);
+      }
+    },
+    onPointerLeave: () => {
+      clearHoverTimer();
+      setOpen(false);
+    },
+    onFocus: () => {
+      clearHoverTimer();
+      setOpen(true);
+    },
+    onBlur: () => {
+      clearHoverTimer();
+      setOpen(false);
+    },
+    onClick: () => {
+      clearHoverTimer();
+      setOpen(true);
+    },
     onKeyDown: (e: KeyboardEvent) => {
       if (e.key === 'Escape' && open) {
         e.stopPropagation();
+        clearHoverTimer();
         setOpen(false);
       }
     },

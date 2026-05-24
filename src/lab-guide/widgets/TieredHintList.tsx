@@ -36,19 +36,32 @@ export function TieredHintList({ entries }: Props) {
               {g.header}
             </div>
           )}
-          <ul className="list-disc space-y-1 pl-4">
+          {/* Bullets are an explicit amber span matching the cell-side idle
+              dot in VariableTable verbatim (h-1.5 w-1.5 rounded-full
+              bg-amber-400) so the popup reads as continuous with its
+              trigger. Body text stays per-tone so misconception (orange) /
+              reveal (emerald) / paid hint (slate) still differentiate. The
+              project-wide `.prose ul > li::before` blue-dot would otherwise
+              paint on top of the amber span — it's suppressed by a scoped
+              override in globals.css that targets `.hint-popup ul > li`. */}
+          <ul className="space-y-1">
             {g.items.map((item) => (
-              <li
-                key={item.key}
-                className={
-                  item.tone === 'misconception'
-                    ? 'text-orange-800'
-                    : item.tone === 'reveal'
-                      ? 'text-emerald-800'
-                      : 'text-slate-700'
-                }
-              >
-                {item.text}
+              <li key={item.key} className="flex items-start gap-2">
+                <span
+                  aria-hidden="true"
+                  className="mt-[0.45rem] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+                />
+                <span
+                  className={
+                    item.tone === 'misconception'
+                      ? 'text-orange-800'
+                      : item.tone === 'reveal'
+                        ? 'text-emerald-800'
+                        : 'text-slate-700'
+                  }
+                >
+                  {item.text}
+                </span>
               </li>
             ))}
           </ul>
