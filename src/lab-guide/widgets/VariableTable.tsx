@@ -1309,9 +1309,15 @@ function Field({
   onUnlock,
 }: FieldProps) {
   const armedSpendable = !locked && armed && info.nextTier !== null;
-  // Idle amber dot: editable + popup-available + not armed-spendable. Locked
-  // cells never carry hint chrome (the lock IS the affordance).
-  const showIdleDot = !locked && !armedSpendable && info.popupEntries.length > 0;
+  // Hint-count pips: editable + popup will open on focus. N tiny amber
+  // vertical ticks at bottom-right communicate "this cell has N hints" — one
+  // tick per popup bullet, so the count matches what the student will read
+  // when the popup opens. Stays visible while armed (the armed border is a
+  // separate "spend mode" cue, not a hint-count cue). Gated on popupEntries
+  // (not cap directly) so the indicator stays hidden mid-edit when the
+  // section is dirty and the popup will not open. Locked cells never carry
+  // hint chrome (the lock IS the affordance).
+  const showHintTicks = !locked && info.popupEntries.length > 0;
 
   const inputClass = armedSpendable
     ? 'w-full border-amber-400 ring-1 ring-amber-300 cursor-pointer'
@@ -1439,7 +1445,7 @@ function Field({
         {label}
       </label>
       <span
-        className="relative inline-block w-full"
+        className="group/cell relative inline-block w-full"
         onDoubleClick={handleWrapperDoubleClick}
         onKeyDown={handleWrapperKeyDown}
         onTouchStart={handleWrapperTouchStart}
@@ -1479,11 +1485,23 @@ function Field({
             </HintPopup>
           )}
         </span>
-        {showIdleDot && (
+        {showHintTicks && (
+          // On focus-within (= popup is open) the container slides DOWN by 8 px
+          // (bottom-0.5 → -bottom-1.5) and each pip grows from 6 px to 14 px,
+          // so the pip top stays put while the bottom reaches the popup's top
+          // edge (the popup is `top-full mt-1.5` = 6 px below the input). Net
+          // effect: the pips become a visual bridge from input to hint box.
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute top-1 right-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
-          />
+            className="pointer-events-none absolute right-2 bottom-0.5 flex gap-0.5 transition-all duration-150 group-focus-within/cell:-bottom-1.5"
+          >
+            {info.popupEntries.map((entry) => (
+              <span
+                key={`${id}-tick-${entry.key}`}
+                className="block h-1.5 w-0.5 rounded-sm bg-amber-400 transition-all duration-150 group-focus-within/cell:h-3.5"
+              />
+            ))}
+          </span>
         )}
       </span>
       {armedSpendable && (

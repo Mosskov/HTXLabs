@@ -558,7 +558,7 @@ describe('VariableTable in-field hint indicator (F4 + F8)', () => {
     return !!input.closest('div')?.querySelector('span.bg-amber-400');
   }
 
-  it('armed-border + idle-dot mutual exclusion (border wins while armed)', async () => {
+  it('armed-border coexists with hint ticks (border = spend-mode cue, ticks = hint count)', async () => {
     const user = userEvent.setup();
     render(
       <ArmedHarness experimentId="vtf4/border-vs-dot">
@@ -571,19 +571,19 @@ describe('VariableTable in-field hint indicator (F4 + F8)', () => {
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
 
-    // Idle: dot present, no amber border.
+    // Idle: ticks present (no border).
     const input = symbolInput();
     expect(idleDotPresent(input)).toBe(true);
     expect(input.className).not.toContain('border-amber-300');
 
-    // Arm: border on, dot gone.
+    // Arm: border on, ticks still present (no mutual exclusion).
     await user.click(screen.getByTestId('arm'));
     expect(input.className).toContain('border-amber-400');
     expect(input.className).toContain('ring-amber-300');
     expect(input.className).toContain('cursor-pointer');
-    expect(idleDotPresent(input)).toBe(false);
+    expect(idleDotPresent(input)).toBe(true);
 
-    // Disarm: back to idle.
+    // Disarm: ticks still present.
     await user.click(screen.getByTestId('disarm'));
     expect(input.className).not.toContain('border-amber-400');
     expect(idleDotPresent(input)).toBe(true);
