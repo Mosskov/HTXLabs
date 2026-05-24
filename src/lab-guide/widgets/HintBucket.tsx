@@ -2,18 +2,16 @@
 //
 // Pure presentation: reads `bucketView(phaseId)` from RunnerContext and spend
 // mode from HintSpendContext. Never dispatches LAZY_REPLENISH itself — the
-// centralized effect in RunnerProvider owns that. The lightbulb-icon variant
-// is chosen by current `tokens` (full / partial / empty); empty-bucket click
-// is a no-op + tooltip with the countdown or generic empty copy.
+// centralized effect in RunnerProvider owns that. Renders a single 💡 glyph
+// plus the numeric token count — no per-token icon variants (the digit-icons
+// duplicated the counter). Empty-bucket click is a no-op + tooltip with the
+// countdown or generic empty copy.
 //
 // `placement === 'footer'`: unconditionally visible while the current phase
 // has eligible widgets (LabGuide's footer mounts it inside that gate).
 // `placement === 'inline'`: rendered inside a specific widget; suppresses
 // itself when the owning widget's phaseScope ≠ currentPhaseId so the hidden-
 // phase widget body doesn't paint a stray bucket.
-import { HintAvailable1 } from '@/icons/HintAvailable1';
-import { HintAvailable2 } from '@/icons/HintAvailable2';
-import { HintAvailable3 } from '@/icons/HintAvailable3';
 import { useHintSpend } from '../HintSpendContext';
 import { usePhaseScope } from '../PhaseScopeContext';
 import { useRunner } from '../RunnerContext';
@@ -54,9 +52,6 @@ export function HintBucket({ placement }: Props) {
   const empty = tokens === 0;
   const canArm = !disabled && !empty;
 
-  const Icon = tokens >= 3 ? HintAvailable3 : tokens === 2 ? HintAvailable2 : HintAvailable1;
-  const showIcon = tokens > 0;
-
   const tooltip = disabled
     ? strings.widgets.hints.bucketDisabled
     : empty
@@ -88,7 +83,9 @@ export function HintBucket({ placement }: Props) {
       aria-disabled={!canArm || undefined}
       className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm font-medium ${colorClass}`}
     >
-      {showIcon ? <Icon className="h-5 w-5" /> : <span className="text-base leading-none">💡</span>}
+      <span aria-hidden="true" className="text-base leading-none">
+        💡
+      </span>
       <span className="tabular-nums">{tokens}</span>
     </button>
   );

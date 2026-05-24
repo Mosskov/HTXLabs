@@ -1,5 +1,6 @@
 // Tjek-flow tests for VariableTable: snapshot-gated `correct`, per-cell tiered
 // hints, status pill, commonMistakes integration.
+import { HintSpendProvider, useHintSpend } from '@/lab-guide/HintSpendContext';
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { VariableTable } from '@/lab-guide/widgets/VariableTable';
 import {
@@ -7,7 +8,7 @@ import {
   resolveLadder,
 } from '@/lab-guide/widgets/variableTableCorrectness';
 import type { Phase } from '@/lib/schema';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -499,5 +500,160 @@ describe('VariableTable checkInFooter (footer-driven Tjek)', () => {
     );
     expect(screen.getByRole('button', { name: /tjek mine variable/i })).toBeInTheDocument();
     expect(screen.getByTestId('vc-label')).toHaveTextContent('(none)');
+  });
+});
+
+describe('VariableTable in-field hint indicator (F4 + F8)', () => {
+  // Calls enterSpendMode/exitSpendMode imperatively for the new tests. Mirrors
+  // the helper in HintLightbulb.test.tsx: armed state is driven via a button
+  // click so it fires AFTER HintSpendProvider's initial-IDLE effect, like
+  // production.
+  function SpendControls({ phaseId }: { phaseId: string }) {
+    const { enterSpendMode, exitSpendMode, spendMode } = useHintSpend();
+    return (
+      <div>
+        <button type="button" data-testid="arm" onClick={() => enterSpendMode(phaseId)}>
+          arm
+        </button>
+        <button type="button" data-testid="disarm" onClick={() => exitSpendMode()}>
+          disarm
+        </button>
+        <span data-testid="spend-mode">{spendMode.kind}</span>
+      </div>
+    );
+  }
+
+  function ArmedHarness({
+    experimentId,
+    children,
+  }: {
+    experimentId: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[phase]}>
+        <HintSpendProvider>
+          <SpendControls phaseId="p" />
+          {children}
+        </HintSpendProvider>
+      </RunnerProvider>
+    );
+  }
+
+  /** Reads the live `border-amber-300` (armed cue) state from the symbol input. */
+  function symbolInput(): HTMLInputElement {
+    return document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+  }
+
+  /** The idle amber dot is the only `span.bg-amber-400` in the cell wrapper. */
+  function idleDotPresent(input: HTMLInputElement): boolean {
+    return !!input.closest('div')?.querySelector('span.bg-amber-400');
+  }
+
+  it('armed-border + idle-dot mutual exclusion (border wins while armed)', async () => {
+    const user = userEvent.setup();
+    render(
+      <ArmedHarness experimentId="vtf4/border-vs-dot">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </ArmedHarness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+
+    // Idle: dot present, no amber border.
+    const input = symbolInput();
+    expect(idleDotPresent(input)).toBe(true);
+    expect(input.className).not.toContain('border-amber-300');
+
+    // Arm: border on, dot gone.
+    await user.click(screen.getByTestId('arm'));
+    expect(input.className).toContain('border-amber-400');
+    expect(input.className).toContain('ring-amber-300');
+    expect(input.className).toContain('cursor-pointer');
+    expect(idleDotPresent(input)).toBe(false);
+
+    // Disarm: back to idle.
+    await user.click(screen.getByTestId('disarm'));
+    expect(input.className).not.toContain('border-amber-400');
+    expect(idleDotPresent(input)).toBe(true);
+  });
+
+  it('click-to-spend on armed cell: spends, exits spend mode, auto-focuses + opens popup', async () => {
+    const user = userEvent.setup();
+    render(
+      <ArmedHarness experimentId="vtf4/click-spend">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </ArmedHarness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    await user.click(screen.getByTestId('arm'));
+    expect(screen.getByTestId('spend-mode')).toHaveTextContent('active');
+
+    const input = symbolInput();
+    await user.click(input);
+
+    // Spend mode exited.
+    expect(screen.getByTestId('spend-mode')).toHaveTextContent('idle');
+    // Cell auto-focuses on the setTimeout(0) tick.
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    // Popup is open against the freshly revealed tier.
+    expect(
+      await screen.findByText('Brug samme store/små bogstav som i teorien.'),
+    ).toBeInTheDocument();
+  });
+
+  it('Enter-to-spend on armed focused cell: spends, exits, refocuses + popup reflects reveal', async () => {
+    const user = userEvent.setup();
+    render(
+      <ArmedHarness experimentId="vtf4/enter-spend">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </ArmedHarness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    await user.click(screen.getByTestId('arm'));
+
+    const input = symbolInput();
+    input.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByTestId('spend-mode')).toHaveTextContent('idle');
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(
+      await screen.findByText('Brug samme store/små bogstav som i teorien.'),
+    ).toBeInTheDocument();
+  });
+
+  it('idle amber dot appears in no-provider harness once Tjek surfaces a popup entry', async () => {
+    // No HintSpendProvider — default-tolerant useHintSpend() means armed is
+    // never true, so this also covers the dot-present-in-fallback path.
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtf4/idle-dot">
+        <VariableTable id="variables" expected={expectedSymbolsOnly} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'Force');
+    await typeInto('variables-iv0-symbol', 'x'); // case-mismatch
+
+    // Before Tjek: section is dirty → popup will not open → no dot.
+    expect(idleDotPresent(symbolInput())).toBe(false);
+
+    await typeInto('variables-dv0-name', 'Acceleration');
+    await typeInto('variables-dv0-symbol', 'Y');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+
+    // After Tjek: free case-mismatch diagnostic populates the popup → dot.
+    expect(idleDotPresent(symbolInput())).toBe(true);
   });
 });

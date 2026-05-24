@@ -133,6 +133,10 @@ export const strings = {
       popupAriaLabel: 'Tilgængelige hints',
       /** Tooltip on a disabled reveal pill (bucket below cost). */
       insufficientHints: 'Du har ikke nok hints.',
+      /** Sr-only description on an armed-spendable VariableTable cell — the
+       *  whole input rectangle becomes the spend target, so AT users need to
+       *  be told the cell is clickable + Enter-activated. */
+      armedSpendableAriaDescription: 'Klik eller tryk Enter for at bruge et hint på dette felt.',
     },
     freeText: {
       placeholder: 'Skriv dit svar her...',

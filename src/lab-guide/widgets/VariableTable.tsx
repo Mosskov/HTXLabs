@@ -25,11 +25,15 @@
 //
 // Hint system: when `expected` is set, the widget participates in the
 // request-driven hint system. Auto-bump on Tjek is gone — students arm spend
-// mode via the bucket and click a lightbulb on a failing cell to unlock its
-// next tier. Free diagnostics (case-mismatch + whitespace-internal) appear in
-// the focus popup without a token cost, gated on the same checked-and-not-
-// dirty rule as paid hints.
-import { useRef } from 'react';
+// mode via the bucket. While armed, every failing cell with a remaining ladder
+// gets a faint amber border + becomes the spend target itself (click or Enter
+// to spend, which exits spend mode and re-focuses the cell so the popup opens
+// against the freshly-revealed tier). When idle, a small amber dot sits at the
+// input's top-right corner whenever the popup will open on focus (paid reveals
+// or live free diagnostics). Free diagnostics (case-mismatch + whitespace-
+// internal) appear in the focus popup without a token cost, gated on the same
+// checked-and-not-dirty rule as paid hints.
+import { type KeyboardEvent, type MouseEvent, useRef } from 'react';
 import { useHintSpend } from '../HintSpendContext';
 import { useRunner } from '../RunnerContext';
 import { format, strings } from '../strings.da';
@@ -38,7 +42,6 @@ import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
 import { HintBucket } from './HintBucket';
-import { HintLightbulb } from './HintLightbulb';
 import { HintPopup, type HintPopupEntry } from './HintPopup';
 import { ProtectedInput } from './ProtectedInput';
 import {
@@ -127,6 +130,10 @@ interface Props {
    *  input focus after a passing Tjek. Vars: {field} = nameHeader / symbolHeader /
    *  unitHeader. */
   cellCorrectAriaLabel?: string;
+  /** SR-only description on an armed-spendable cell — surfaced via
+   *  aria-describedby while spend mode is armed AND the cell has an unspent
+   *  tier. Tells AT users the whole input rectangle is the spend target. */
+  armedSpendableAriaDescription?: string;
   /** SR-only live-region announcement on full-success Tjek. Reuses existing
    *  Danish copy verbatim; exists only as the SPEC §17 override knob. */
   checkedAriaStatusLabel?: string;
@@ -263,12 +270,12 @@ function rowCorrect(
 
 /** Compact per-cell info aggregated for the row renderer. `cap === 0` means
  *  no hint ladder for this cell (e.g. `empty` error with no author hints) —
- *  no lightbulb is rendered. `freeDiagnostic` is the case-mismatch /
- *  whitespace-internal text (no token cost). `popupEntries` holds the
- *  revealed-tier paid hints for the focus popup. */
+ *  the cell is not a spend target / `nextTier` stays `null`. `freeDiagnostic`
+ *  is the case-mismatch / whitespace-internal text (no token cost).
+ *  `popupEntries` holds the revealed-tier paid hints for the focus popup. */
 interface CellHintInfo {
   cap: number;
-  /** Next tier the lightbulb would unlock (1..cap). `null` when no advance is
+  /** Next tier a spend click would unlock (1..cap). `null` when no advance is
    *  possible (cap reached or no error). */
   nextTier: number | null;
   freeDiagnostic: string | null;
@@ -320,11 +327,12 @@ export function VariableTable({
   checkLabel,
   checkInFooter = false,
   cellCorrectAriaLabel,
+  armedSpendableAriaDescription,
   checkedAriaStatusLabel,
   allowPaste,
 }: Props) {
   const { state, setWidgetValue, spendAndRevealVtTier, setVariableTableLastChecked } = useRunner();
-  const { spendMode } = useHintSpend();
+  const { spendMode, exitSpendMode } = useHintSpend();
 
   const bounds = {
     iv: resolveBounds(ivConfig, DEFAULT_IV_BOUNDS),
@@ -516,7 +524,7 @@ export function VariableTable({
         const cellSpec = rowExp[cell];
         cap = maxTierForCell(err, cellSpec, cell);
         const tier = tiers[cellKey] ?? 0;
-        // Lightbulb only available on a clean section — spending mid-edit
+        // Spend target only armed on a clean section — spending mid-edit
         // would charge the student for a hint about an error type that may
         // shift on the next keystroke.
         nextTier = sectionClean[section] && cap > 0 && tier < cap ? tier + 1 : null;
@@ -606,6 +614,8 @@ export function VariableTable({
     checkedAriaStatusLabel ?? strings.widgets.variableTable.checkedAriaStatusLabel;
   const resolvedCellCorrectAria =
     cellCorrectAriaLabel ?? strings.widgets.variableTable.cellCorrectAriaLabel;
+  const resolvedArmedAria =
+    armedSpendableAriaDescription ?? strings.widgets.hints.armedSpendableAriaDescription;
 
   const ivMissing = missingMessagesFor(
     'iv',
@@ -663,6 +673,9 @@ export function VariableTable({
       revealedText,
       hintCap: cap,
     });
+    // With HintLightbulb removed, the click-to-spend lives on the input
+    // itself; spend mode must exit here instead of inside the lightbulb.
+    exitSpendMode();
   };
 
   return (
@@ -701,6 +714,7 @@ export function VariableTable({
             getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
             getCorrect={(s) => rowCorrectFor('iv', ivExpectedArr, errors?.iv, s)}
             cellCorrectAriaLabel={resolvedCellCorrectAria}
+            armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={ivMissing}
             allowPaste={allowPaste}
             armed={armed}
@@ -724,6 +738,7 @@ export function VariableTable({
             getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
             getCorrect={(s) => rowCorrectFor('dv', dvExpectedArr, errors?.dv, s)}
             cellCorrectAriaLabel={resolvedCellCorrectAria}
+            armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={dvMissing}
             allowPaste={allowPaste}
             armed={armed}
@@ -755,6 +770,7 @@ export function VariableTable({
               rowCorrectFor('constants', constantsExpectedArr ?? [], errors?.constants, s)
             }
             cellCorrectAriaLabel={resolvedCellCorrectAria}
+            armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={constantsMissing}
             allowPaste={allowPaste}
             armed={armed}
@@ -805,6 +821,7 @@ interface RowGroupProps {
   getInfo: (studentIndex: number, cell: Cell) => CellHintInfo;
   getCorrect: (studentIndex: number) => Record<Cell, boolean>;
   cellCorrectAriaLabel: string;
+  armedSpendableAriaDescription: string;
   missingMessages: string[];
   allowPaste?: boolean;
   armed: boolean;
@@ -828,6 +845,7 @@ function RowGroupSection({
   getInfo,
   getCorrect,
   cellCorrectAriaLabel,
+  armedSpendableAriaDescription,
   missingMessages,
   allowPaste,
   armed,
@@ -859,6 +877,7 @@ function RowGroupSection({
           }}
           correct={getCorrect(i)}
           cellCorrectAriaLabel={cellCorrectAriaLabel}
+          armedSpendableAriaDescription={armedSpendableAriaDescription}
           allowPaste={allowPaste}
           armed={armed}
           onSpend={(cell) => onSpend(i, cell)}
@@ -900,6 +919,8 @@ interface RepeatableRowProps {
   correct: Record<Cell, boolean>;
   /** Template with {field} placeholder for the sr-only correctness aria label. */
   cellCorrectAriaLabel: string;
+  /** Already-resolved sr-only description for an armed-spendable cell. */
+  armedSpendableAriaDescription: string;
   allowPaste?: boolean;
   armed: boolean;
   onSpend: (cell: Cell) => void;
@@ -919,6 +940,7 @@ function RepeatableRow({
   info,
   correct,
   cellCorrectAriaLabel,
+  armedSpendableAriaDescription,
   allowPaste,
   armed,
   onSpend,
@@ -943,6 +965,7 @@ function RepeatableRow({
         info={info.name}
         correct={correct.name}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: nameHeader })}
+        armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('name')}
@@ -956,6 +979,7 @@ function RepeatableRow({
         info={info.symbol}
         correct={correct.symbol}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: symbolHeader })}
+        armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('symbol')}
@@ -969,6 +993,7 @@ function RepeatableRow({
         info={info.unit}
         correct={correct.unit}
         correctAriaLabel={format(cellCorrectAriaLabel, { field: unitHeader })}
+        armedSpendableAriaDescription={armedSpendableAriaDescription}
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('unit')}
@@ -1006,6 +1031,8 @@ interface FieldProps {
   correct: boolean;
   /** Resolved sr-only label announced on focus when `correct === true`. */
   correctAriaLabel: string;
+  /** Resolved sr-only description announced when the cell is armed-spendable. */
+  armedSpendableAriaDescription: string;
   allowPaste?: boolean;
   armed: boolean;
   onSpend: () => void;
@@ -1020,41 +1047,93 @@ function Field({
   info,
   correct,
   correctAriaLabel,
+  armedSpendableAriaDescription,
   allowPaste,
   armed,
   onSpend,
 }: FieldProps) {
   const hasHint = info.popupEntries.length > 0 || info.freeDiagnostic !== null;
   const showGreen = correct && !hasHint;
-  const inputClass = showGreen ? 'w-full ring-1 ring-emerald-300' : 'w-full';
-  const ariaDescribedBy = showGreen ? `${id}-correct` : undefined;
-  const showLightbulb = armed && info.nextTier !== null;
+  const armedSpendable = armed && info.nextTier !== null;
+  // Mutual exclusion: while armed-spendable the whole border is the cue —
+  // the dot would be redundant and noisy.
+  const showIdleDot = !armedSpendable && info.popupEntries.length > 0;
+
+  const inputClass = armedSpendable
+    ? 'w-full border-amber-400 ring-1 ring-amber-300 cursor-pointer'
+    : showGreen
+      ? 'w-full ring-1 ring-emerald-300'
+      : 'w-full';
+
+  const armedDescId = `${id}-armed`;
+  const ariaDescribedBy =
+    [showGreen ? `${id}-correct` : null, armedSpendable ? armedDescId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
+
+  // Spend + auto-focus the cell so the popup opens with fresh entries.
+  // Browser order on click: mousedown → focus → click. We preventDefault on
+  // mousedown to suppress the natural focus (the popup would open against
+  // stale entries), dispatch the spend, then re-focus on the next macrotask —
+  // by which point React has flushed the reveal into popupEntries and
+  // HintPopup's freshly-cloned onFocus sees willOpen=true.
+  const handleMouseDown = (e: MouseEvent<HTMLInputElement>) => {
+    if (!armedSpendable) return;
+    e.preventDefault();
+    onSpend();
+    setTimeout(() => document.getElementById(id)?.focus(), 0);
+  };
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (armedSpendable && e.key === 'Enter') {
+      e.preventDefault();
+      onSpend();
+      // Already focused — but HintPopup's onFocus only fires on focus
+      // *transitions*. Force a blur+refocus so the popup re-opens against
+      // fresh entries.
+      setTimeout(() => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        el?.blur();
+        el?.focus();
+      }, 0);
+    }
+  };
+
   return (
     <div className="min-w-0" data-correct={showGreen ? 'true' : undefined}>
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600 sm:hidden">
         {label}
       </label>
-      <HintPopup entries={info.popupEntries}>
-        <ProtectedInput
-          id={id}
-          type="text"
-          value={value}
-          aria-label={ariaLabel}
-          aria-describedby={ariaDescribedBy}
-          allowPaste={allowPaste}
-          onChange={(e) => onChange(e.target.value)}
-          className={inputClass}
-        />
-      </HintPopup>
+      <span className="relative inline-block w-full">
+        <HintPopup entries={info.popupEntries}>
+          <ProtectedInput
+            id={id}
+            type="text"
+            value={value}
+            aria-label={ariaLabel}
+            aria-describedby={ariaDescribedBy}
+            allowPaste={allowPaste}
+            onChange={(e) => onChange(e.target.value)}
+            onMouseDown={handleMouseDown}
+            onKeyDown={handleKeyDown}
+            className={inputClass}
+          />
+        </HintPopup>
+        {showIdleDot && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1 right-1.5 h-1.5 w-1.5 rounded-full bg-amber-400"
+          />
+        )}
+      </span>
       {showGreen && (
         <span id={`${id}-correct`} className="sr-only">
           {correctAriaLabel}
         </span>
       )}
-      {showLightbulb && info.nextTier !== null && (
-        <div className="mt-1">
-          <HintLightbulb nextTier={info.nextTier} cap={info.cap} onSpend={onSpend} />
-        </div>
+      {armedSpendable && (
+        <span id={armedDescId} className="sr-only">
+          {armedSpendableAriaDescription}
+        </span>
       )}
     </div>
   );
