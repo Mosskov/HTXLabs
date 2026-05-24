@@ -76,7 +76,7 @@ export function HintPopup({ entries, children, align = 'left' }: Props) {
           // The `hint-popup` class is a hook for globals.css to suppress the
           // project-wide `.prose ul > li::before` bullet inside the popup —
           // we render our own amber bullet in TieredHintList.
-          className={`hint-popup absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 z-20 w-80 max-w-[min(20rem,100vw)] rounded-md border border-amber-400 bg-slate-50 p-3 text-sm shadow-lg`}
+          className={`hint-popup absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1.5 z-20 w-80 min-w-[14rem] max-w-[min(20rem,100vw)] rounded-md border border-amber-400 bg-slate-50 p-3 text-sm shadow-lg`}
         >
           <TieredHintList entries={entries} />
         </section>
