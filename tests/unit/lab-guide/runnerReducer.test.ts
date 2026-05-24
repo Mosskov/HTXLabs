@@ -21,6 +21,7 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     variableTableHintTiers: {},
     variableTableHintReveals: {},
     variableTableLastChecked: {},
+    variableTableLocks: {},
     hintTokens: {},
     hintLastReplenishAt: {},
     hintUsageTotal: 0,
@@ -477,6 +478,97 @@ describe('runnerReducer', () => {
         phaseId: 'planlaeg',
         now: 9_999,
         poolCap: 3,
+      });
+      expect(next).toBe(s);
+    });
+  });
+
+  describe('LOCK_VT_CELLS', () => {
+    it('seeds the per-widget map with the supplied cell keys', () => {
+      const next = runnerReducer(makeState(), {
+        type: 'LOCK_VT_CELLS',
+        widgetId: 'vars',
+        cellKeys: ['iv.0.symbol', 'iv.0.unit'],
+      });
+      expect(next.variableTableLocks.vars).toEqual({
+        'iv.0.symbol': true,
+        'iv.0.unit': true,
+      });
+    });
+
+    it('merges into an existing widget map without clobbering prior locks', () => {
+      const s = makeState({ variableTableLocks: { vars: { 'iv.0.symbol': true } } });
+      const next = runnerReducer(s, {
+        type: 'LOCK_VT_CELLS',
+        widgetId: 'vars',
+        cellKeys: ['dv.0.symbol'],
+      });
+      expect(next.variableTableLocks.vars).toEqual({
+        'iv.0.symbol': true,
+        'dv.0.symbol': true,
+      });
+    });
+
+    it('is idempotent when every supplied key is already locked (same state ref)', () => {
+      const s = makeState({ variableTableLocks: { vars: { 'iv.0.symbol': true } } });
+      const next = runnerReducer(s, {
+        type: 'LOCK_VT_CELLS',
+        widgetId: 'vars',
+        cellKeys: ['iv.0.symbol'],
+      });
+      expect(next).toBe(s);
+    });
+
+    it('returns the same state ref on an empty cellKeys payload', () => {
+      const s = makeState();
+      const next = runnerReducer(s, {
+        type: 'LOCK_VT_CELLS',
+        widgetId: 'vars',
+        cellKeys: [],
+      });
+      expect(next).toBe(s);
+    });
+  });
+
+  describe('UNLOCK_VT_CELL', () => {
+    it('removes a single key from the per-widget map', () => {
+      const s = makeState({
+        variableTableLocks: { vars: { 'iv.0.symbol': true, 'iv.0.unit': true } },
+      });
+      const next = runnerReducer(s, {
+        type: 'UNLOCK_VT_CELL',
+        widgetId: 'vars',
+        cellKey: 'iv.0.symbol',
+      });
+      expect(next.variableTableLocks.vars).toEqual({ 'iv.0.unit': true });
+    });
+
+    it('drops the widget entry entirely when the last key is removed (compactness)', () => {
+      const s = makeState({ variableTableLocks: { vars: { 'iv.0.symbol': true } } });
+      const next = runnerReducer(s, {
+        type: 'UNLOCK_VT_CELL',
+        widgetId: 'vars',
+        cellKey: 'iv.0.symbol',
+      });
+      expect(next.variableTableLocks).toEqual({});
+    });
+
+    it('is a no-op for an unknown widget id (same state ref)', () => {
+      const s = makeState();
+      const next = runnerReducer(s, {
+        type: 'UNLOCK_VT_CELL',
+        widgetId: 'no-such-widget',
+        cellKey: 'iv.0.symbol',
+      });
+      expect(next).toBe(s);
+    });
+
+    it('is a no-op for an unknown cell key in a known widget (same state ref)', () => {
+      const s = makeState({ variableTableLocks: { vars: { 'iv.0.symbol': true } } });
+      const next = runnerReducer(s, {
+        type: 'UNLOCK_VT_CELL',
+        widgetId: 'vars',
+        cellKey: 'dv.0.symbol',
       });
       expect(next).toBe(s);
     });

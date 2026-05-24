@@ -64,6 +64,24 @@
   }
 }
 
+/* VariableTable Tjek flash: the cell wrapper paints bg-emerald-100 /
+   bg-rose-100 via its static class on mount, and this keyframe fades the
+   background-color to transparent over 1500ms. `forwards` holds the final
+   transparent state until the next remount restarts the animation. The
+   keyframe has no explicit `from` so the user agent uses the underlying
+   value of the property (i.e. the static class colour) as the starting
+   point — that's how a single animation works for both emerald and rose. */
+@keyframes vt-flash-fade {
+  to {
+    background-color: transparent;
+  }
+}
+@layer utilities {
+  .animate-vt-flash-fade {
+    animation: vt-flash-fade 1500ms ease-out forwards;
+  }
+}
+
 /* Print stylesheet for the Rapportér phase. The ReportComposer toggles
    data-print-include attributes; only opted-in sections survive print. */
 @media print {

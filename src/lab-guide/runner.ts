@@ -65,6 +65,14 @@ export interface RunnerState {
    *  the widget derives both `tjekStatus` and the published `correct` bit
    *  from this snapshot so reload preserves the checked state. */
   variableTableLastChecked: Record<string, VariableTableValues>;
+  /** Per-VariableTable per-cell lock state. Set when Tjek confirms a cell as
+   *  correct + filled; cleared on explicit student unlock (double-click /
+   *  Enter/F2 / long-press). Keyed by `${section}.${expectedIndex}.${cell}`
+   *  so locks track expected-row identity, not the student's render order.
+   *  The widget's published `correct` bit and `sections` facet both derive
+   *  from this slice. Empty per-widget maps are dropped on unlock to keep
+   *  persisted state compact. */
+  variableTableLocks: Record<string, Record<string, true>>;
   /** Per-phase current token count for the request-driven hint system.
    *  Absent = "never entered or never spent in this phase"; bucketView
    *  treats absence as `cap` (full) so first paint is correct without a
@@ -100,6 +108,7 @@ interface SerializedRunnerState {
   variableTableHintTiers: Record<string, Record<string, number>>;
   variableTableHintReveals?: Record<string, Record<string, string[]>>;
   variableTableLastChecked: Record<string, VariableTableValues>;
+  variableTableLocks?: Record<string, Record<string, true>>;
   hintTokens?: Record<string, number>;
   hintLastReplenishAt?: Record<string, number | null>;
   hintUsageTotal?: number;
@@ -134,6 +143,7 @@ export function emptyState(
     variableTableHintTiers: {},
     variableTableHintReveals: {},
     variableTableLastChecked: {},
+    variableTableLocks: {},
     hintTokens: {},
     hintLastReplenishAt: {},
     hintUsageTotal: 0,
@@ -172,6 +182,7 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     variableTableHintTiers: raw.variableTableHintTiers ?? {},
     variableTableHintReveals: raw.variableTableHintReveals ?? {},
     variableTableLastChecked: raw.variableTableLastChecked ?? {},
+    variableTableLocks: raw.variableTableLocks ?? {},
     hintTokens: raw.hintTokens ?? {},
     hintLastReplenishAt: raw.hintLastReplenishAt ?? {},
     hintUsageTotal: raw.hintUsageTotal ?? 0,

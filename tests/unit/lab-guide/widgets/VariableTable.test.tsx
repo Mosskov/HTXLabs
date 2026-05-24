@@ -614,7 +614,7 @@ describe('VariableTable — sections facet', () => {
     expect(readSections()).toEqual({ iv: true, dv: false, constants: false });
   });
 
-  it('editing a section after a passing Tjek reverts only that section', async () => {
+  it('unlocking a locked IV cell drops only IV — DV + constants stay locked', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vt-sec/3">
@@ -629,10 +629,12 @@ describe('VariableTable — sections facet', () => {
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(readSections()).toEqual({ iv: true, dv: true, constants: true });
 
-    // Editing an IV cell drops only IV — DV + constants stay validated. This
-    // is the per-section dirty fix: filling one section must not un-check
+    // Under the lock model, the `sections` facet follows lock coverage —
+    // not snapshot equality. Double-click any locked IV cell to unlock it;
+    // IV's coverage drops while DV and constants stay locked. This is the
+    // per-section guarantee: unlocking one section's cell must not un-lock
     // another that the student already validated.
-    await user.type(document.getElementById('variables-iv0-name') as HTMLInputElement, 'x');
+    await user.dblClick(document.getElementById('variables-iv0-name') as HTMLInputElement);
     expect(readSections()).toEqual({ iv: false, dv: true, constants: true });
   });
 });

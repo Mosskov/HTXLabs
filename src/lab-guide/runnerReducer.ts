@@ -52,6 +52,8 @@ export type RunnerAction =
     }
   | { type: 'ANCHOR_HINT_TIMER'; phaseId: string; now: number; poolCap: number }
   | { type: 'SET_VARIABLE_TABLE_LAST_CHECKED'; widgetId: string; values: VariableTableValues }
+  | { type: 'LOCK_VT_CELLS'; widgetId: string; cellKeys: readonly string[] }
+  | { type: 'UNLOCK_VT_CELL'; widgetId: string; cellKey: string }
   | { type: 'RESET'; nextState: RunnerState };
 
 export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerState {
@@ -235,6 +237,45 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
           [action.widgetId]: action.values,
         },
       };
+    case 'LOCK_VT_CELLS': {
+      // Merge the given cell keys into the per-widget lock map. Idempotent —
+      // re-locking already-locked keys is a no-op; an empty cellKeys payload
+      // short-circuits without producing a new state reference.
+      if (action.cellKeys.length === 0) return state;
+      const widgetBucket = state.variableTableLocks[action.widgetId] ?? {};
+      let changed = false;
+      const next: Record<string, true> = { ...widgetBucket };
+      for (const key of action.cellKeys) {
+        if (next[key] !== true) {
+          next[key] = true;
+          changed = true;
+        }
+      }
+      if (!changed) return state;
+      return {
+        ...state,
+        variableTableLocks: {
+          ...state.variableTableLocks,
+          [action.widgetId]: next,
+        },
+      };
+    }
+    case 'UNLOCK_VT_CELL': {
+      // Delete a single cell key. When the resulting per-widget map is empty,
+      // drop the parent key so persisted state stays compact. Idempotent for
+      // unknown keys / widgets.
+      const widgetBucket = state.variableTableLocks[action.widgetId];
+      if (!widgetBucket || widgetBucket[action.cellKey] !== true) return state;
+      const next = { ...widgetBucket };
+      delete next[action.cellKey];
+      const nextLocks = { ...state.variableTableLocks };
+      if (Object.keys(next).length === 0) {
+        delete nextLocks[action.widgetId];
+      } else {
+        nextLocks[action.widgetId] = next;
+      }
+      return { ...state, variableTableLocks: nextLocks };
+    }
     case 'RESET':
       return action.nextState;
   }

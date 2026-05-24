@@ -97,6 +97,14 @@ interface RunnerApi {
   /** Snapshot the current VariableTable values as the most recent Tjek
    *  result. Overwrites any prior snapshot for that widget id. */
   setVariableTableLastChecked: (widgetId: string, values: VariableTableValues) => void;
+  /** Lock a set of VariableTable cells (by `${section}.${expectedIndex}.${cell}`
+   *  keys) as confirmed-correct. Idempotent — re-locking already-locked cells
+   *  is a no-op. Empty `cellKeys` short-circuits. */
+  lockVtCells: (widgetId: string, cellKeys: readonly string[]) => void;
+  /** Unlock a single VariableTable cell by its expected-row key. When the
+   *  resulting per-widget map is empty, the parent entry is dropped so the
+   *  persisted state stays compact. Idempotent for unknown keys. */
+  unlockVtCell: (widgetId: string, cellKey: string) => void;
   onSimulationProgress: (e: ProgressEvent) => void;
   setSimulationState: (state: unknown) => void;
   registerWidgetState: (id: string, state: WidgetState | null) => void;
@@ -311,6 +319,15 @@ export function RunnerProvider({
     },
     [],
   );
+
+  const lockVtCells = useCallback((widgetId: string, cellKeys: readonly string[]) => {
+    if (cellKeys.length === 0) return;
+    dispatch({ type: 'LOCK_VT_CELLS', widgetId, cellKeys });
+  }, []);
+
+  const unlockVtCell = useCallback((widgetId: string, cellKey: string) => {
+    dispatch({ type: 'UNLOCK_VT_CELL', widgetId, cellKey });
+  }, []);
 
   const onSimulationProgress = useCallback((e: ProgressEvent) => {
     switch (e.type) {
@@ -557,6 +574,8 @@ export function RunnerProvider({
     spendAndRevealVtTier,
     bucketView,
     setVariableTableLastChecked,
+    lockVtCells,
+    unlockVtCell,
     onSimulationProgress,
     setSimulationState,
     registerWidgetState,

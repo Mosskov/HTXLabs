@@ -217,7 +217,7 @@ describe('template phase 1 — negative paths', () => {
     await waitFor(() => expect(footerButton()).toHaveAttribute('aria-disabled', 'true'));
   });
 
-  it('edit a cell after reaching "Tjek hypotese": footer reverts to "Tjek variable"', async () => {
+  it('unlock a locked cell after reaching "Tjek hypotese": footer reverts to "Tjek variable"', async () => {
     const user = userEvent.setup();
     renderTemplate('negative/edit-after-pass');
 
@@ -226,11 +226,15 @@ describe('template phase 1 — negative paths', () => {
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeInTheDocument());
     await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
 
-    // Edit an IV cell — strict RevealWhen hides the section, `clearOnHide`
-    // clears `hypotese`, RubricResponse unmounts and its footer check is
-    // unregistered (the deliberate unmount cleanup) → the footer walk stops
-    // at `variables` and the button reverts to state 1.
-    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'Z');
+    // Under the lock model, the just-Tjek'd IV symbol is a readOnly input.
+    // user.type would no-op. Unlock first via double-click, then the strict
+    // RevealWhen condition (variables `correct === true`) flips false →
+    // hypothesis hides, `clearOnHide` clears it, RubricResponse unmounts and
+    // its footer check is unregistered → the footer walk stops at
+    // `variables` and the button reverts to state 1.
+    const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    expect(ivSymbol).toHaveAttribute('readonly');
+    await user.dblClick(ivSymbol);
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeNull());
     await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek variable/i));
   });

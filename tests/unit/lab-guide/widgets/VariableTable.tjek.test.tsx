@@ -118,7 +118,7 @@ describe('VariableTable Tjek flow', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Godkendt');
   });
 
-  it('editing a cell after a passing Tjek: correct flips back to false', async () => {
+  it('unlocking a cell after a passing Tjek: correct flips back to false', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtj/edit-after-pass">
@@ -132,8 +132,14 @@ describe('VariableTable Tjek flow', () => {
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(readCorrect()).toBe(true);
 
-    // Edit any cell — even with a still-valid value — must flip correct back.
-    await typeInto('variables-iv0-name', 'X');
+    // Under the lock model, `correct` follows lock coverage — not snapshot
+    // equality. Editing a non-locked cell (iv0-name has no expected entry)
+    // changes the live values but leaves the IV/DV symbol locks intact, so
+    // `correct` stays true. To flip it, the student must unlock a locked
+    // cell — here via double-click on iv0-symbol's read-only input.
+    const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    expect(ivSymbol).toHaveAttribute('readonly');
+    await user.dblClick(ivSymbol);
     expect(readCorrect()).toBe(false);
   });
 
@@ -364,19 +370,19 @@ describe('VariableTable Tjek flow', () => {
 
 });
 
-describe('VariableTable per-cell green confirmation', () => {
-  // The `data-correct` marker lives on the wrapping <div> the Field renders
-  // around each ProtectedInput. Reading from the input back up to the wrapper
-  // keeps the assertion robust to extra wrapper changes.
-  function cellMarker(inputId: string): string | null | undefined {
+describe('VariableTable per-cell lock confirmation', () => {
+  // Under the lock model, the per-cell "correct" signal is "the cell renders
+  // as a readOnly input" (locked). Cells without an `expected[cell]` entry,
+  // and wrong cells, stay editable.
+  function isLocked(inputId: string): boolean {
     const input = document.getElementById(inputId) as HTMLInputElement | null;
-    return input?.closest('div')?.getAttribute('data-correct');
+    return input?.hasAttribute('readonly') ?? false;
   }
 
-  it('passing Tjek: every expected-defined cell has data-correct="true"', async () => {
+  it('passing Tjek: every expected-defined cell becomes readOnly (locked)', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj-green/passing">
+      <Harness experimentId="vtj-lock/passing">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
@@ -386,17 +392,17 @@ describe('VariableTable per-cell green confirmation', () => {
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     // expectedSymbolsOnly only sets `symbol` on IV and DV — name and unit
-    // are not part of the answer key, so they stay unmarked.
-    expect(cellMarker('variables-iv0-symbol')).toBe('true');
-    expect(cellMarker('variables-dv0-symbol')).toBe('true');
-    expect(cellMarker('variables-iv0-name')).toBeNull();
-    expect(cellMarker('variables-dv0-name')).toBeNull();
+    // are not part of the answer key, so they stay editable.
+    expect(isLocked('variables-iv0-symbol')).toBe(true);
+    expect(isLocked('variables-dv0-symbol')).toBe(true);
+    expect(isLocked('variables-iv0-name')).toBe(false);
+    expect(isLocked('variables-dv0-name')).toBe(false);
   });
 
-  it('mixed Tjek: only error-free expected-defined cells get the green marker', async () => {
+  it('mixed Tjek: only error-free expected-defined cells lock', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj-green/mixed">
+      <Harness experimentId="vtj-lock/mixed">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
@@ -405,14 +411,14 @@ describe('VariableTable per-cell green confirmation', () => {
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(cellMarker('variables-iv0-symbol')).toBeNull();
-    expect(cellMarker('variables-dv0-symbol')).toBe('true');
+    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    expect(isLocked('variables-dv0-symbol')).toBe(true);
   });
 
-  it('editing a section after a passing Tjek clears its green but keeps siblings', async () => {
+  it('unlocking a locked cell drops the gate; siblings stay locked', async () => {
     const user = userEvent.setup();
     render(
-      <Harness experimentId="vtj-green/dirty">
+      <Harness experimentId="vtj-lock/unlock-one">
         <VariableTable id="variables" expected={expectedSymbolsOnly} />
       </Harness>,
     );
@@ -421,23 +427,25 @@ describe('VariableTable per-cell green confirmation', () => {
     await typeInto('variables-dv0-name', 'Acceleration');
     await typeInto('variables-dv0-symbol', 'Y');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(cellMarker('variables-iv0-symbol')).toBe('true');
-    // Edit an IV cell — IV green clears, but DV (untouched) keeps its green.
-    await typeInto('variables-iv0-name', 'X');
-    expect(cellMarker('variables-iv0-symbol')).toBeNull();
-    expect(cellMarker('variables-dv0-symbol')).toBe('true');
-    // The whole-table success announcement unmounts (no longer all-checked).
+    expect(isLocked('variables-iv0-symbol')).toBe(true);
+    expect(isLocked('variables-dv0-symbol')).toBe(true);
+    // Double-click iv0-symbol's read-only input to unlock — DV symbol stays
+    // locked (locks are per-cell, not per-section).
+    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
+    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    expect(isLocked('variables-dv0-symbol')).toBe(true);
+    // The whole-table success announcement unmounts (gate no longer satisfied).
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('without `expected`: no data-correct markers ever, no Tjek button', () => {
+  it('without `expected`: no cells ever lock, no Tjek button', () => {
     render(
-      <Harness experimentId="vtj-green/no-expected">
+      <Harness experimentId="vtj-lock/no-expected">
         <VariableTable id="variables" />
       </Harness>,
     );
-    expect(cellMarker('variables-iv0-symbol')).toBeNull();
-    expect(cellMarker('variables-dv0-symbol')).toBeNull();
+    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    expect(isLocked('variables-dv0-symbol')).toBe(false);
     expect(screen.queryByRole('button', { name: /tjek mine variable/i })).not.toBeInTheDocument();
   });
 });
