@@ -12,6 +12,7 @@
 //     the tooltip only.
 //   - depleted: cracked-bulb SVG (src/icons/BulbCracked).
 //   - no-targets: yellow bulb at opacity-40 + tooltip.
+import { Bulb } from '@/icons/Bulb';
 import { BulbCracked } from '@/icons/BulbCracked';
 import { BulbFilling } from '@/icons/BulbFilling';
 import type { ReactNode } from 'react';
@@ -27,6 +28,17 @@ const ARMABLE_SHELL =
   'inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium border-accent-400 bg-white text-slate-700 hover:bg-accent-50 transition-colors';
 
 function BucketArmable() {
+  return (
+    <button type="button" className={ARMABLE_SHELL}>
+      <Bulb className={BULB_SIZE} />
+      <span className="tabular-nums">3</span>
+    </button>
+  );
+}
+
+/** Legacy armable variant kept for side-by-side review: 💡 emoji at full
+ *  opacity. Delete once Bulb is signed off. */
+function BucketArmableEmoji() {
   return (
     <button type="button" className={ARMABLE_SHELL}>
       <span aria-hidden="true" className="text-base leading-none">
@@ -51,20 +63,31 @@ function BucketCountdown({ fillPct }: { fillPct: number }) {
   );
 }
 
-/** Depleted — cracked bulb + "0". */
+/** Depleted — cracked bulb + "0". Same opacity-40 mute as no-targets so the
+ *  two disabled states sit as one family. */
 function BucketDepleted() {
   return (
     <button type="button" className={DISABLED_SHELL}>
-      <BulbCracked className={BULB_SIZE} />
+      <BulbCracked className={`${BULB_SIZE} opacity-40`} />
       <span className="tabular-nums">0</span>
     </button>
   );
 }
 
-/** No-targets — opacity-40 yellow bulb + count. The state is the most
- *  ephemeral (resolves when the student edits a cell), so tooltip-only with
- *  the option-4 mute carries the signal. */
+/** No-targets — same Bulb as armable, dimmed to opacity-40. Resolves when the
+ *  student edits a cell, so tooltip-only + low-opacity carries the signal. */
 function BucketNoTargets() {
+  return (
+    <button type="button" className={DISABLED_SHELL}>
+      <Bulb className={`${BULB_SIZE} opacity-40`} />
+      <span className="tabular-nums">3</span>
+    </button>
+  );
+}
+
+/** Legacy no-targets variant kept for side-by-side review: 💡 emoji at
+ *  opacity-40. Delete once Bulb is signed off. */
+function BucketNoTargetsEmoji() {
   return (
     <button type="button" className={DISABLED_SHELL}>
       <span aria-hidden="true" className="text-base leading-none opacity-40">
@@ -207,6 +230,36 @@ export function DisabledStylePlayground() {
             </Cell>
             <Cell sub="stepper locked">
               <StepperLocked />
+            </Cell>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-slate-200 p-3">
+          <div className="mb-2 text-sm font-semibold text-navy">
+            New hand-drawn Bulb vs. system 💡 emoji
+          </div>
+          <div className="mb-3 text-xs text-slate-500">
+            Side-by-side review across armable (full opacity) and no-targets (opacity-40). The emoji
+            variants are kept here until the SVG is signed off. Family check on the right.
+          </div>
+          <div className="flex flex-wrap items-end gap-6">
+            <Cell sub="armable — Bulb (new)">
+              <BucketArmable />
+            </Cell>
+            <Cell sub="armable — 💡 (old)">
+              <BucketArmableEmoji />
+            </Cell>
+            <Cell sub="no-targets — Bulb (new)">
+              <BucketNoTargets />
+            </Cell>
+            <Cell sub="no-targets — 💡 (old)">
+              <BucketNoTargetsEmoji />
+            </Cell>
+            <Cell sub="depleted (family check)">
+              <BucketDepleted />
+            </Cell>
+            <Cell sub="countdown 50% (family check)">
+              <BucketCountdown fillPct={50} />
             </Cell>
           </div>
         </div>

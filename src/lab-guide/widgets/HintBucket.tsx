@@ -2,22 +2,26 @@
 //
 // Pure presentation: reads `bucketView(phaseId)` from RunnerContext and spend
 // mode from HintSpendContext. Never dispatches LAZY_REPLENISH itself — the
-// centralized effect in RunnerProvider owns that. Renders a single 💡 glyph
-// plus the numeric token count — no per-token icon variants (the digit-icons
-// duplicated the counter). Empty-bucket click is a no-op + tooltip with the
-// countdown or generic empty copy.
+// centralized effect in RunnerProvider owns that. Renders the hand-drawn
+// `Bulb` icon plus the numeric token count. Empty-bucket click is a no-op +
+// tooltip with the countdown or generic empty copy.
 //
-// Four distinct disabled visuals (today's grey shell stays the family default):
-//   1. Empty + countdown — M:SS label replaces the token digit.
-//   2. Empty + no refill — icon dims to opacity-60 (depleted).
-//   3. Phase has no hints (hintPoolSize=0) — small lock glyph overlay.
-//   4. Tokens but no spendable targets — full-opacity icon, tooltip only.
+// Four distinct disabled visuals:
+//   1. Phase has no hints (hintPoolSize=0) → NOT RENDERED (author explicitly
+//      disabled hints; no affordance needed).
+//   2. Empty + countdown → `BulbFilling` icon fills bottom-up over the
+//      replenish cycle; M:SS lives in tooltip only.
+//   3. Empty + no refill (depleted) → `BulbCracked` at opacity-40 + "0".
+//   4. Tokens but no spendable targets → `Bulb` at opacity-40 + count.
 //
 // `placement === 'footer'`: unconditionally visible while the current phase
 // has eligible widgets (LabGuide's footer mounts it inside that gate).
 // `placement === 'inline'`: rendered inside a specific widget; suppresses
 // itself when the owning widget's phaseScope ≠ currentPhaseId so the hidden-
 // phase widget body doesn't paint a stray bucket.
+import { Bulb } from '@/icons/Bulb';
+import { BulbCracked } from '@/icons/BulbCracked';
+import { BulbFilling } from '@/icons/BulbFilling';
 import { useHintSpend } from '../HintSpendContext';
 import { usePhaseScope } from '../PhaseScopeContext';
 import { useRunner } from '../RunnerContext';
@@ -53,34 +57,34 @@ export function HintBucket({ placement }: Props) {
   // No eligible widgets in the current phase → no bucket at all.
   if (!phaseHasHintEligibleWidgets(currentPhaseId)) return null;
 
-  const { tokens, cap, msUntilNext, disabled } = bucketView(currentPhaseId);
+  const { tokens, cap, msUntilNext, replenishMs, disabled } = bucketView(currentPhaseId);
+
+  // Author explicitly disabled hints — don't render the bucket at all.
+  if (disabled) return null;
+
   const armed = spendMode.kind === 'active' && spendMode.phaseId === currentPhaseId;
   const empty = tokens === 0;
-  const noTargets = !disabled && !empty && phaseSpendableTargetCount(currentPhaseId) === 0;
-  const canArm = !disabled && !empty && !noTargets;
+  const noTargets = !empty && phaseSpendableTargetCount(currentPhaseId) === 0;
+  const canArm = !empty && !noTargets;
 
   // Discriminated disabled cause — drives both tooltip + visual variant.
-  type DisabledReason = 'phase' | 'countdown' | 'depleted' | 'no-targets' | null;
-  const disabledReason: DisabledReason = disabled
-    ? 'phase'
-    : empty
-      ? msUntilNext !== null
-        ? 'countdown'
-        : 'depleted'
-      : noTargets
-        ? 'no-targets'
-        : null;
+  type DisabledReason = 'countdown' | 'depleted' | 'no-targets' | null;
+  const disabledReason: DisabledReason = empty
+    ? msUntilNext !== null
+      ? 'countdown'
+      : 'depleted'
+    : noTargets
+      ? 'no-targets'
+      : null;
 
   const tooltip =
-    disabledReason === 'phase'
-      ? strings.widgets.hints.bucketDisabled
-      : disabledReason === 'countdown' && msUntilNext !== null
-        ? format(strings.widgets.hints.bucketCountdown, { time: formatCountdown(msUntilNext) })
-        : disabledReason === 'depleted'
-          ? strings.widgets.hints.bucketEmpty
-          : disabledReason === 'no-targets'
-            ? strings.widgets.hints.bucketNoTargets
-            : undefined;
+    disabledReason === 'countdown' && msUntilNext !== null
+      ? format(strings.widgets.hints.bucketCountdown, { time: formatCountdown(msUntilNext) })
+      : disabledReason === 'depleted'
+        ? strings.widgets.hints.bucketEmpty
+        : disabledReason === 'no-targets'
+          ? strings.widgets.hints.bucketNoTargets
+          : undefined;
 
   const ariaLabel = armed
     ? strings.widgets.hints.bucketSpendModeAriaLabel
@@ -92,10 +96,30 @@ export function HintBucket({ placement }: Props) {
       ? 'border-accent-400 bg-white text-slate-700 hover:bg-accent-50'
       : 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed';
 
-  // Per-reason icon styling. Countdown swaps the digit for the M:SS label;
-  // depleted dims the icon (run-out feel); phase-disabled adds a lock glyph
-  // overlay; no-targets stays at full opacity (the tooltip carries the meaning).
-  const iconOpacity = disabledReason === 'depleted' ? 'opacity-60' : '';
+  // Countdown fillPct: 0% just after a spend (msUntilNext ≈ replenishMs),
+  // 100% the moment a token is granted. Guard against replenishMs=0.
+  const fillPct =
+    disabledReason === 'countdown' && msUntilNext !== null && replenishMs > 0
+      ? ((replenishMs - msUntilNext) / replenishMs) * 100
+      : 0;
+
+  const ICON_SIZE = 'w-[18px] h-[18px]';
+
+  const icon =
+    disabledReason === 'countdown' ? (
+      <BulbFilling fillPct={fillPct} className={ICON_SIZE} />
+    ) : disabledReason === 'depleted' ? (
+      <BulbCracked className={`${ICON_SIZE} opacity-40`} />
+    ) : disabledReason === 'no-targets' ? (
+      <Bulb className={`${ICON_SIZE} opacity-40`} />
+    ) : (
+      <Bulb className={ICON_SIZE} />
+    );
+
+  // Countdown shows bulb only (M:SS lives in tooltip); other states show the
+  // token count next to the bulb.
+  const countLabel =
+    disabledReason === 'countdown' ? null : <span className="tabular-nums">{tokens}</span>;
 
   const button = (
     <button
@@ -110,22 +134,8 @@ export function HintBucket({ placement }: Props) {
       aria-disabled={!canArm || undefined}
       className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${colorClass}`}
     >
-      <span aria-hidden="true" className={`relative text-base leading-none ${iconOpacity}`}>
-        💡
-        {disabledReason === 'phase' && (
-          <span
-            aria-hidden="true"
-            className="absolute -bottom-0.5 -right-0.5 inline-flex h-2.5 w-2.5 items-center justify-center rounded-full bg-slate-200 text-[8px] leading-none text-slate-500"
-          >
-            🔒
-          </span>
-        )}
-      </span>
-      {disabledReason === 'countdown' && msUntilNext !== null ? (
-        <span className="tabular-nums text-xs text-slate-500">{formatCountdown(msUntilNext)}</span>
-      ) : (
-        <span className="tabular-nums">{tokens}</span>
-      )}
+      {icon}
+      {countLabel}
     </button>
   );
 

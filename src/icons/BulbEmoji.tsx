@@ -9,7 +9,15 @@ export function BulbEmoji(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden focusable="false" {...props}>
       <title>Glødepære (emoji)</title>
-      <text x="12" y="20" fontSize="20" textAnchor="middle">
+      <text
+        x="12"
+        y="20"
+        fontSize="20"
+        textAnchor="middle"
+        style={{
+          filter: 'grayscale(1) saturate(0.45) opacity(0.7)',
+        }}
+      >
         💡
       </text>
     </svg>

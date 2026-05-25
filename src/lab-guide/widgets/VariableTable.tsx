@@ -1605,7 +1605,7 @@ function InWidgetTjekButton({
   const dimmed = dimReason !== null;
   const baseClass = 'px-3 py-1.5 rounded-md text-sm font-medium border transition-colors';
   const stateClass = dimmed
-    ? 'bg-slate-50 border-slate-300 text-slate-400 cursor-not-allowed'
+    ? 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
     : 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50';
 
   const button = (

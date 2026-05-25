@@ -116,7 +116,7 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
   const enabledClass = flashActive
     ? 'border-accent-400 text-slate-700 hover:bg-accent-50'
     : 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50';
-  const dimClass = 'bg-slate-50 border-slate-300 text-slate-400 cursor-not-allowed';
+  const dimClass = 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed';
   const fullyDisabledClass = 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed';
   const stateClass = !buttonDisabled ? enabledClass : tjekDim ? dimClass : fullyDisabledClass;
 

@@ -46,6 +46,10 @@ export interface BucketView {
   tokens: number;
   cap: number;
   msUntilNext: number | null;
+  /** Full replenish interval in ms. `HintBucket` uses it with `msUntilNext`
+   *  to compute the `BulbFilling` icon's progress (`(replenishMs - msUntilNext)
+   *  / replenishMs`). `0` when the timer is disabled. */
+  replenishMs: number;
   /** True when `cap === 0` (`hintPoolSize: 0` author override) — bucket is
    *  rendered disabled with the appropriate copy. */
   disabled: boolean;
@@ -464,7 +468,7 @@ export function RunnerProvider({
       const cap = poolCapFor(pid);
       const replenishMs = replenishMsFor(pid);
       if (cap === 0) {
-        return { tokens: 0, cap: 0, msUntilNext: null, disabled: true };
+        return { tokens: 0, cap: 0, msUntilNext: null, replenishMs: 0, disabled: true };
       }
       const rawTokens = state.hintTokens[pid];
       const tokens = rawTokens ?? cap;
@@ -475,7 +479,7 @@ export function RunnerProvider({
         const remainder = elapsed % replenishMs;
         msUntilNext = Math.max(0, replenishMs - remainder);
       }
-      return { tokens, cap, msUntilNext, disabled: false };
+      return { tokens, cap, msUntilNext, replenishMs, disabled: false };
     },
     [
       state.currentPhaseId,
