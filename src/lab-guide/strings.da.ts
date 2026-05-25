@@ -122,6 +122,10 @@ export const strings = {
       bucketCountdown: 'Næste hint om {time}',
       /** Tooltip when the phase carries `hintPoolSize: 0`. */
       bucketDisabled: 'Hints er ikke tilgængelige i denne fase',
+      /** Tooltip when the bucket has tokens but no spendable target remains in
+       *  the phase — every failing cell/criterion has exhausted its ladder, or
+       *  every target is already satisfied. */
+      bucketNoTargets: 'Ingen steder at bruge hint i denne fase',
       /** Aria label on a per-field lightbulb. Vars: {tier} = next-tier digit,
        *  {cap} = ladder length. */
       lightbulbAriaLabel: 'Få et hint ({tier} af {cap})',
@@ -200,6 +204,12 @@ export const strings = {
       ivRowAriaLabel: 'Uafhængig variabel {n}, {field}',
       dvRowAriaLabel: 'Afhængig variabel {n}, {field}',
       checkLabel: 'Tjek mine variable',
+      /** Tooltip on the Tjek button when no values have been entered yet (so a
+       *  click would produce a uniformly empty/wrong result). */
+      tjekDisabledEmpty: 'Indtast mindst én værdi for at tjekke',
+      /** Tooltip on the Tjek button when the values are unchanged since the
+       *  last Tjek (re-clicking would yield an identical result). */
+      tjekDisabledClean: 'Ingen ændringer siden sidste tjek',
       /** Tooltip on a locked cell (hover + focus) — full string form.
        *  Used as the fallback when an author passes a `lockedTooltip` prop
        *  override (which keeps the verbal "Korrekt." prefix verbatim). The

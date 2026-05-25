@@ -1,0 +1,15 @@
+## Formål
+Side-by-side visning af kandidat-stilarter for "disabled" tilstanden på
+`HintBucket` og `Tjek`-knappen, så vi kan vælge én konsistent visuel familie
+i stedet for at iterere på den faktiske kode.
+
+## Sammenhæng
+F3 fra polish-runden: i dag bruger `HintBucket` `bg-slate-100` + per-årsag
+glyfer, mens `Tjek` bruger `bg-slate-50` + tooltip-only. To akser at vælge på:
+
+1. **Grå-skygge** — én fælles `slate-50`, én fælles `slate-100`, eller to
+   skygger bundet til semantik ("midlertidig" vs "låst").
+2. **Visuel rigdom** — per-årsag glyf/cue, eller tooltip-only.
+
+Vælg et skema fra galleriet og opdatér så `HintBucket.tsx`,
+`PhaseFooter.tsx` og `VariableTable.tsx` (`InWidgetTjekButton`) til at matche.

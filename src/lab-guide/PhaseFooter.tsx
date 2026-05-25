@@ -1,6 +1,6 @@
 // Bottom-of-phase footer: previous/next buttons + gate-block tooltip.
 import type { Phase } from '@/lib/schema';
-import { type ReactNode, useContext } from 'react';
+import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ResetWorkButton } from './ResetWorkButton';
 import { useRunner } from './RunnerContext';
 import { Tooltip } from './Tooltip';
@@ -8,6 +8,11 @@ import { gateMessage, isGateSatisfied, widgetSatisfied } from './gates';
 import { strings } from './strings.da';
 import { HintBucket } from './widgets/HintBucket';
 import { ToastContext } from './widgets/ToastContext';
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 interface Props {
   phases: Phase[];
@@ -79,6 +84,42 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
   // keeps the real attribute. The click handler no-ops while disabled either way.
   const disabledReason = activeCheck?.disabledReason;
 
+  // "Tjek dim" — disabled WITH a reason (empty values, clean snapshot, below
+  // min-words, …). Renders a slightly lighter slate-50 shell to read as
+  // "temporarily quiet, not broken" vs. the fully-disabled slate-100 gate lock.
+  const tjekDim = activeCheck?.disabled === true && disabledReason != null;
+
+  // Gate-unlock flash: emerald-only, fires exactly once on the false → true
+  // transition of `gateOk`. Per F1 the button never flashes on a per-Tjek
+  // outcome; the only progress signal is "you just unlocked the next phase".
+  // `flashNonce` re-mounts the wrapper so the CSS keyframe re-fires each
+  // time the gate re-opens (e.g. unlock cell → re-Tjek → gate closes then
+  // re-opens). Initial mount with an already-satisfied gate does NOT flash
+  // (a returning student should not see the celebration replay on every
+  // visit to a completed phase).
+  const [flashNonce, setFlashNonce] = useState(0);
+  const [flashWithTransition, setFlashWithTransition] = useState(true);
+  const prevGateOkRef = useRef(gateOk);
+  useEffect(() => {
+    if (prevGateOkRef.current === false && gateOk === true) {
+      setFlashWithTransition(!prefersReducedMotion());
+      setFlashNonce((n) => n + 1);
+    }
+    prevGateOkRef.current = gateOk;
+  }, [gateOk]);
+
+  const flashActive = flashNonce > 0;
+
+  const baseButtonClass = 'px-3 py-1.5 rounded-md text-sm font-medium border transition-colors';
+  // During the flash window, drop the bg-* so the wrapper bg bleeds through and
+  // fades alongside the keyframe; `!important` would defeat the keyframe.
+  const enabledClass = flashActive
+    ? 'border-accent-400 text-slate-700 hover:bg-accent-50'
+    : 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50';
+  const dimClass = 'bg-slate-50 border-slate-300 text-slate-400 cursor-not-allowed';
+  const fullyDisabledClass = 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed';
+  const stateClass = !buttonDisabled ? enabledClass : tjekDim ? dimClass : fullyDisabledClass;
+
   const nextButton = (
     <button
       type="button"
@@ -96,18 +137,28 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
       }}
       disabled={buttonDisabled && disabledReason == null}
       aria-disabled={disabledReason != null || undefined}
-      className={`
-        px-3 py-1.5 rounded-md text-sm font-medium border transition-colors
-        ${
-          !buttonDisabled
-            ? 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50'
-            : 'bg-slate-100 border-slate-300 text-slate-400 cursor-not-allowed'
-        }
-      `}
+      className={`${baseButtonClass} ${stateClass}`}
     >
       {buttonLabel}
     </button>
   );
+
+  // Emerald wrapper renders only when the gate is currently satisfied AND a
+  // transition has fired. Re-renders are keyed on `flashNonce` so each gate-
+  // unlock event remounts the wrapper and re-fires the keyframe.
+  const flashedButton =
+    flashActive && gateOk ? (
+      <span
+        key={flashNonce}
+        className={`inline-block rounded-md bg-emerald-100${
+          flashWithTransition ? ' animate-vt-flash-fade-to-white' : ''
+        }`}
+      >
+        {nextButton}
+      </span>
+    ) : (
+      nextButton
+    );
 
   return (
     <div className="mt-8 no-print">
@@ -144,11 +195,11 @@ export function PhaseFooter({ phases, middleActions, onSwitchInquiryForm, onRese
         </div>
         <div className="flex-1 flex items-center justify-end gap-2">
           {disabledReason != null ? (
-            <Tooltip content={disabledReason} align="right">
-              {nextButton}
+            <Tooltip content={disabledReason} align="right" openDelayMs={500}>
+              {flashedButton}
             </Tooltip>
           ) : (
-            nextButton
+            flashedButton
           )}
         </div>
       </div>

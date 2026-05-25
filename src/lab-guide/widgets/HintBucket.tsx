@@ -7,6 +7,12 @@
 // duplicated the counter). Empty-bucket click is a no-op + tooltip with the
 // countdown or generic empty copy.
 //
+// Four distinct disabled visuals (today's grey shell stays the family default):
+//   1. Empty + countdown — M:SS label replaces the token digit.
+//   2. Empty + no refill — icon dims to opacity-60 (depleted).
+//   3. Phase has no hints (hintPoolSize=0) — small lock glyph overlay.
+//   4. Tokens but no spendable targets — full-opacity icon, tooltip only.
+//
 // `placement === 'footer'`: unconditionally visible while the current phase
 // has eligible widgets (LabGuide's footer mounts it inside that gate).
 // `placement === 'inline'`: rendered inside a specific widget; suppresses
@@ -33,7 +39,7 @@ function formatCountdown(ms: number): string {
 }
 
 export function HintBucket({ placement }: Props) {
-  const { state, bucketView, phaseHasHintEligibleWidgets } = useRunner();
+  const { state, bucketView, phaseHasHintEligibleWidgets, phaseSpendableTargetCount } = useRunner();
   const { spendMode, enterSpendMode, exitSpendMode } = useHintSpend();
   const phaseScope = usePhaseScope();
   const currentPhaseId = state.currentPhaseId;
@@ -50,15 +56,31 @@ export function HintBucket({ placement }: Props) {
   const { tokens, cap, msUntilNext, disabled } = bucketView(currentPhaseId);
   const armed = spendMode.kind === 'active' && spendMode.phaseId === currentPhaseId;
   const empty = tokens === 0;
-  const canArm = !disabled && !empty;
+  const noTargets = !disabled && !empty && phaseSpendableTargetCount(currentPhaseId) === 0;
+  const canArm = !disabled && !empty && !noTargets;
 
-  const tooltip = disabled
-    ? strings.widgets.hints.bucketDisabled
+  // Discriminated disabled cause — drives both tooltip + visual variant.
+  type DisabledReason = 'phase' | 'countdown' | 'depleted' | 'no-targets' | null;
+  const disabledReason: DisabledReason = disabled
+    ? 'phase'
     : empty
       ? msUntilNext !== null
+        ? 'countdown'
+        : 'depleted'
+      : noTargets
+        ? 'no-targets'
+        : null;
+
+  const tooltip =
+    disabledReason === 'phase'
+      ? strings.widgets.hints.bucketDisabled
+      : disabledReason === 'countdown' && msUntilNext !== null
         ? format(strings.widgets.hints.bucketCountdown, { time: formatCountdown(msUntilNext) })
-        : strings.widgets.hints.bucketEmpty
-      : undefined;
+        : disabledReason === 'depleted'
+          ? strings.widgets.hints.bucketEmpty
+          : disabledReason === 'no-targets'
+            ? strings.widgets.hints.bucketNoTargets
+            : undefined;
 
   const ariaLabel = armed
     ? strings.widgets.hints.bucketSpendModeAriaLabel
@@ -69,6 +91,11 @@ export function HintBucket({ placement }: Props) {
     : canArm
       ? 'border-accent-400 bg-white text-slate-700 hover:bg-accent-50'
       : 'border-slate-300 bg-slate-100 text-slate-400 cursor-not-allowed';
+
+  // Per-reason icon styling. Countdown swaps the digit for the M:SS label;
+  // depleted dims the icon (run-out feel); phase-disabled adds a lock glyph
+  // overlay; no-targets stays at full opacity (the tooltip carries the meaning).
+  const iconOpacity = disabledReason === 'depleted' ? 'opacity-60' : '';
 
   const button = (
     <button
@@ -83,16 +110,28 @@ export function HintBucket({ placement }: Props) {
       aria-disabled={!canArm || undefined}
       className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${colorClass}`}
     >
-      <span aria-hidden="true" className="text-base leading-none">
+      <span aria-hidden="true" className={`relative text-base leading-none ${iconOpacity}`}>
         💡
+        {disabledReason === 'phase' && (
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-0.5 -right-0.5 inline-flex h-2.5 w-2.5 items-center justify-center rounded-full bg-slate-200 text-[8px] leading-none text-slate-500"
+          >
+            🔒
+          </span>
+        )}
       </span>
-      <span className="tabular-nums">{tokens}</span>
+      {disabledReason === 'countdown' && msUntilNext !== null ? (
+        <span className="tabular-nums text-xs text-slate-500">{formatCountdown(msUntilNext)}</span>
+      ) : (
+        <span className="tabular-nums">{tokens}</span>
+      )}
     </button>
   );
 
   if (tooltip) {
     return (
-      <Tooltip content={tooltip} align="right">
+      <Tooltip content={tooltip} align="right" openDelayMs={500}>
         {button}
       </Tooltip>
     );

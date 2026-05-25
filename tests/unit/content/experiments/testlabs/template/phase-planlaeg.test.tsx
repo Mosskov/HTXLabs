@@ -207,9 +207,11 @@ describe('template phase 1 — negative paths', () => {
     expect(tip).toHaveAttribute('role', 'tooltip');
     expect(tip).toHaveAttribute('data-open', 'false');
 
-    // It opens on hover of the check button — before any text is typed.
+    // It opens on hover of the check button — before any text is typed. The
+    // disabled-button tooltip carries a 500 ms openDelayMs (F2), so wait for
+    // the timer to fire before asserting.
     await user.hover(footerButton());
-    expect(tip).toHaveAttribute('data-open', 'true');
+    await waitFor(() => expect(tip).toHaveAttribute('data-open', 'true'));
 
     // Still too short after a few words — the button stays aria-disabled.
     const textarea = document.getElementById('rr-hypotese') as HTMLTextAreaElement;

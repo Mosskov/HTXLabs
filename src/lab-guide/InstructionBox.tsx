@@ -110,7 +110,10 @@ function StepRow({ step, state }: { step: NormalizedStep; state: StepState }) {
         {marker}
       </span>
       {state === 'locked' ? (
-        <Tooltip content={step.lockedHint ?? strings.instructionBox.stepLockedHint}>
+        <Tooltip
+          content={step.lockedHint ?? strings.instructionBox.stepLockedHint}
+          openDelayMs={500}
+        >
           {textNode}
         </Tooltip>
       ) : (

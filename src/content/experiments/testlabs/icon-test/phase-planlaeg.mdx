@@ -5,6 +5,9 @@ import { SimulationClosed } from '@/icons/SimulationClosed';
 import { HintAvailable1 } from '@/icons/HintAvailable1';
 import { HintAvailable2 } from '@/icons/HintAvailable2';
 import { HintAvailable3 } from '@/icons/HintAvailable3';
+import { BulbCracked } from '@/icons/BulbCracked';
+import { BulbFilling } from '@/icons/BulbFilling';
+import { BulbEmoji } from '@/icons/BulbEmoji';
 
 export const icons = [
   { name: 'TheoryOpen', Comp: TheoryOpen },
@@ -14,6 +17,8 @@ export const icons = [
   { name: 'HintAvailable1', Comp: HintAvailable1 },
   { name: 'HintAvailable2', Comp: HintAvailable2 },
   { name: 'HintAvailable3', Comp: HintAvailable3 },
+  { name: 'BulbEmoji (💡 reference)', Comp: BulbEmoji },
+  { name: 'BulbCracked', Comp: BulbCracked },
 ];
 
 export const sizes = [
@@ -22,6 +27,8 @@ export const sizes = [
   { label: 'w-12 h-12 (48px)', cls: 'w-12 h-12' },
   { label: 'w-16 h-16 (64px)', cls: 'w-16 h-16' },
 ];
+
+export const fillLevels = [0, 15, 35, 60, 85, 100];
 
 <div className="space-y-8">
   {icons.map(({ name, Comp }) => (
@@ -37,4 +44,25 @@ export const sizes = [
       </div>
     </section>
   ))}
+
+  {/* BulbFilling — separate section since it takes a `fillPct` prop. Render a
+       grid: rows = size, columns = fill level. */}
+  <section className="border border-slate-200 rounded p-4">
+    <h3 className="font-mono text-sm text-navy mb-3">BulbFilling (fillPct 0–100)</h3>
+    <div className="space-y-4">
+      {sizes.map(({ label, cls }) => (
+        <div key={label} className="flex items-end gap-8">
+          <div className="flex flex-col items-start gap-1 w-32 shrink-0">
+            <span className="text-xs text-slate-500">{label}</span>
+          </div>
+          {fillLevels.map((pct) => (
+            <div key={pct} className="flex flex-col items-center gap-2">
+              <BulbFilling fillPct={pct} className={cls} />
+              <span className="text-xs text-slate-500">{pct}%</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  </section>
 </div>

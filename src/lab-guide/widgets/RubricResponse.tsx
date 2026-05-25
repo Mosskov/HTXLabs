@@ -127,7 +127,8 @@ export function RubricResponse({
   allowPaste,
   embedder = defaultEmbedder,
 }: Props) {
-  const { state, setWidgetValue, spendAndRevealRubricTier, bucketView } = useRunner();
+  const { state, setWidgetValue, spendAndRevealRubricTier, bucketView, registerSpendableCount } =
+    useRunner();
   const { spendMode } = useHintSpend();
   const text = (state.widgetValues[id] as string | undefined) ?? '';
   const tiers = state.rubricHintTiers[id] ?? {};
@@ -211,6 +212,30 @@ export function RubricResponse({
   // Always-register pattern — even with a bad rubric, we publish satisfied:false
   // from mount so hooks order is stable across the render-branch below.
   useRegisteredWidgetState(id, { kind: 'rubric', satisfied }, [satisfied]);
+
+  // Live spendable-target count: the number of failing criteria that could
+  // still accept a paid hint. Mirrors the eligibility rule used to render
+  // `failingCriteria` below (required always counts; optional only when
+  // `requiredSatisfied && evaluable`). HintBucket sums this across the phase
+  // to disable when tokens > 0 but nothing is left to buy.
+  const rubricSpendableCount = (() => {
+    if (!parsed.ok || !result) return 0;
+    let count = 0;
+    for (const c of result.criteria) {
+      if (c.satisfied || c.hints.length === 0) continue;
+      if (c.required) {
+        count++;
+        continue;
+      }
+      if (result.requiredSatisfied && c.evaluable) count++;
+    }
+    return count;
+  })();
+  useEffect(() => {
+    if (!parsed.ok) return;
+    registerSpendableCount(id, rubricSpendableCount);
+    return () => registerSpendableCount(id, null);
+  }, [id, parsed.ok, rubricSpendableCount, registerSpendableCount]);
 
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   const meetsMinWords = typeof minWords !== 'number' || words >= minWords;
@@ -489,7 +514,7 @@ export function RubricResponse({
             <>
               <HintBucket placement="inline" />
               {wordCountHint != null ? (
-                <Tooltip content={wordCountHint} align="right">
+                <Tooltip content={wordCountHint} align="right" openDelayMs={500}>
                   {checkButton}
                 </Tooltip>
               ) : (

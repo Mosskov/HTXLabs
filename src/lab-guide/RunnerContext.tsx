@@ -115,6 +115,15 @@ interface RunnerApi {
    *  — separate from value-bearing widget state — so the ticker/effect can
    *  decide which phase has hint-eligible widgets mounted under its scope. */
   registerHintEligibility: (id: string, eligibility: HintEligibility | null) => void;
+  /** Register (or, with `null`, clear) a widget's live spendable-target count.
+   *  Each hint-eligible widget reports how many of its targets currently have
+   *  a remaining ladder + are eligible to receive a paid hint. The HintBucket
+   *  reads `phaseSpendableTargetCount(currentPhaseId)` to decide whether to
+   *  stay armable: tokens > 0 with no spendable target is a dead click. */
+  registerSpendableCount: (id: string, count: number | null) => void;
+  /** Sum of spendable-target counts across all hint-eligible widgets whose
+   *  `phaseScope === phaseId`. `0` means "nothing to buy here right now". */
+  phaseSpendableTargetCount: (phaseId: string) => number;
   /** True iff some widget has registered hint eligibility for the named
    *  phase. Drives ticker mount + bucket visibility. */
   phaseHasHintEligibleWidgets: (phaseId: string) => boolean;
@@ -184,6 +193,9 @@ export function RunnerProvider({
   // Hint-eligibility registry — separate from value-bearing widget state
   // because it is structural (phase ownership) not value-bearing.
   const hintEligibilityRef = useRef<Record<string, HintEligibility>>({});
+  // Live per-widget spendable-target count. Read alongside hintEligibilityRef
+  // to scope counts to a phase. Absence means "nothing reported"; treated as 0.
+  const spendableCountRef = useRef<Record<string, number>>({});
   // Seed from persisted state so sim-mirror consumers (sim-mode DataTable)
   // render the restored rows on the first paint, not after the sim's first
   // post-mount `onState` publish.
@@ -410,6 +422,26 @@ export function RunnerProvider({
     setTick((t) => t + 1);
   }, []);
 
+  const registerSpendableCount = useCallback((id: string, count: number | null) => {
+    if (count === null) {
+      delete spendableCountRef.current[id];
+    } else {
+      spendableCountRef.current[id] = Math.max(0, count);
+    }
+    // Force HintBucket consumers (subscribed via gateCtx tick) to re-evaluate
+    // the armability of the bucket on the next paint.
+    setTick((t) => t + 1);
+  }, []);
+
+  const phaseSpendableTargetCount = useCallback((phaseId: string) => {
+    let total = 0;
+    for (const [id, eligibility] of Object.entries(hintEligibilityRef.current)) {
+      if (eligibility.phaseId !== phaseId) continue;
+      total += spendableCountRef.current[id] ?? 0;
+    }
+    return total;
+  }, []);
+
   const phaseHasHintEligibleWidgets = useCallback((phaseId: string) => {
     for (const eligibility of Object.values(hintEligibilityRef.current)) {
       if (eligibility.phaseId === phaseId) return true;
@@ -581,6 +613,8 @@ export function RunnerProvider({
     registerWidgetState,
     registerWidgetCheck,
     registerHintEligibility,
+    registerSpendableCount,
+    phaseSpendableTargetCount,
     phaseHasHintEligibleWidgets,
     phaseHintEligibleWidgetIds,
     widgetChecks: widgetCheckRef.current,

@@ -218,6 +218,10 @@ function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
   return nameOk && symbolOk && unitOk;
 }
 
+function entryEmpty(e: VariableEntry): boolean {
+  return e.name.trim() === '' && e.symbol.trim() === '' && e.unit.trim() === '';
+}
+
 function sectionFilled(rows: VariableEntry[], bounds: Bounds, requireUnits: boolean): boolean {
   if (rows.length < bounds.min) return false;
   if (Number.isFinite(bounds.max) && rows.length > bounds.max) return false;
@@ -309,6 +313,14 @@ interface FlashPayload {
   withTransition: boolean;
 }
 
+/** Reason the Tjek button is dimmed (and clicking it is a no-op):
+ *   - `'empty'`  — no values entered anywhere, so a Tjek would just report
+ *                  uniformly empty cells.
+ *   - `'clean'`  — every section's snapshot still matches the values, so a
+ *                  re-Tjek would produce the same verdict as the prior click.
+ *  `null` means the button is armed.  */
+type TjekDimReason = 'empty' | 'clean' | null;
+
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -353,6 +365,7 @@ export function VariableTable({
     setVariableTableLastChecked,
     lockVtCells,
     unlockVtCell,
+    registerSpendableCount,
   } = useRunner();
   const { spendMode, exitSpendMode } = useHintSpend();
 
@@ -548,6 +561,24 @@ export function VariableTable({
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashNonceRef = useRef(0);
 
+  // Tjek-dim derivation. When `expected` is not set the Tjek button isn't
+  // rendered at all, so the dim reason is moot — keep it `null` so any
+  // downstream consumer sees an armed default.
+  const valuesAllEmpty =
+    values.iv.every(entryEmpty) &&
+    values.dv.every(entryEmpty) &&
+    values.constants.every(entryEmpty);
+  const allSectionsClean =
+    lastChecked !== undefined && sectionChecked.iv && sectionChecked.dv && sectionChecked.constants;
+  const tjekDimReason: TjekDimReason =
+    expected === undefined ? null : valuesAllEmpty ? 'empty' : allSectionsClean ? 'clean' : null;
+  const tjekDimTooltip =
+    tjekDimReason === 'empty'
+      ? strings.widgets.variableTable.tjekDisabledEmpty
+      : tjekDimReason === 'clean'
+        ? strings.widgets.variableTable.tjekDisabledClean
+        : undefined;
+
   // Clear any pending flash timer on unmount so a late tick can't call
   // setState on an unmounted widget (e.g. lab teardown mid-flash).
   useEffect(
@@ -559,6 +590,9 @@ export function VariableTable({
 
   function handleTjek() {
     if (!expected || !errors) return;
+    // Dimmed Tjek is a no-op — the click hit a no-changes-or-empty state. Let
+    // the dim affordance carry the signal; don't snapshot the values again.
+    if (tjekDimReason !== null) return;
     setVariableTableLastChecked(id, values);
 
     const newlyLocked: string[] = [];
@@ -636,8 +670,10 @@ export function VariableTable({
   // and we're not in open mode), the in-widget Tjek button is suppressed and
   // the PhaseFooter drives `handleTjek` instead. The check object is stable;
   // we mutate it in place each render so the footer reads the latest closure.
-  // VariableTable's check is synchronous — never disabled, never pending — so
-  // the registration `revision` is a constant `0`.
+  // VariableTable's check is synchronous (never pending), but it CAN be dimmed
+  // — empty cells, or no-edits-since-last-Tjek — so disabled+disabledReason
+  // flow through to the footer's Tooltip wrap. The button flash itself fires
+  // from the footer (on gate-unlock transition), not from the widget.
   const footerActive = checkInFooter && expected !== undefined && state.mode !== 'open';
   const checkRef = useRef<WidgetCheck>({
     label: '',
@@ -647,7 +683,13 @@ export function VariableTable({
   });
   checkRef.current.label = checkLabel ?? strings.widgets.variableTable.checkLabel;
   checkRef.current.run = handleTjek;
-  useRegisteredWidgetCheck(id, footerActive, checkRef, 0);
+  checkRef.current.disabled = tjekDimReason !== null;
+  checkRef.current.disabledReason = tjekDimTooltip;
+  // Re-fire the registration whenever the dim reason changes so the footer
+  // re-reads the live `disabled`/`disabledReason` (most state changes already
+  // re-render the footer via runner dispatch; this is the belt-and-braces).
+  const checkRevision = tjekDimReason === 'empty' ? 1 : tjekDimReason === 'clean' ? 2 : 0;
+  useRegisteredWidgetCheck(id, footerActive, checkRef, checkRevision);
 
   const tiers = state.variableTableHintTiers[id] ?? {};
   const reveals = state.variableTableHintReveals?.[id] ?? {};
@@ -731,6 +773,39 @@ export function VariableTable({
 
     return { cap, nextTier, freeDiagnostic, popupEntries };
   }
+
+  // Live spendable-target count — number of failing cells with a remaining
+  // ladder. HintBucket reads the phase-aggregate to disable when tokens > 0
+  // but nothing is left to buy. cellInfoFor already gates `nextTier` on the
+  // section being clean + the cell having an unspent tier, so locked /
+  // matched / mid-edit cells naturally drop out.
+  let spendableCount = 0;
+  if (expected && errors) {
+    for (const { section, expectedArr, matches } of [
+      { section: 'iv' as const, expectedArr: ivExpectedArr, matches: errors.iv },
+      { section: 'dv' as const, expectedArr: dvExpectedArr, matches: errors.dv },
+      {
+        section: 'constants' as const,
+        expectedArr: constantsExpectedArr ?? [],
+        matches: errors.constants,
+      },
+    ]) {
+      if (!matches) continue;
+      const studentRows = values[section];
+      for (let s = 0; s < studentRows.length; s++) {
+        for (const cell of CELLS) {
+          if (cellInfoFor(section, expectedArr, matches, s, cell).nextTier !== null) {
+            spendableCount++;
+          }
+        }
+      }
+    }
+  }
+  useEffect(() => {
+    if (expected === undefined) return;
+    registerSpendableCount(id, spendableCount);
+    return () => registerSpendableCount(id, null);
+  }, [id, expected, spendableCount, registerSpendableCount]);
 
   function missingMessagesFor(
     section: 'iv' | 'dv' | 'constants',
@@ -991,13 +1066,12 @@ export function VariableTable({
           {!footerActive && (
             <>
               <HintBucket placement="inline" />
-              <button
-                type="button"
+              <InWidgetTjekButton
                 onClick={handleTjek}
-                className="px-3 py-1.5 rounded-md text-sm font-medium border transition-colors bg-white border-accent-400 text-slate-700 hover:bg-accent-50"
-              >
-                {checkLabel ?? strings.widgets.variableTable.checkLabel}
-              </button>
+                label={checkLabel ?? strings.widgets.variableTable.checkLabel}
+                dimReason={tjekDimReason}
+                dimTooltip={tjekDimTooltip}
+              />
             </>
           )}
         </div>
@@ -1511,4 +1585,50 @@ function Field({
       )}
     </div>
   );
+}
+
+/** In-widget Tjek button — dims when there's nothing to check (empty cells
+ *  or no edits since the last Tjek). Never flashes: per F1, the only
+ *  emerald-flash signal lives on the footer button at the moment the phase
+ *  gate transitions to satisfied. */
+function InWidgetTjekButton({
+  onClick,
+  label,
+  dimReason,
+  dimTooltip,
+}: {
+  onClick: () => void;
+  label: string;
+  dimReason: TjekDimReason;
+  dimTooltip: string | undefined;
+}) {
+  const dimmed = dimReason !== null;
+  const baseClass = 'px-3 py-1.5 rounded-md text-sm font-medium border transition-colors';
+  const stateClass = dimmed
+    ? 'bg-slate-50 border-slate-300 text-slate-400 cursor-not-allowed'
+    : 'bg-white border-accent-400 text-slate-700 hover:bg-accent-50';
+
+  const button = (
+    <button
+      type="button"
+      onClick={() => {
+        if (dimmed) return;
+        onClick();
+      }}
+      disabled={dimmed && dimTooltip == null}
+      aria-disabled={dimTooltip != null || undefined}
+      className={`${baseClass} ${stateClass}`}
+    >
+      {label}
+    </button>
+  );
+
+  if (dimmed && dimTooltip != null) {
+    return (
+      <Tooltip content={dimTooltip} align="right" openDelayMs={500}>
+        {button}
+      </Tooltip>
+    );
+  }
+  return button;
 }

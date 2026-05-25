@@ -11,8 +11,13 @@ import { describe, expect, it } from 'vitest';
 
 const phase: Phase = { id: 'p', title: 'P', gate: { type: 'always' } };
 
-function Eligible({ id }: { id: string }) {
+function Eligible({ id, spendable = 1 }: { id: string; spendable?: number }) {
   useRegisteredHintEligibility(id, true, 'rubric');
+  const { registerSpendableCount } = useRunner();
+  useEffect(() => {
+    registerSpendableCount(id, spendable);
+    return () => registerSpendableCount(id, null);
+  }, [id, spendable, registerSpendableCount]);
   return null;
 }
 
