@@ -17,12 +17,14 @@
 //   `{ lastCheckedText, lastCheckedDependsOn, requiredSatisfied, embedderDown }`.
 // On reload, that record hydrates the gate so a prior pass survives without
 // forcing a re-Tjek. The full `RubricResult` (criteria, hints, misconceptions)
-// is component-state only — the panel's Tips list will be empty until the
-// next Tjek, but spent tier counters survive in `state.rubricHintTiers` so
-// the very next Tjek immediately re-paints every paid tier without spending
-// again. The verdict-revealed bit + frozen row-id snapshot survive in
-// `state.rubricVerdictsRevealed[id]` / `state.rubricVerdictRowIds[id]`; the
-// verdict checklist re-materializes on the first fresh post-reload Tjek.
+// is component-state only, but the panel survives across remount via two
+// compact `widgetValues` snapshots: `${id}:panelEntries` for the Tips
+// bullets, and `${id}:verdictRows` for the "Hvad mangler" checklist. Both
+// are written alongside the pass record at every evaluate; the verdict
+// snapshot is also written at reveal-spend time, and the Tips snapshot
+// is also written at every paid spend. Spent tier counters survive in
+// `state.rubricHintTiers`. The verdict-revealed bit + frozen row-id list
+// survive in `state.rubricVerdictsRevealed[id]` / `state.rubricVerdictRowIds[id]`.
 // The sticky-panel one-way bit lives in `widgetValues[${id}:panelShown]`.
 //
 // Hint system: request-driven, per-phase token bucket. The textarea itself is
@@ -59,7 +61,9 @@ import { useRegisteredHintEligibility } from '../useRegisteredHintEligibility';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
+import type { HintPopupEntry } from './HintPopup';
 import { ProtectedTextarea } from './ProtectedInput';
+import { TieredHintList } from './TieredHintList';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
@@ -88,12 +92,105 @@ function readPersisted(value: unknown): PersistedPass | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Bullet shape for the panel's Tips list — same author-priority walk as the
- *  retired focus-popup, just stripped of the per-criterion `reveal` tone. */
-interface PanelEntry {
-  key: string;
-  text: string;
-  tone: 'misconception' | 'hint';
+// Persisted-across-reload snapshot of the panel's bullets. Written at every
+// evaluate + every paid spend; read on remount when `result` is null so the
+// student sees the same Tips list they left. Zod-validated; a malformed
+// payload (e.g. hand-edited localStorage) lands as `null` and the panel
+// renders empty until the next Tjek. `group` is required in the snapshot
+// (the writer always sets it to the parent criterion label) even though
+// `HintPopupEntry.group` is `?`-optional on the consumer side.
+const PanelEntrySchema = z
+  .object({
+    key: z.string(),
+    text: z.string(),
+    tone: z.enum(['misconception', 'hint']),
+    group: z.string(),
+  })
+  .strict();
+const PanelSnapshotSchema = z.object({ entries: z.array(PanelEntrySchema) }).strict();
+type PanelSnapshot = z.infer<typeof PanelSnapshotSchema>;
+
+function readPanelSnapshot(value: unknown): PanelSnapshot | null {
+  const parsed = PanelSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+// Persisted-across-reload snapshot of the verdict-checklist rows ("Hvad
+// mangler" section). The row set is already frozen at reveal-spend time
+// via `state.rubricVerdictRowIds[id]`; this snapshot adds the per-row
+// label + live ✓/➔ satisfaction bit so the section keeps rendering after
+// a remount drops the live `RubricResult`. Refreshed on every evaluate +
+// at the initial verdict-reveal dispatch. Zod-validated; a malformed
+// payload lands as `null` and the section renders empty until next Tjek.
+const VerdictRowSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    satisfied: z.boolean(),
+  })
+  .strict();
+const VerdictRowsSnapshotSchema = z.object({ rows: z.array(VerdictRowSchema) }).strict();
+type VerdictRow = z.infer<typeof VerdictRowSchema>;
+type VerdictRowsSnapshot = z.infer<typeof VerdictRowsSnapshotSchema>;
+
+function readVerdictRowsSnapshot(value: unknown): VerdictRowsSnapshot | null {
+  const parsed = VerdictRowsSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Resolve the frozen rowIds against a live result. Missing criteria (rubric
+ *  edited mid-flight) are skipped defensively — same best-effort policy as
+ *  the render-time row mapping. */
+function computeVerdictRows(result: RubricResult, rowIds: ReadonlyArray<string>): VerdictRow[] {
+  const rows: VerdictRow[] = [];
+  for (const rid of rowIds) {
+    const c = result.criteria.find((x) => x.id === rid);
+    if (!c) continue;
+    rows.push({ id: rid, label: c.label, satisfied: c.satisfied });
+  }
+  return rows;
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Author-priority walk used by both the live panel and the snapshot writer.
+ *  Iterates criteria once and, per criterion, emits its triggered
+ *  misconceptions followed by its paid tiers — so TieredHintList groups each
+ *  criterion's bullets as one contiguous block under its label header. */
+function computePanelEntries(
+  result: RubricResult,
+  tiers: Record<string, number>,
+): HintPopupEntry[] {
+  const entries: HintPopupEntry[] = [];
+  for (const c of result.criteria) {
+    for (const m of c.misconceptions) {
+      if (m.status !== VETO_STATUSES.TRIGGERED) continue;
+      entries.push({
+        key: `mis-${c.id}-${m.hint}`,
+        text: m.hint,
+        tone: 'misconception',
+        group: c.label,
+      });
+    }
+    const tier = tiers[c.id] ?? 0;
+    if (tier <= 0) continue;
+    const cap = c.hints.length;
+    const ladderTier = Math.min(tier, cap);
+    for (let i = 0; i < ladderTier; i++) {
+      const text = c.hints[i];
+      if (text === undefined) continue;
+      entries.push({
+        key: `tier-${c.id}-${i + 1}`,
+        text,
+        tone: 'hint',
+        group: c.label,
+      });
+    }
+  }
+  return entries;
 }
 
 interface Props {
@@ -169,7 +266,11 @@ export function RubricResponse({
 
   const persistedKey = `${id}:result`;
   const panelShownKey = `${id}:panelShown`;
+  const panelEntriesKey = `${id}:panelEntries`;
+  const verdictRowsKey = `${id}:verdictRows`;
   const persistedRaw = readPersisted(state.widgetValues[persistedKey]);
+  const panelSnapshot = readPanelSnapshot(state.widgetValues[panelEntriesKey]);
+  const verdictRowsSnapshot = readVerdictRowsSnapshot(state.widgetValues[verdictRowsKey]);
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
 
@@ -205,12 +306,31 @@ export function RubricResponse({
   // so this ref is the one thing that reliably stops a second `evaluateRubric`.
   const pendingRef = useRef(false);
 
+  // Tjek-flash state — emerald-only, mirrors VT cell pass-flash. Paints
+  // bg-emerald-100 on a passing Tjek (`requiredSatisfied` is the same bit
+  // that drives the gate). Cleared after 1500ms. The `nonce` key on the
+  // background wrapper restarts the CSS keyframe even when two consecutive
+  // passing Tjeks happen back-to-back. No rose-on-fail variant: panel
+  // bullets carry the failure feedback; rose would compete with them.
+  const [flash, setFlash] = useState<{ nonce: number; withTransition: boolean } | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashNonceRef = useRef(0);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  // Clear any pending flash timer on unmount so a late tick can't setState on
+  // an unmounted widget (matches VT's pattern).
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current !== null) clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
 
   // Derive the "what was checked last" pair from the persisted record so a
   // reload (no live `result`) still produces the right dirty/satisfied bits.
@@ -333,6 +453,41 @@ export function RubricResponse({
           embedderDown: skipped,
         };
         setWidgetValue(persistedKey, record);
+        // Snapshot the Tips list for cross-remount survival. `tiers` is the
+        // closed-over render-time value — Tjek itself never bumps tiers, so
+        // the snapshot reflects the just-evaluated `r` paired with the live
+        // tier state.
+        setWidgetValue(panelEntriesKey, { entries: computePanelEntries(r, tiers) });
+        // Verdict-rows snapshot refresh — only meaningful once the student
+        // has paid the verdict reveal (otherwise the section doesn't render
+        // at all). Closed-over `state.rubricVerdictRowIds[id]` is the
+        // frozen row set from reveal time; we recompute live ✓/➔ against
+        // the just-evaluated `r`.
+        const liveVerdictRowIds = state.rubricVerdictRowIds?.[id];
+        if (verdictsRevealed && liveVerdictRowIds) {
+          setWidgetValue(verdictRowsKey, {
+            rows: computeVerdictRows(r, liveVerdictRowIds),
+          });
+        }
+        // Tjek flash — emerald-only, on pass. A failing Tjek deliberately
+        // does NOT paint a rose flash on the textarea: the panel bullets
+        // (misconceptions + revealable hint ladders) are the failure
+        // feedback, and rose would compete with them. Embedder-down also
+        // skips (the amber banner is the feedback). Nonce bumps on every
+        // pass so a repeat passing-Tjek still restarts the keyframe.
+        if (!skipped && r.requiredSatisfied) {
+          const nonce = flashNonceRef.current + 1;
+          flashNonceRef.current = nonce;
+          setFlash({
+            nonce,
+            withTransition: !prefersReducedMotion(),
+          });
+          if (flashTimerRef.current !== null) clearTimeout(flashTimerRef.current);
+          flashTimerRef.current = setTimeout(() => {
+            if (mountedRef.current) setFlash(null);
+            flashTimerRef.current = null;
+          }, 1500);
+        }
       }
     } finally {
       pendingRef.current = false;
@@ -374,6 +529,17 @@ export function RubricResponse({
   // index access is safe.
   const verdictsRevealed = state.rubricVerdictsRevealed?.[id] === true;
   const persistedVerdictRowIds = state.rubricVerdictRowIds?.[id] ?? null;
+
+  // Resolved verdict-checklist rows for render. Live `result` wins so the
+  // ✓/➔ ticks update immediately on every Tjek; on a fresh remount (no
+  // result yet) the snapshot keeps the section visible until the next Tjek.
+  // `null` means the section should not render at all.
+  const verdictRows: VerdictRow[] | null =
+    verdictsRevealed && persistedVerdictRowIds
+      ? result
+        ? computeVerdictRows(result, persistedVerdictRowIds)
+        : (verdictRowsSnapshot?.rows ?? null)
+      : null;
 
   // Bad rubric: render disabled chrome so the page doesn't break.
   if (!parsed.ok) {
@@ -421,38 +587,12 @@ export function RubricResponse({
   // Panel entries: amber misconceptions from the latest `result` first, then
   // paid tier reveals walked in author order. Critically, this is independent
   // of `dirty`/`pending` — the F9 fix is that paid bullets must NOT vanish
-  // mid-edit. The list refreshes only on the next Tjek (when `result` is
-  // replaced).
-  const panelEntries: PanelEntry[] = (() => {
-    if (!result) return [];
-    const entries: PanelEntry[] = [];
-    for (const c of result.criteria) {
-      for (const m of c.misconceptions) {
-        if (m.status !== VETO_STATUSES.TRIGGERED) continue;
-        entries.push({
-          key: `mis-${c.id}-${m.hint}`,
-          text: m.hint,
-          tone: 'misconception',
-        });
-      }
-    }
-    for (const c of result.criteria) {
-      const tier = tiers[c.id] ?? 0;
-      if (tier <= 0) continue;
-      const cap = c.hints.length;
-      const ladderTier = Math.min(tier, cap);
-      for (let i = 0; i < ladderTier; i++) {
-        const text = c.hints[i];
-        if (text === undefined) continue;
-        entries.push({
-          key: `tier-${c.id}-${i + 1}`,
-          text,
-          tone: 'hint',
-        });
-      }
-    }
-    return entries;
-  })();
+  // mid-edit. Live `result` wins; on a fresh remount (no `result` yet) we
+  // hydrate from the persisted snapshot so bullets survive cross-phase nav
+  // and reload. Snapshot writes happen at evaluate + spend; see below.
+  const panelEntries: HintPopupEntry[] = result
+    ? computePanelEntries(result, tiers)
+    : (panelSnapshot?.entries ?? []);
 
   // First-show write of the sticky `panelShown` bit. The guard makes this
   // one-shot — once the bit lands in widgetValues, the effect's `panelShown`
@@ -511,6 +651,14 @@ export function RubricResponse({
     if (bucket.tokens < VERDICT_REVEAL_COST) return;
     const rowIds = computeVerdictRowIdsSnapshot();
     revealRubricVerdicts({ widgetId: id, rowIds });
+    // Write the initial verdict-rows snapshot synchronously alongside the
+    // reveal dispatch so the section keeps rendering across a remount even
+    // before the student re-Tjeks. `result` is guaranteed non-null here:
+    // `verdictUnlocked` is derived from `failingCriteria` which derives
+    // from `result`.
+    if (result) {
+      setWidgetValue(verdictRowsKey, { rows: computeVerdictRows(result, rowIds) });
+    }
   };
 
   const spendNextAvailableTier = () => {
@@ -518,6 +666,14 @@ export function RubricResponse({
     if (!target) return;
     spendAndRevealRubricTier({ widgetId: id, criterionId: target.id, hintCap: target.cap });
     exitSpendMode();
+    // Re-snapshot the Tips list against the projected next-tier value so the
+    // freshly-revealed bullet survives a remount. Spends only happen while
+    // `result` is non-null (failingCriteria reads from it), so the guard
+    // here is defensive.
+    if (result) {
+      const nextTiers = { ...tiers, [target.id]: target.tier + 1 };
+      setWidgetValue(panelEntriesKey, { entries: computePanelEntries(result, nextTiers) });
+    }
   };
 
   // Armed-textarea click: dispatch the next tier. We do NOT preventDefault on
@@ -577,9 +733,25 @@ export function RubricResponse({
     verdictRevealPillLabel ?? strings.widgets.rubric.verdictRevealPillLabel;
   const verdictRevealDisabled = bucket.tokens < VERDICT_REVEAL_COST;
 
+  // Default chrome mirrors VT's cell input class (`hover:bg-accent-50` +
+  // accent focus border, no ring). During the flash window the textarea is
+  // forced `!bg-transparent` so the wrapper's animated background bleeds
+  // through and fades alongside the keyframe (a static `!bg-emerald-100` /
+  // `!bg-rose-100` on the textarea would beat the keyframe's intermediate
+  // values and snap on/off instead of fading) — same trick VT uses.
+  const flashOverride = flash !== null ? ' !bg-transparent' : '';
   const textareaClass = armedSpendable
-    ? 'border-amber-400 ring-1 ring-amber-300 cursor-pointer'
-    : '';
+    ? `border-amber-400 ring-1 ring-amber-300 cursor-pointer${flashOverride}`
+    : `hover:bg-accent-50 focus:border-accent-400 focus:!ring-0${flashOverride}`;
+
+  // Flash wrapper class — emerald-only, mirrors VT's pass-flash keyframe.
+  // The `key={flashKey}` remount restarts the animation on repeat passing
+  // Tjeks. `rounded-md` matches the textarea's corners exactly so the
+  // bleed-through doesn't show beyond the input's edge.
+  const flashBg = flash !== null ? 'bg-emerald-100' : 'bg-transparent';
+  const flashAnim = flash?.withTransition ? ' animate-vt-flash-fade' : '';
+  const flashClass = `rounded-md ${flashBg}${flashAnim}`;
+  const flashKey = flash?.nonce ?? 0;
 
   return (
     <div className="my-4">
@@ -590,6 +762,18 @@ export function RubricResponse({
           for the pip-cluster's absolute positioning; `group` so the pips can
           react to focus-within. */}
       <span className="group/rr relative block w-full">
+        {/* Flash background — sits behind the textarea as an absolutely
+            positioned sibling so the `key={flashKey}` remount restarts the
+            keyframe WITHOUT remounting the textarea (which would drop the
+            student's focus / selection / IME composition mid-typing). The
+            textarea is forced `!bg-transparent` during the flash window so
+            the emerald/rose bleeds through and fades alongside the keyframe.
+            `pointer-events-none` keeps clicks/focus reaching the textarea. */}
+        <span
+          aria-hidden="true"
+          key={flashKey}
+          className={`pointer-events-none absolute inset-0 ${flashClass}`}
+        />
         <ProtectedTextarea
           id={`rr-${id}`}
           value={text}
@@ -625,97 +809,89 @@ export function RubricResponse({
           </span>
         )}
       </span>
-      {/* Panel sits to the left, word counter to the right. The panel is
-          capped at `max-w-md` so it cannot push the counter off; the row's
-          top edge meets the textarea's pip cluster ("the tick") so the pip
-          visually bridges into the panel. When the panel is absent the row
-          still right-aligns the counter (initial-render layout unchanged). */}
-      <div className={`mt-1 flex items-start gap-3 ${panelVisible ? '' : 'justify-end'}`}>
-        {panelVisible && (
-          <section
-            aria-label={strings.widgets.rubric.hintsLabel}
-            // `hint-popup` class is the same hook globals.css uses to
-            // suppress the project-wide `.prose ul > li::before` blue dot
-            // — see TieredHintList for the popup-side use.
-            className="hint-popup max-w-md flex-1 rounded-md border border-amber-300 bg-slate-50 p-3 text-sm"
-          >
-            {verdictsRevealed && result && persistedVerdictRowIds && (
-              <div className="mb-3">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {verdictsHeader}
-                </div>
-                <ul className="space-y-1">
-                  {persistedVerdictRowIds.map((rowId) => {
-                    // Live ✓/✗ lookup against the latest result. A criterion
-                    // missing from `result.criteria` (rubric edited mid-flight)
-                    // is skipped defensively — the engine rejects malformed
-                    // rubrics at parseRubric so this branch is best-effort.
-                    const c = result.criteria.find((x) => x.id === rowId);
-                    if (!c) return null;
-                    const template = c.satisfied
-                      ? strings.widgets.rubric.verdictPass
-                      : strings.widgets.rubric.verdictFail;
-                    return (
-                      <li
-                        key={`verdict-${rowId}`}
-                        className={c.satisfied ? 'text-emerald-800' : 'text-rose-800'}
-                      >
-                        {format(template, { label: c.label })}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
-            {/* Bullets — amber misconception lines first, then slate paid tier
-                text in author order. Matches the visual language of the retired
-                focus-popup so the student's mental model carries over. */}
-            <ul className="space-y-1">
-              {panelEntries.map((entry) => (
-                <li
-                  key={entry.key}
-                  className={`flex items-start gap-2 ${entry.tone === 'misconception' ? 'text-orange-800' : 'text-slate-700'}`}
-                >
-                  <span aria-hidden="true" className="select-none leading-snug">
-                    –
-                  </span>
-                  <span>{entry.text}</span>
-                </li>
-              ))}
-            </ul>
-
-            {verdictUnlocked && !verdictsRevealed && (
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleVerdictReveal}
-                  disabled={verdictRevealDisabled}
-                  className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {verdictRevealLabel}
-                </button>
-              </div>
-            )}
-          </section>
+      {/* Word counter sits directly below the textarea, right-aligned (C1).
+          Frees the panel below to use a content-driven width (C2) instead
+          of sharing a flex row with the counter. */}
+      <div id={helpId} aria-live="polite" className="mt-1 text-right text-xs">
+        {typeof maxChars === 'number' && (
+          <div className="text-slate-500">
+            {text.length} / {maxChars}
+          </div>
         )}
-        <div
-          id={helpId}
-          aria-live="polite"
-          className="shrink-0 whitespace-nowrap text-xs text-right"
-        >
-          {typeof maxChars === 'number' && (
-            <div className="text-slate-500">
-              {text.length} / {maxChars}
-            </div>
-          )}
-          {typeof maxWords === 'number' && (
-            <div className={overMaxWords ? 'text-amber-700' : 'text-slate-500'}>
-              {format(strings.widgets.rubric.wordCount, { n: words, max: maxWords })}
-            </div>
-          )}
-        </div>
+        {typeof maxWords === 'number' && (
+          <div className={overMaxWords ? 'text-amber-700' : 'text-slate-500'}>
+            {format(strings.widgets.rubric.wordCount, { n: words, max: maxWords })}
+          </div>
+        )}
       </div>
+
+      {/* Panel — own block below the counter. `max-w-[50ch]` (C2) caps the
+          reading line at ~optimal Danish width without sharing the row.
+          Collapse/pin visuals are intentionally deferred — they'll be
+          iterated alongside the per-criterion verdict redesign in the
+          D3 testlab pass. */}
+      {panelVisible && (
+        <section
+          aria-label={strings.widgets.rubric.hintsLabel}
+          // `hint-popup` class is the same hook globals.css uses to
+          // suppress the project-wide `.prose ul > li::before` blue dot
+          // — see TieredHintList for the popup-side use.
+          className="hint-popup mt-2 max-w-[50ch] rounded-md border border-amber-300 bg-slate-50 p-3 text-sm"
+        >
+          {verdictRows && verdictRows.length > 0 && (
+            <div className="mb-3">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {verdictsHeader}
+              </div>
+              <ul className="space-y-1">
+                {verdictRows.map((row) => {
+                  // Live ✓/➔ via `result.criteria` when present; snapshot
+                  // fallback after remount before the next Tjek. `➔` is
+                  // InstructionBox's active-step glyph ("do this next"),
+                  // not `✗` ("you got this wrong") — tone stays slate.
+                  const template = row.satisfied
+                    ? strings.widgets.rubric.verdictPass
+                    : strings.widgets.rubric.verdictFail;
+                  return (
+                    <li
+                      key={`verdict-${row.id}`}
+                      className={`flex items-start gap-2 ${row.satisfied ? 'text-emerald-800' : 'text-slate-700'}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`select-none leading-snug ${row.satisfied ? 'text-base' : 'text-sm'}`}
+                      >
+                        {row.satisfied ? '✓' : '➔'}
+                      </span>
+                      <span>{format(template, { label: row.label })}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* Bullets grouped per criterion (label as header). Shared
+                renderer with VT's HintPopup so the two surfaces stay visually
+                consistent — misconceptions in orange, paid tiers in slate,
+                dash glyph. Returns null when empty, so a hint-empty panel
+                that only carries the verdict-reveal pill renders cleanly. */}
+          <TieredHintList entries={panelEntries} />
+
+          {verdictUnlocked && !verdictsRevealed && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleVerdictReveal}
+                disabled={verdictRevealDisabled}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {verdictRevealLabel}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {(showAriaStatus || !footerActive) && (
         <div className="mt-2 flex items-center justify-end gap-3">

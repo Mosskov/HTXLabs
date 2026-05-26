@@ -144,6 +144,18 @@ describe('Tooltip', () => {
     expect(tip).toHaveAttribute('data-open', 'true');
   });
 
+  it('caps the open bubble width at 28ch so multi-word messages do not single-word-wrap (C5)', () => {
+    render(
+      <Tooltip content="En lang forklaring der ville knække til adskillige korte linjer uden bredde-cap">
+        <span>Udløser</span>
+      </Tooltip>,
+    );
+    const trigger = screen.getByText('Udløser');
+    const tip = screen.getByRole('tooltip');
+    fireEvent.pointerEnter(trigger);
+    expect(tip).toHaveClass('max-w-[28ch]');
+  });
+
   it('stays open through a focus-then-click tap sequence (PL2)', () => {
     render(
       <Tooltip content="Forklaring">

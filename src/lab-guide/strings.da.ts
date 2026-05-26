@@ -183,9 +183,13 @@ export const strings = {
       verdictRevealPillLabel: 'Vis hvad der mangler (2)',
       /** Per-criterion verdict-row templates. Vars: {label} = criterion
        *  label from the rubric. Framework chrome, not author-overridable
-       *  (consistent with the existing checklist row pattern). */
-      verdictPass: '✓ {label}',
-      verdictFail: '✗ {label}',
+       *  (consistent with the existing checklist row pattern). The glyph
+       *  (`✓` / `➔`) lives in the JSX, not the template — so it can be
+       *  sized + tone-coloured independently of the label. `➔` matches the
+       *  InstructionBox active-step marker ("do this next"), not `✗`
+       *  ("you got this wrong"). */
+      verdictPass: '{label}',
+      verdictFail: '{label}',
     },
     variableTable: {
       ivLabel: 'Uafhængig variabel',

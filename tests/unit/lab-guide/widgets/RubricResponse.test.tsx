@@ -7,7 +7,7 @@ import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { RubricResponse } from '@/lab-guide/widgets/RubricResponse';
 import { MockEmbedder } from '@/lib/rubric/embedder';
 import type { Gate, Phase } from '@/lib/schema';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -571,6 +571,145 @@ describe('RubricResponse — panel + spend (F9)', () => {
     // paid bullet must NOT vanish — that's the F9 fix.
     await user.type(textarea, ' yderligere tekst');
     expect(screen.getByText('rel-t1')).toBeInTheDocument();
+  });
+
+  // C7: bullets survive remount via the persisted panel-entries snapshot.
+  // The misconception path exercises the evaluate-time write.
+  it('panel bullets survive remount via the persisted snapshot (C7 evaluate write)', async () => {
+    const experimentId = 'rr-f9-c7/mis';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    const user = userEvent.setup();
+    const first = render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    await user.type(screen.getByRole('textbox'), 'pendul svinger frem og tilbage tydeligt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    expect(await screen.findByText('mis-pendul')).toBeInTheDocument();
+    first.unmount();
+
+    // Fresh mount with the same experimentId — snapshot rehydrates the
+    // bullet without needing to re-Tjek (result is null on remount; the
+    // panelEntries fallback reads from widgetValues).
+    render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    expect(screen.getByText('mis-pendul')).toBeInTheDocument();
+  });
+
+  // C7: paid bullet survives remount. Exercises the spend-time write so a
+  // student who navigates away after revealing a tier finds it on return.
+  it('paid bullet survives remount via the snapshot (C7 spend write)', async () => {
+    const experimentId = 'rr-f9-c7/paid';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    const user = userEvent.setup();
+    const first = render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'svar uden krav opfyldt her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+    await user.click(bucket);
+    await user.click(textarea);
+    expect(await screen.findByText('rel-t1')).toBeInTheDocument();
+    first.unmount();
+
+    render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    expect(screen.getByText('rel-t1')).toBeInTheDocument();
+  });
+
+  // C7 follow-up: the verdict checklist itself must survive remount, not
+  // just the Tips bullets. Needs a big-pool harness because reaching the
+  // verdict pill costs 5 paid tiers (relation 3 + variables 2) + the
+  // 2-token pill = 7 spends.
+  it('verdict checklist survives remount via the snapshot (C7 follow-up)', async () => {
+    const bigPoolPhase: Phase = { id: 'p', title: 'P', gate, hintPoolSize: 10 };
+    function BigPoolHarness({
+      experimentId,
+      children,
+    }: {
+      experimentId: string;
+      children: React.ReactNode;
+    }) {
+      return (
+        <RunnerProvider
+          experimentId={experimentId}
+          experimentVersion={1}
+          phases={[bigPoolPhase]}
+        >
+          <HintSpendProvider>
+            <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+            <GateProbe />
+          </HintSpendProvider>
+        </RunnerProvider>
+      );
+    }
+
+    const experimentId = 'rr-f9-c7/verdict';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+
+    const user = userEvent.setup();
+    const first = render(
+      <BigPoolHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </BigPoolHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'svar uden krav opfyldt her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    // Spend all 5 paid tiers (relation: 3, variables: 2). After each spend
+    // re-fetch the bucket button — its accessible name encodes the live
+    // count + spendable state, so the prior reference goes stale.
+    for (let i = 0; i < 5; i++) {
+      const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+      await user.click(bucket);
+      await user.click(textarea);
+    }
+
+    // Verdict-reveal pill now unlocked (every failing ladder at cap).
+    await user.click(await screen.findByRole('button', { name: /vis hvad der mangler/i }));
+
+    // Section + frozen rows visible. Scope row queries to the verdict
+    // section so they don't collide with TieredHintList's group headers
+    // (which use the same criterion labels).
+    const verdictHeader = await screen.findByText(/hvad mangler/i);
+    const verdictSection = verdictHeader.parentElement as HTMLElement;
+    expect(within(verdictSection).getByText('Relation')).toBeInTheDocument();
+    expect(within(verdictSection).getByText('Variable')).toBeInTheDocument();
+
+    first.unmount();
+
+    // Fresh remount with the same experimentId — snapshot rehydrates the
+    // verdict section before any re-Tjek.
+    render(
+      <BigPoolHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </BigPoolHarness>,
+    );
+    const reloadedHeader = screen.getByText(/hvad mangler/i);
+    const reloadedSection = reloadedHeader.parentElement as HTMLElement;
+    expect(within(reloadedSection).getByText('Relation')).toBeInTheDocument();
+    expect(within(reloadedSection).getByText('Variable')).toBeInTheDocument();
   });
 
   // T16: armed Enter on the textarea spends without inserting a newline.

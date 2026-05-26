@@ -150,7 +150,7 @@ export function Tooltip({
           open
             ? `absolute ${align === 'right' ? 'right-0' : 'left-0'} ${
                 placement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
-              } z-10 max-w-[20rem] rounded bg-slate-800 px-3 py-2 text-sm leading-snug text-white shadow-lg`
+              } z-10 w-max max-w-[28ch] rounded bg-slate-800 px-3 py-2 text-sm leading-snug text-white shadow-lg`
             : 'sr-only'
         }
       >
