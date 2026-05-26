@@ -638,3 +638,25 @@ describe('VariableTable — sections facet', () => {
     expect(readSections()).toEqual({ iv: false, dv: true, constants: true });
   });
 });
+
+describe('VariableTable empty-state', () => {
+  it('renders the default Danish empty-state message inside the Konstanter section when it has no rows', () => {
+    render(
+      <Harness experimentId="vt-empty/1">
+        <VariableTable id="variables" />
+      </Harness>,
+    );
+    expect(screen.getByText('Ingen konstanter tilføjet endnu.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Tilføj konstant' })).toBeInTheDocument();
+  });
+
+  it('honours an author override on constantsEmptyMessage', () => {
+    render(
+      <Harness experimentId="vt-empty/2">
+        <VariableTable id="variables" constantsEmptyMessage="Brugerdefineret tom-tilstand" />
+      </Harness>,
+    );
+    expect(screen.getByText('Brugerdefineret tom-tilstand')).toBeInTheDocument();
+    expect(screen.queryByText('Ingen konstanter tilføjet endnu.')).not.toBeInTheDocument();
+  });
+});

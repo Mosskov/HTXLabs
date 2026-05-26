@@ -193,6 +193,10 @@ export const strings = {
       addConstantLabel: '+ Tilføj konstant',
       addIvLabel: '+ Tilføj uafhængig variabel',
       addDvLabel: '+ Tilføj afhængig variabel',
+      /** Empty-state copy shown inside the Konstanter section when it has zero
+       *  rows. Author-overridable per instance via the widget's
+       *  `constantsEmptyMessage` prop. */
+      constantsEmptyMessage: 'Ingen konstanter tilføjet endnu.',
       /** Aria labels for the per-row remove (×) button. Vars: {n} = 1-based row
        *  index, so screen readers can distinguish which row a button removes. */
       removeConstantAriaLabel: 'Fjern konstant {n}',

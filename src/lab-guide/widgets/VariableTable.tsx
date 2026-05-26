@@ -137,6 +137,19 @@ interface Props {
   constantMissingMessage?: string;
   ivMissingMessage?: string;
   dvMissingMessage?: string;
+  /** Empty-state copy shown inside the Konstanter section when it has zero
+   *  rows. Default: `strings.widgets.variableTable.constantsEmptyMessage`
+   *  ("Ingen konstanter tilføjet endnu."). Pass `""` (empty string) to
+   *  explicitly disable the empty-state branch and fall back to the
+   *  bare add-link render. SPEC §17. */
+  constantsEmptyMessage?: string;
+  /** Empty-state copy for the IV section. Undefined by default — IV defaults
+   *  to a single fixed row so the empty-state is unreachable unless the
+   *  author overrides `iv: { min: 0, … }`. SPEC §17. */
+  ivEmptyMessage?: string;
+  /** Empty-state copy for the DV section. Undefined by default — see
+   *  `ivEmptyMessage`. SPEC §17. */
+  dvEmptyMessage?: string;
   /** Tjek button label override (SPEC §17). Only rendered when `expected`
    *  is provided. */
   checkLabel?: string;
@@ -351,6 +364,9 @@ export function VariableTable({
   constantMissingMessage,
   ivMissingMessage,
   dvMissingMessage,
+  constantsEmptyMessage,
+  ivEmptyMessage,
+  dvEmptyMessage,
   checkLabel,
   checkInFooter = false,
   lockedTooltip,
@@ -987,6 +1003,7 @@ export function VariableTable({
             lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={ivMissing}
+            emptyMessage={ivEmptyMessage}
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('iv', s, cell)}
@@ -1015,6 +1032,7 @@ export function VariableTable({
             lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={dvMissing}
+            emptyMessage={dvEmptyMessage}
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('dv', s, cell)}
@@ -1049,6 +1067,9 @@ export function VariableTable({
             lockedTooltipContent={lockedTooltipContent}
             armedSpendableAriaDescription={resolvedArmedAria}
             missingMessages={constantsMissing}
+            emptyMessage={
+              constantsEmptyMessage ?? strings.widgets.variableTable.constantsEmptyMessage
+            }
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('constants', s, cell)}
@@ -1103,6 +1124,11 @@ interface RowGroupProps {
   lockedTooltipContent: ReactNode;
   armedSpendableAriaDescription: string;
   missingMessages: string[];
+  /** Empty-state copy. When `rows.length === 0` and this is a non-empty
+   *  string, the section renders heading → empty-state text → a button-chip
+   *  styled add affordance. When undefined or `""`, the section falls back
+   *  to today's bare add-link render. */
+  emptyMessage?: string;
   allowPaste?: boolean;
   armed: boolean;
   onSpend: (studentIndex: number, cell: Cell) => void;
@@ -1131,6 +1157,7 @@ function RowGroupSection({
   lockedTooltipContent,
   armedSpendableAriaDescription,
   missingMessages,
+  emptyMessage,
   allowPaste,
   armed,
   onSpend,
@@ -1138,9 +1165,11 @@ function RowGroupSection({
 }: RowGroupProps) {
   const canAdd = rows.length < bounds.max;
   const canRemove = rows.length > bounds.min;
+  const showEmptyState = rows.length === 0 && !!emptyMessage;
   return (
     <div className="p-3">
       <div className="mb-2 text-sm font-semibold text-navy">{label}</div>
+      {showEmptyState && <div className="mb-2 text-sm text-slate-500">{emptyMessage}</div>}
       {rows.map((row, i) => (
         <RepeatableRow
           // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a row in this section
@@ -1191,7 +1220,11 @@ function RowGroupSection({
         <button
           type="button"
           onClick={onAdd}
-          className="mt-2 text-sm font-medium text-accent hover:underline"
+          className={
+            showEmptyState
+              ? 'mt-2 inline-flex items-center rounded border border-accent/40 px-2 py-1 text-sm font-medium text-accent hover:border-accent hover:bg-accent/5'
+              : 'mt-2 text-sm font-medium text-accent hover:underline'
+          }
         >
           {addLabel}
         </button>
@@ -1319,7 +1352,7 @@ function RepeatableRow({
           type="button"
           onClick={onRemove}
           aria-label={format(removeAriaLabel, { n: rowIndex + 1 })}
-          className="self-start rounded px-2 py-1 text-sm text-slate-500 hover:text-red-600"
+          className="self-start rounded px-2 py-1.5 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600 focus-visible:bg-rose-50 focus-visible:text-rose-600"
         >
           ×
         </button>
