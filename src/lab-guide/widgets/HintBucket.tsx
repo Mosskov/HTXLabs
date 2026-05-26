@@ -11,8 +11,8 @@
 //      disabled hints; no affordance needed).
 //   2. Empty + countdown → `BulbFilling` icon fills bottom-up over the
 //      replenish cycle; M:SS lives in tooltip only.
-//   3. Empty + no refill (depleted) → `BulbCracked` at opacity-40 + "0".
-//   4. Tokens but no spendable targets → `Bulb` at opacity-40 + count.
+//   3. Empty + no refill (depleted) → `BulbCracked` at opacity-60 + "0".
+//   4. Tokens but no spendable targets → `Bulb` at opacity-60 + count.
 //
 // `placement === 'footer'`: unconditionally visible while the current phase
 // has eligible widgets (LabGuide's footer mounts it inside that gate).
@@ -103,15 +103,15 @@ export function HintBucket({ placement }: Props) {
       ? ((replenishMs - msUntilNext) / replenishMs) * 100
       : 0;
 
-  const ICON_SIZE = 'w-[18px] h-[18px]';
+  const ICON_SIZE = 'h-5 w-5';
 
   const icon =
     disabledReason === 'countdown' ? (
-      <BulbFilling fillPct={fillPct} className={ICON_SIZE} />
+      <BulbFilling fillPct={fillPct} className={`${ICON_SIZE} opacity-60`} />
     ) : disabledReason === 'depleted' ? (
-      <BulbCracked className={`${ICON_SIZE} opacity-40`} />
+      <BulbCracked className={`${ICON_SIZE} opacity-60`} />
     ) : disabledReason === 'no-targets' ? (
-      <Bulb className={`${ICON_SIZE} opacity-40`} />
+      <Bulb className={`${ICON_SIZE} opacity-60`} />
     ) : (
       <Bulb className={ICON_SIZE} />
     );

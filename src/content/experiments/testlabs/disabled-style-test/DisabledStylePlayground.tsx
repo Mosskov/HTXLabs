@@ -3,22 +3,24 @@
 // rebuilding the lab. No Runner dependency: every variant is a static mock
 // with the same Tailwind classes the real components use.
 //
-// Locked-in scheme (2026-05-25 review):
+// Locked-in scheme:
 //   - shade: slate-100 + slate-300 border (matches PhaseStepper locked + footer
 //     fully-disabled).
 //   - phase-disabled: NOT RENDERED — author explicitly disabled hints, no
 //     affordance needed.
+//   - bulb family: hand-drawn Bulb / BulbCracked / BulbFilling at 20 px
+//     (`h-5 w-5`); disabled bulbs dimmed to `opacity-60`.
 //   - countdown: bulb fills bottom-up over the replenish cycle; M:SS lives in
 //     the tooltip only.
 //   - depleted: cracked-bulb SVG (src/icons/BulbCracked).
-//   - no-targets: yellow bulb at opacity-40 + tooltip.
+//   - no-targets: yellow bulb at opacity-60 + tooltip.
 import { Bulb } from '@/icons/Bulb';
 import { BulbCracked } from '@/icons/BulbCracked';
 import { BulbFilling } from '@/icons/BulbFilling';
 import type { ReactNode } from 'react';
 
 /* ============================================================
-   HintBucket state mocks — locked-in design.
+   HintBucket state mocks — production-matching.
    ============================================================ */
 
 const DISABLED_SHELL =
@@ -26,6 +28,8 @@ const DISABLED_SHELL =
 
 const ARMABLE_SHELL =
   'inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium border-accent-400 bg-white text-slate-700 hover:bg-accent-50 transition-colors';
+
+const BULB_SIZE = 'h-5 w-5';
 
 function BucketArmable() {
   return (
@@ -36,63 +40,31 @@ function BucketArmable() {
   );
 }
 
-/** Legacy armable variant kept for side-by-side review: 💡 emoji at full
- *  opacity. Delete once Bulb is signed off. */
-function BucketArmableEmoji() {
-  return (
-    <button type="button" className={ARMABLE_SHELL}>
-      <span aria-hidden="true" className="text-base leading-none">
-        💡
-      </span>
-      <span className="tabular-nums">3</span>
-    </button>
-  );
-}
-
-// Bulb icons match the 💡 emoji's rendered size (text-base ≈ 16 px). Tailwind
-// w-[18px] keeps the SVGs close in optical weight without dragging in arbitrary
-// Tailwind config; tweak here if a smaller/larger size reads better.
-const BULB_SIZE = 'w-[18px] h-[18px]';
-
-/** Countdown — bulb fills bottom-up; no visible digit. M:SS in tooltip only. */
-function BucketCountdown({ fillPct }: { fillPct: number }) {
+/** Countdown — bulb fills bottom-up at production opacity-60. M:SS in tooltip
+ *  only. Accepts an optional fillColor so the colour test can swap candidates. */
+function BucketCountdown({ fillPct, fillColor }: { fillPct: number; fillColor?: string }) {
   return (
     <button type="button" className={DISABLED_SHELL}>
-      <BulbFilling fillPct={fillPct} className={BULB_SIZE} />
+      <BulbFilling fillPct={fillPct} fillColor={fillColor} className={`${BULB_SIZE} opacity-60`} />
     </button>
   );
 }
 
-/** Depleted — cracked bulb + "0". Same opacity-40 mute as no-targets so the
- *  two disabled states sit as one family. */
+/** Depleted — cracked bulb + "0". */
 function BucketDepleted() {
   return (
     <button type="button" className={DISABLED_SHELL}>
-      <BulbCracked className={`${BULB_SIZE} opacity-40`} />
+      <BulbCracked className={`${BULB_SIZE} opacity-60`} />
       <span className="tabular-nums">0</span>
     </button>
   );
 }
 
-/** No-targets — same Bulb as armable, dimmed to opacity-40. Resolves when the
- *  student edits a cell, so tooltip-only + low-opacity carries the signal. */
+/** No-targets — same Bulb as armable, dimmed to opacity-60. */
 function BucketNoTargets() {
   return (
     <button type="button" className={DISABLED_SHELL}>
-      <Bulb className={`${BULB_SIZE} opacity-40`} />
-      <span className="tabular-nums">3</span>
-    </button>
-  );
-}
-
-/** Legacy no-targets variant kept for side-by-side review: 💡 emoji at
- *  opacity-40. Delete once Bulb is signed off. */
-function BucketNoTargetsEmoji() {
-  return (
-    <button type="button" className={DISABLED_SHELL}>
-      <span aria-hidden="true" className="text-base leading-none opacity-40">
-        💡
-      </span>
+      <Bulb className={`${BULB_SIZE} opacity-60`} />
       <span className="tabular-nums">3</span>
     </button>
   );
@@ -170,6 +142,21 @@ function Placeholder({ label }: { label: string }) {
   );
 }
 
+/* ============================================================
+   BulbFilling colour candidates — drives the colour-test row.
+   ============================================================ */
+
+type ColorCandidate = { name: string; value: string };
+
+const BULB_FILL_CANDIDATES: ColorCandidate[] = [
+  { name: '#fdd477 (current)', value: '#fdd477' },
+  { name: '#fdb800 (Bulb outline)', value: '#fdb800' },
+  { name: '#facc15 (yellow-400)', value: '#facc15' },
+  { name: '#eab308 (yellow-500)', value: '#eab308' },
+  { name: '#fbbf24 (amber-400)', value: '#fbbf24' },
+  { name: '#f59e0b (amber-500)', value: '#f59e0b' },
+];
+
 export function DisabledStylePlayground() {
   return (
     <div className="space-y-10">
@@ -190,7 +177,7 @@ export function DisabledStylePlayground() {
       </section>
 
       <section>
-        <h3 className="font-mono text-sm text-navy mb-3">HintBucket — locked-in design</h3>
+        <h3 className="font-mono text-sm text-navy mb-3">HintBucket — production states</h3>
         <p className="mb-4 text-sm text-slate-600">
           Reference (armable) on the left. The four disabled reasons each get a state-specific
           render:
@@ -206,7 +193,7 @@ export function DisabledStylePlayground() {
             <strong>depleted</strong> — cracked bulb + "0" count.
           </li>
           <li>
-            <strong>no-targets</strong> — faint yellow bulb (opacity-40) + count, tooltip explains.
+            <strong>no-targets</strong> — faint yellow bulb (opacity-60) + count, tooltip explains.
           </li>
         </ul>
 
@@ -236,41 +223,11 @@ export function DisabledStylePlayground() {
 
         <div className="mt-4 rounded-md border border-slate-200 p-3">
           <div className="mb-2 text-sm font-semibold text-navy">
-            New hand-drawn Bulb vs. system 💡 emoji
-          </div>
-          <div className="mb-3 text-xs text-slate-500">
-            Side-by-side review across armable (full opacity) and no-targets (opacity-40). The emoji
-            variants are kept here until the SVG is signed off. Family check on the right.
-          </div>
-          <div className="flex flex-wrap items-end gap-6">
-            <Cell sub="armable — Bulb (new)">
-              <BucketArmable />
-            </Cell>
-            <Cell sub="armable — 💡 (old)">
-              <BucketArmableEmoji />
-            </Cell>
-            <Cell sub="no-targets — Bulb (new)">
-              <BucketNoTargets />
-            </Cell>
-            <Cell sub="no-targets — 💡 (old)">
-              <BucketNoTargetsEmoji />
-            </Cell>
-            <Cell sub="depleted (family check)">
-              <BucketDepleted />
-            </Cell>
-            <Cell sub="countdown 50% (family check)">
-              <BucketCountdown fillPct={50} />
-            </Cell>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-md border border-slate-200 p-3">
-          <div className="mb-2 text-sm font-semibold text-navy">
             Countdown progression — bulb fills over the replenish cycle
           </div>
           <div className="mb-3 text-xs text-slate-500">
-            Static snapshots at sample fill levels. In the real component the fill ticks once per
-            second via the existing 1 Hz <code>hintTick</code>.
+            Static snapshots at sample fill levels (production opacity-60). In the real component
+            the fill ticks once per second via the existing 1 Hz <code>hintTick</code>.
           </div>
           <div className="flex flex-wrap items-end gap-6">
             <Cell sub="0% (just spent)">
@@ -291,6 +248,44 @@ export function DisabledStylePlayground() {
             <Cell sub="100% (token granted)">
               <BucketCountdown fillPct={100} />
             </Cell>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-md border border-slate-200 p-3">
+          <div className="mb-2 text-sm font-semibold text-navy">
+            BulbFilling colour test — which yellow reads best at opacity-60 / 50% fill?
+          </div>
+          <div className="mb-3 text-xs text-slate-500">
+            Same bulb, same shell, same fillPct. Only the yellow swatch varies. The visible signal
+            is the rising fill against slate-100 — pick the one that pops without clashing with the
+            border. Top row: live render. Bottom row: the raw swatch.
+          </div>
+          <div className="flex flex-wrap items-end gap-6">
+            {BULB_FILL_CANDIDATES.map((c) => (
+              <Cell key={c.value} sub={c.name}>
+                <BucketCountdown fillPct={50} fillColor={c.value} />
+              </Cell>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {BULB_FILL_CANDIDATES.map((c) => (
+              <div key={c.value} className="flex flex-col items-center gap-1">
+                <span
+                  aria-hidden
+                  className="inline-block h-6 w-10 rounded border border-slate-300"
+                  style={{ backgroundColor: c.value, opacity: 0.6 }}
+                />
+                <span className="font-mono text-[10px] text-slate-500">{c.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-end gap-6">
+            <span className="text-xs text-slate-500">100% fill, for endpoint check:</span>
+            {BULB_FILL_CANDIDATES.map((c) => (
+              <Cell key={c.value} sub={c.value}>
+                <BucketCountdown fillPct={100} fillColor={c.value} />
+              </Cell>
+            ))}
           </div>
         </div>
       </section>
