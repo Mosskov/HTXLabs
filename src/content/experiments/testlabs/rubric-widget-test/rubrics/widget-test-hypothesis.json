@@ -1,0 +1,58 @@
+{
+  "id": "widget-test-hypothesis",
+  "version": 1,
+  "title": "Widget-test (panel + verdict-checklist diagnostic)",
+  "criteria": [
+    {
+      "id": "relation",
+      "label": "Forudsagt sammenhæng",
+      "hints": [
+        "Har du læst teoriafsnittet? Brug teorien som udgangspunkt.",
+        "Hypotesen skal forudsige hvad der sker når du varierer den ene variabel.",
+        "Skriv det som én sætning: når X stiger, så ... Y."
+      ],
+      "any": [
+        {
+          "kind": "regex",
+          "pattern": "\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b",
+          "flags": "iu"
+        }
+      ],
+      "misconceptions": [
+        {
+          "kind": "regex",
+          "pattern": "(pendul|lod|svinger)",
+          "flags": "iu",
+          "hint": "Beskriv en sammenhæng mellem dette forsøgs variable — ikke et eksempel fra et andet forsøg."
+        }
+      ]
+    },
+    {
+      "id": "variables",
+      "label": "Variable nævnt",
+      "hints": [
+        "Nævn de to variable du undersøger eksplicit.",
+        "Brug X og Y (eller jeres aftalte symboler)."
+      ],
+      "any": [
+        {
+          "kind": "regex",
+          "pattern": "\\bx\\b.*\\by\\b|\\by\\b.*\\bx\\b",
+          "flags": "iu"
+        }
+      ]
+    },
+    {
+      "id": "shape",
+      "label": "Lineær form (valgfrit)",
+      "required": false,
+      "hints": ["Kan du sige mere præcist hvilken type sammenhæng — fx lineær?"],
+      "any": [
+        {
+          "kind": "literal",
+          "terms": ["lineær", "ret linje", "konstant takt"]
+        }
+      ]
+    }
+  ]
+}

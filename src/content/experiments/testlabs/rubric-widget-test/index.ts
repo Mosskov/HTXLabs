@@ -11,12 +11,14 @@ import PhaseKonkluder from './phase-konkluder.mdx';
 import PhaseMaal from './phase-maal.mdx';
 import PhaseOpstil from './phase-opstil.mdx';
 import PhasePlanlaeg from './phase-planlaeg.mdx';
+import widgetTestHypothesis from './rubrics/widget-test-hypothesis.json';
 import widgetTestMini from './rubrics/widget-test-mini.json';
 import Theory from './theory.mdx';
 
 for (const [name, json] of [
   ['template-hypothesis', templateHypothesis],
   ['widget-test-mini', widgetTestMini],
+  ['widget-test-hypothesis', widgetTestHypothesis],
 ] as const) {
   const parsed = parseRubric(json);
   if (!parsed.ok) {

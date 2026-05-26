@@ -27,7 +27,7 @@ import {
   save,
   wipe,
 } from './runner';
-import { type RubricSpendOp, runnerReducer } from './runnerReducer';
+import { runnerReducer } from './runnerReducer';
 import type { WidgetCheck } from './widgetCheck';
 import type { VariableTableValues } from './widgets/VariableTable';
 
@@ -70,8 +70,8 @@ interface RunnerApi {
   bumpAttempts: (id: string) => number;
   fireMilestone: (id: string) => void;
   /** Atomic spend-and-reveal for a RubricResponse criterion. Caller supplies
-   *  the criterion id, the operation (`{ kind: 'tier' }` or
-   *  `{ kind: 'reveal', cost }`), and the hint ladder cap. The context layer
+   *  the criterion id and the hint ladder cap. Every spend costs 1 token —
+   *  the per-criterion reveal variant retired with F9. The context layer
    *  resolves `phaseId` from `currentPhaseId`, `now` from `Date.now()`, and
    *  `poolCap` from the current phase's `hintPoolSize` override. The reducer
    *  re-validates token sufficiency + the tier ceiling against the latest
@@ -79,9 +79,14 @@ interface RunnerApi {
   spendAndRevealRubricTier: (args: {
     widgetId: string;
     criterionId: string;
-    op: RubricSpendOp;
     hintCap: number;
   }) => void;
+  /** Widget-level "show what's missing" reveal for a RubricResponse. Costs
+   *  2 tokens; sets `rubricVerdictsRevealed[widgetId] = true` and freezes
+   *  `rubricVerdictRowIds[widgetId]` to the criterion-id snapshot the widget
+   *  computed at spend time. Idempotent in the reducer — a re-dispatch on an
+   *  already-revealed widget is a no-op. */
+  revealRubricVerdicts: (args: { widgetId: string; rowIds: readonly string[] }) => void;
   /** Atomic spend-and-reveal for a VariableTable cell ladder. Same shape as
    *  the rubric variant but VT has no reveal tier — every spend is a single
    *  tier advance. */
@@ -131,9 +136,9 @@ interface RunnerApi {
   /** True iff some widget has registered hint eligibility for the named
    *  phase. Drives ticker mount + bucket visibility. */
   phaseHasHintEligibleWidgets: (phaseId: string) => boolean;
-  /** Widget ids registered as hint-eligible for the named phase. Currently
-   *  consumed defensively by `HintLightbulb` to confirm the rendering widget
-   *  belongs to the active phase. */
+  /** Widget ids registered as hint-eligible for the named phase. Exposed for
+   *  framework consumers that need to scope a per-widget render decision to
+   *  the active phase. */
   phaseHintEligibleWidgetIds: (phaseId: string) => string[];
   /** Live map of widget id → check action, read by `PhaseFooter` to drive the
    *  merged check button. Kept separate from `gateCtx.widgets` so the pure
@@ -279,12 +284,10 @@ export function RunnerProvider({
     ({
       widgetId,
       criterionId,
-      op,
       hintCap,
     }: {
       widgetId: string;
       criterionId: string;
-      op: RubricSpendOp;
       hintCap: number;
     }) => {
       const phaseId = stateRef.current.currentPhaseId;
@@ -293,8 +296,22 @@ export function RunnerProvider({
         phaseId,
         widgetId,
         criterionId,
-        op,
         hintCap,
+        poolCap: poolCapFor(phaseId),
+        now: Date.now(),
+      });
+    },
+    [poolCapFor],
+  );
+
+  const revealRubricVerdicts = useCallback(
+    ({ widgetId, rowIds }: { widgetId: string; rowIds: readonly string[] }) => {
+      const phaseId = stateRef.current.currentPhaseId;
+      dispatch({
+        type: 'REVEAL_RUBRIC_VERDICTS',
+        phaseId,
+        widgetId,
+        rowIds,
         poolCap: poolCapFor(phaseId),
         now: Date.now(),
       });
@@ -607,6 +624,7 @@ export function RunnerProvider({
     bumpAttempts,
     fireMilestone,
     spendAndRevealRubricTier,
+    revealRubricVerdicts,
     spendAndRevealVtTier,
     bucketView,
     setVariableTableLastChecked,

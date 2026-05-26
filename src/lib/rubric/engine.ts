@@ -63,10 +63,6 @@ export interface CriterionResult {
    *  else `[criterion.hint]` if set, else `[firstFailedCheck.hint]` if a
    *  check carries one, else `[]`. Tiering happens at the widget layer. */
   hints: string[];
-  /** 4th-tier "show the answer" reveal text — passed through verbatim from
-   *  the criterion when set. The widget uses it to render the "Vis svar"
-   *  reveal pill (costs 2 tokens). Absent when the author didn't opt in. */
-  reveal?: string;
 }
 
 export interface RubricResult {
@@ -236,7 +232,6 @@ function evaluateCriterion(
     vetoes,
     misconceptions,
     hints,
-    ...(criterion.reveal !== undefined ? { reveal: criterion.reveal } : {}),
   };
 }
 

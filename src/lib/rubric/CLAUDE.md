@@ -18,6 +18,6 @@ The engine is pure (sibling of `regression.ts`, `textMatch.ts`). No React, no I/
 
 `literal` checks and vetoes match on whole-word boundaries via `\p{L}\p{N}` lookarounds with the `u` flag — so a term `"afhængig"` does *not* fire inside `"uafhængig"`, and Danish letters at boundaries are respected. The match is also case-insensitive. Inflected forms are NOT covered automatically (e.g. `"afhængig"` doesn't match `"afhængige"`); list inflected variants explicitly or reach for `regex` if you need fuzzy matching.
 
-## `reveal` — the 4th-tier "show the answer" affordance
+## Retired: per-criterion `reveal`
 
-A criterion may carry an optional `reveal: string`. It feeds the request-driven hint system's 4th-tier reveal pill — costs 2 tokens and is rendered only when the criterion's hint ladder is fully unlocked. The schema requires `hint` or `hints` to be set when `reveal` is — a reveal without a ladder is an authoring mistake (the student would jump straight to the answer with no scaffolding). Engine passes `reveal` through verbatim on `CriterionResult.reveal`; the widget owns the spend + tier-state semantics.
+Per-criterion `reveal: string` was removed (F9). The "show the answer" affordance now lives at widget level as a single verdict-checklist reveal in `<RubricResponse>` — see the lab-guide hint-system docs.

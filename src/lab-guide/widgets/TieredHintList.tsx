@@ -44,11 +44,7 @@ export function TieredHintList({ entries }: Props) {
           <ul className="space-y-1">
             {g.items.map((item) => {
               const toneClass =
-                item.tone === 'misconception'
-                  ? 'text-orange-800'
-                  : item.tone === 'reveal'
-                    ? 'text-emerald-800'
-                    : 'text-slate-700';
+                item.tone === 'misconception' ? 'text-orange-800' : 'text-slate-700';
               return (
                 <li key={item.key} className={`flex items-start gap-2 ${toneClass}`}>
                   <span aria-hidden="true" className="select-none leading-snug">

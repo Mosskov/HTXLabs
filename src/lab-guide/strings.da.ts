@@ -126,17 +126,8 @@ export const strings = {
        *  the phase — every failing cell/criterion has exhausted its ladder, or
        *  every target is already satisfied. */
       bucketNoTargets: 'Ingen steder at bruge hint i denne fase',
-      /** Aria label on a per-field lightbulb. Vars: {tier} = next-tier digit,
-       *  {cap} = ladder length. */
-      lightbulbAriaLabel: 'Få et hint ({tier} af {cap})',
-      /** Visible label on the reveal pill — the 4th-tier "show the answer"
-       *  affordance. Vars: {cost} = token cost (always 2 today). */
-      revealLabel: 'Vis svar ({cost})',
-      revealAriaLabel: 'Brug {cost} hints for at se svaret',
       /** Aria label on the popup container that opens on focus. */
       popupAriaLabel: 'Tilgængelige hints',
-      /** Tooltip on a disabled reveal pill (bucket below cost). */
-      insufficientHints: 'Du har ikke nok hints.',
       /** Sr-only description on an armed-spendable VariableTable cell — the
        *  whole input rectangle becomes the spend target, so AT users need to
        *  be told the cell is clickable + Enter-activated. */
@@ -182,6 +173,19 @@ export const strings = {
       statusPassed: 'Godkendt',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
       hintsLabel: 'Tips til de manglende krav',
+      /** Section header above the verdict checklist (✓/✗ rows) once the
+       *  student has paid the 2-token reveal. Author-overridable per
+       *  instance via the widget's `verdictsPanelHeader` prop. */
+      verdictsPanelHeader: 'Hvad mangler',
+      /** Visible label on the verdict-reveal pill at the bottom of the
+       *  panel — shown once every failing criterion's ladder is at cap.
+       *  Author-overridable per instance via `verdictRevealPillLabel`. */
+      verdictRevealPillLabel: 'Vis hvad der mangler (2)',
+      /** Per-criterion verdict-row templates. Vars: {label} = criterion
+       *  label from the rubric. Framework chrome, not author-overridable
+       *  (consistent with the existing checklist row pattern). */
+      verdictPass: '✓ {label}',
+      verdictFail: '✗ {label}',
     },
     variableTable: {
       ivLabel: 'Uafhængig variabel',

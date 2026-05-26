@@ -31,15 +31,6 @@ describe('TieredHintList', () => {
     expect(mis?.className).toContain('text-orange-800');
   });
 
-  it('renders reveal entries with distinct (emerald) styling', () => {
-    const entries: HintPopupEntry[] = [
-      { key: 'r', text: 'the full answer', tone: 'reveal' },
-    ];
-    render(<TieredHintList entries={entries} />);
-    const reveal = screen.getByText('the full answer').closest('li');
-    expect(reveal?.className).toContain('text-emerald-800');
-  });
-
   it('groups consecutive entries with the same `group` under one header', () => {
     const entries: HintPopupEntry[] = [
       { key: 'a', text: 'tier 1', tone: 'hint', group: 'Criterion B' },

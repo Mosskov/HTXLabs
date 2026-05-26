@@ -1,4 +1,4 @@
-// Student-facing rubric widget: textarea + "Tjek mit svar" button, evaluates against a rubric JSON.
+// Student-facing rubric widget: textarea + persistent feedback panel beneath.
 //
 // Contract with the gate: this widget registers `{ kind: 'rubric', satisfied }`
 // where `satisfied` is derived each render from
@@ -6,27 +6,34 @@
 // `result` (just-evaluated) or the persisted pass record (cross-reload).
 // Editing the text — or changing `dependsOn` — flips `dirty:true` → the gate
 // re-closes without us touching the persisted record. Feedback to the student
-// comes from a focus-triggered HintPopup beside the textarea (misconceptions
-// always free + orange; revealed criterion tiers stacked underneath) plus the
+// comes from a sticky panel below the textarea (Tips box with amber free
+// misconceptions + slate paid tiers, plus a verdict-checklist section that
+// unlocks once every failing criterion's hint ladder is fully spent) plus the
 // Next-phase button enabling on pass; an sr-only `<output>` announces
 // "Godkendt" once for AT users.
 //
 // Reload-safety: each completed evaluate writes a minimal pass record to
 // `widgetValues[`${id}:result`]` containing
 //   `{ lastCheckedText, lastCheckedDependsOn, requiredSatisfied, embedderDown }`.
-// On reload, that record hydrates the gate + pill so a prior pass survives
-// without forcing a re-Tjek. The full `RubricResult` (criteria, hints,
-// misconceptions) is component-state only — the popup will render empty until
-// the next Tjek, but spent tier counters survive in `state.rubricHintTiers`
-// so the very next Tjek immediately re-paints every paid tier without
-// spending again. This is the accepted trade-off vs. persisting embedder
-// vectors.
+// On reload, that record hydrates the gate so a prior pass survives without
+// forcing a re-Tjek. The full `RubricResult` (criteria, hints, misconceptions)
+// is component-state only — the panel's Tips list will be empty until the
+// next Tjek, but spent tier counters survive in `state.rubricHintTiers` so
+// the very next Tjek immediately re-paints every paid tier without spending
+// again. The verdict-revealed bit + frozen row-id snapshot survive in
+// `state.rubricVerdictsRevealed[id]` / `state.rubricVerdictRowIds[id]`; the
+// verdict checklist re-materializes on the first fresh post-reload Tjek.
+// The sticky-panel one-way bit lives in `widgetValues[${id}:panelShown]`.
 //
-// Hint system: request-driven, per-phase token bucket. Auto-bump on Tjek is
-// gone — students opt into seeing a tier by clicking the bucket (arms spend
-// mode) and then a per-criterion lightbulb. The widget registers itself as
-// hint-eligible against the PhaseScopeContext so the runner ticker / bucket
-// know which phase owns it.
+// Hint system: request-driven, per-phase token bucket. The textarea itself is
+// the spend target — when the footer's HintBucket is armed, the textarea
+// container shows an amber border + click/Enter spends 1 token to reveal the
+// next paid tier in author-priority order across failing criteria. The
+// 2-token verdict-reveal pill at the bottom of the panel unlocks the ✓/✗
+// checklist once every failing criterion's ladder is at cap; it dispatches
+// directly to the runner (not through spend mode), so the HintBucket's
+// spendable-count never includes it. The widget registers itself as
+// hint-eligible against the PhaseScopeContext.
 import { DEV_EMBEDDER_URL, type Embedder, HttpEmbedder } from '@/lib/rubric/embedder';
 import {
   CHECK_STATUSES,
@@ -35,7 +42,14 @@ import {
   evaluateRubric,
   parseRubric,
 } from '@/lib/rubric/engine';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { z } from 'zod';
 import { useHintSpend } from '../HintSpendContext';
 import { useRunner } from '../RunnerContext';
@@ -45,14 +59,11 @@ import { useRegisteredHintEligibility } from '../useRegisteredHintEligibility';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
-import { HintBucket } from './HintBucket';
-import { HintLightbulb } from './HintLightbulb';
-import { HintPopup, type HintPopupEntry } from './HintPopup';
 import { ProtectedTextarea } from './ProtectedInput';
 
 const defaultEmbedder: Embedder = new HttpEmbedder(DEV_EMBEDDER_URL);
 
-const REVEAL_COST = 2;
+const VERDICT_REVEAL_COST = 2;
 
 // Persisted across reload via `widgetValues[${id}:result]`. Validated with
 // Zod so a future shape change (or hand-edited localStorage) lands as a
@@ -77,6 +88,14 @@ function readPersisted(value: unknown): PersistedPass | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** Bullet shape for the panel's Tips list — same author-priority walk as the
+ *  retired focus-popup, just stripped of the per-criterion `reveal` tone. */
+interface PanelEntry {
+  key: string;
+  text: string;
+  tone: 'misconception' | 'hint';
+}
+
 interface Props {
   id: string;
   prompt: string;
@@ -97,6 +116,12 @@ interface Props {
   tooShortMessage?: string;
   tooLongMessage?: string;
   embedderDownMessage?: string;
+  /** Section header above the verdict-checklist (once revealed). Default
+   *  `strings.widgets.rubric.verdictsPanelHeader`. */
+  verdictsPanelHeader?: string;
+  /** Visible label on the verdict-reveal pill. Default
+   *  `strings.widgets.rubric.verdictRevealPillLabel`. */
+  verdictRevealPillLabel?: string;
   /** Opaque dependency string. When it changes after a check, `dirty` flips on
    *  (same as editing the text) and the gate re-closes. Use it to bind the
    *  pass to external context the prompt depends on — e.g. variable symbols
@@ -123,18 +148,27 @@ export function RubricResponse({
   tooShortMessage,
   tooLongMessage,
   embedderDownMessage,
+  verdictsPanelHeader,
+  verdictRevealPillLabel,
   dependsOn,
   allowPaste,
   embedder = defaultEmbedder,
 }: Props) {
-  const { state, setWidgetValue, spendAndRevealRubricTier, bucketView, registerSpendableCount } =
-    useRunner();
-  const { spendMode } = useHintSpend();
+  const {
+    state,
+    setWidgetValue,
+    spendAndRevealRubricTier,
+    revealRubricVerdicts,
+    bucketView,
+    registerSpendableCount,
+  } = useRunner();
+  const { spendMode, exitSpendMode } = useHintSpend();
   const text = (state.widgetValues[id] as string | undefined) ?? '';
   const tiers = state.rubricHintTiers[id] ?? {};
   const dependsOnNorm = dependsOn ?? null;
 
   const persistedKey = `${id}:result`;
+  const panelShownKey = `${id}:panelShown`;
   const persistedRaw = readPersisted(state.widgetValues[persistedKey]);
 
   const parsed = useMemo(() => parseRubric(rubric), [rubric]);
@@ -213,21 +247,20 @@ export function RubricResponse({
   // from mount so hooks order is stable across the render-branch below.
   useRegisteredWidgetState(id, { kind: 'rubric', satisfied }, [satisfied]);
 
-  // Live spendable-target count: the number of failing criteria that could
-  // still accept a paid hint. Mirrors the eligibility rule used to render
-  // `failingCriteria` below (required always counts; optional only when
-  // `requiredSatisfied && evaluable`). HintBucket sums this across the phase
-  // to disable when tokens > 0 but nothing is left to buy.
+  // Live spendable-target count: sum of unrevealed paid tiers across failing
+  // criteria. Only spend-mode targets are counted — the verdict-reveal pill is
+  // a direct-dispatch button (panel-resident, never armed), so it's excluded.
+  // Eligibility mirrors `failingCriteria` below.
   const rubricSpendableCount = (() => {
     if (!parsed.ok || !result) return 0;
     let count = 0;
     for (const c of result.criteria) {
       if (c.satisfied || c.hints.length === 0) continue;
-      if (c.required) {
-        count++;
-        continue;
-      }
-      if (result.requiredSatisfied && c.evaluable) count++;
+      const eligible = c.required || (result.requiredSatisfied && c.evaluable);
+      if (!eligible) continue;
+      const tier = tiers[c.id] ?? 0;
+      const remaining = c.hints.length - tier;
+      if (remaining > 0) count += remaining;
     }
     return count;
   })();
@@ -265,8 +298,9 @@ export function RubricResponse({
     // Invalidate any in-flight evaluation: when it resolves, its requestId
     // won't match anymore and the resolution gets dropped (pending still
     // clears so the button re-enables). We deliberately do NOT clear the
-    // persisted record here — that's what lets the pill show "Ændret siden
-    // tjek" rather than reverting to "Ikke tjekket endnu".
+    // persisted record here — that's what lets the panel stay sticky after
+    // an edit (per the F9 fix; panel bullets read from the latest result
+    // regardless of dirty state).
     requestIdRef.current += 1;
     setWidgetValue(id, next);
   };
@@ -331,6 +365,16 @@ export function RubricResponse({
   checkRef.current.pending = pending;
   useRegisteredWidgetCheck(id, footerActive, checkRef, pending ? 1 : 0);
 
+  // Sticky-panel one-way bit. Reads from widgetValues so it survives reload
+  // (the bit is persisted automatically via SET_WIDGET_VALUE). The first-show
+  // write happens in a useEffect (below) to avoid render-time dispatches.
+  const panelShown = state.widgetValues[panelShownKey] === true;
+
+  // Verdict-reveal state. Both slices fall back to {} on hydration, so direct
+  // index access is safe.
+  const verdictsRevealed = state.rubricVerdictsRevealed?.[id] === true;
+  const persistedVerdictRowIds = state.rubricVerdictRowIds?.[id] ?? null;
+
   // Bad rubric: render disabled chrome so the page doesn't break.
   if (!parsed.ok) {
     const isDev = import.meta.env.DEV;
@@ -354,21 +398,34 @@ export function RubricResponse({
 
   const checkDisabled = pending || !nonEmpty || !meetsMinWords || overMaxWords;
 
-  // Surface a fresh result (live or persisted-shaped) for the popup, gated on
-  // the same "feedback only" rule: result present, not dirty, not mid-check.
-  // `lastCheckedText !== null` keeps stale local `result` from driving popups
-  // after `resetLab` clears the persisted record without remounting the widget.
-  const showFeedback = !!result && lastCheckedText !== null && !dirty && !pending;
+  // Failing criteria — the spend-mode targets. Eligibility mirrors the old
+  // auto-bump rule: required criteria always count; optional ones only once
+  // `requiredSatisfied` AND `evaluable` so an embedder outage on a
+  // semantic-only bonus doesn't surface unreachable hints.
+  const failingCriteria = (() => {
+    if (!result) return [] as { id: string; label: string; cap: number; tier: number }[];
+    return result.criteria
+      .filter((c) => {
+        if (c.satisfied || c.hints.length === 0) return false;
+        if (c.required) return true;
+        return result.requiredSatisfied && c.evaluable;
+      })
+      .map((c) => ({
+        id: c.id,
+        label: c.label,
+        cap: c.hints.length,
+        tier: tiers[c.id] ?? 0,
+      }));
+  })();
 
-  // Build the popup entries from the latest result + persisted tier counters.
-  // - Misconceptions are free and always appear at the top in orange.
-  // - For each criterion with `tier > 0`: render its tier texts under a header
-  //   with the criterion label. Reveal text (tier === hintCap + 1) appears
-  //   underneath in distinct tone.
-  const popupEntries: HintPopupEntry[] = (() => {
-    if (!showFeedback || !result) return [];
-    const entries: HintPopupEntry[] = [];
-    // Misconceptions — free, always shown when result is fresh.
+  // Panel entries: amber misconceptions from the latest `result` first, then
+  // paid tier reveals walked in author order. Critically, this is independent
+  // of `dirty`/`pending` — the F9 fix is that paid bullets must NOT vanish
+  // mid-edit. The list refreshes only on the next Tjek (when `result` is
+  // replaced).
+  const panelEntries: PanelEntry[] = (() => {
+    if (!result) return [];
+    const entries: PanelEntry[] = [];
     for (const c of result.criteria) {
       for (const m of c.misconceptions) {
         if (m.status !== VETO_STATUSES.TRIGGERED) continue;
@@ -379,8 +436,6 @@ export function RubricResponse({
         });
       }
     }
-    // Paid tier reveals per criterion. Walk criteria in author order so the
-    // popup reads consistently across re-evaluations.
     for (const c of result.criteria) {
       const tier = tiers[c.id] ?? 0;
       if (tier <= 0) continue;
@@ -393,60 +448,98 @@ export function RubricResponse({
           key: `tier-${c.id}-${i + 1}`,
           text,
           tone: 'hint',
-          group: c.label,
-        });
-      }
-      if (tier > cap && c.reveal !== undefined) {
-        entries.push({
-          key: `reveal-${c.id}`,
-          text: c.reveal,
-          tone: 'reveal',
-          group: c.label,
         });
       }
     }
     return entries;
   })();
 
+  // First-show write of the sticky `panelShown` bit. The guard makes this
+  // one-shot — once the bit lands in widgetValues, the effect's `panelShown`
+  // dep is `true` and the body short-circuits. Lives in a useEffect (not the
+  // render body) so we never dispatch during render — that would warn under
+  // strict mode and risk an update loop.
+  useEffect(() => {
+    if (!panelShown && panelEntries.length > 0) {
+      setWidgetValue(panelShownKey, true);
+    }
+  }, [panelShown, panelEntries.length, panelShownKey, setWidgetValue]);
+
   const showEmbedderBanner = embedderDown && !dirty;
 
   const helpId = `rr-${id}-help`;
 
-  // Visible status pill removed — feedback now comes from the popup (on fail)
-  // and the Next-phase button enabling (on pass). The sr-only live region
-  // preserves the AT-side "Godkendt" announcement on pass.
+  // Visible status pill removed — feedback comes from the panel and the
+  // Next-phase button enabling on pass. The sr-only live region preserves
+  // the AT-side "Godkendt" announcement.
   const showAriaStatus = !pending && !dirty && satisfied;
 
-  // Spend mode: render lightbulbs alongside failing criteria. Only the active
-  // phase's widget shows them — spend-mode's `phaseId` is the active phase,
-  // and PhaseScopeContext ensures only the active phase body is visible.
-  const armed =
-    spendMode.kind === 'active' && spendMode.phaseId === state.currentPhaseId && showFeedback;
+  // Spend mode: only the active phase's widget acts on it (PhaseScopeContext
+  // ensures only the active body is visible, but the conjunction makes the
+  // armed-cursor scoping explicit).
+  const armed = spendMode.kind === 'active' && spendMode.phaseId === state.currentPhaseId;
+  const armedSpendable = armed && failingCriteria.length > 0;
+
   const currentPhase = state.currentPhaseId;
   const bucket = bucketView(currentPhase);
 
-  const failingCriteria = (() => {
-    if (!result)
-      return [] as { id: string; label: string; cap: number; tier: number; reveal?: string }[];
-    // Eligibility mirrors the old auto-bump rule: required criteria always
-    // count; optional ones only once `requiredSatisfied` AND `evaluable` so
-    // an embedder outage on a semantic-only bonus doesn't surface unreachable
-    // hints — the verdict on the bonus isn't real when the system can't
-    // evaluate it.
-    return result.criteria
-      .filter((c) => {
-        if (c.satisfied || c.hints.length === 0) return false;
-        if (c.required) return true;
-        return result.requiredSatisfied && c.evaluable;
-      })
-      .map((c) => ({
-        id: c.id,
-        label: c.label,
-        cap: c.hints.length,
-        tier: tiers[c.id] ?? 0,
-        reveal: c.reveal,
-      }));
-  })();
+  // Verdict-reveal unlock predicate. The `.length > 0` guard avoids the
+  // vacuous-true case on a fully passing rubric (every() over an empty array
+  // returns true) — otherwise the pill would render with no checklist content
+  // behind it and a click would burn 2 tokens for nothing.
+  const verdictUnlocked =
+    failingCriteria.length > 0 && failingCriteria.every((c) => c.tier >= c.cap);
+
+  // Frozen verdict-row computation. Called only at the moment of the
+  // reveal-spend dispatch — the snapshot is then persisted in
+  // `rubricVerdictRowIds[id]` and never recomputed for that widget. Required
+  // criteria are always in the snapshot (their ladder is always accessible);
+  // optionals are included iff they are currently failing + eligible (which,
+  // by `verdictUnlocked`, means they are in `failingCriteria` and at cap).
+  const computeVerdictRowIdsSnapshot = (): string[] => {
+    if (!result) return [];
+    const failingIds = new Set(failingCriteria.map((c) => c.id));
+    const ids: string[] = [];
+    for (const c of result.criteria) {
+      if (c.required || failingIds.has(c.id)) ids.push(c.id);
+    }
+    return ids;
+  };
+
+  const handleVerdictReveal = () => {
+    if (!verdictUnlocked || verdictsRevealed) return;
+    if (bucket.tokens < VERDICT_REVEAL_COST) return;
+    const rowIds = computeVerdictRowIdsSnapshot();
+    revealRubricVerdicts({ widgetId: id, rowIds });
+  };
+
+  const spendNextAvailableTier = () => {
+    const target = failingCriteria.find((c) => c.tier < c.cap);
+    if (!target) return;
+    spendAndRevealRubricTier({ widgetId: id, criterionId: target.id, hintCap: target.cap });
+    exitSpendMode();
+  };
+
+  // Armed-textarea click: dispatch the next tier. We do NOT preventDefault on
+  // the click — letting the natural focus happen means a keyboard student who
+  // arms + tabs to the textarea can keep editing seamlessly after the spend.
+  const onTextareaClick = (_e: ReactMouseEvent<HTMLTextAreaElement>) => {
+    if (!armedSpendable) return;
+    spendNextAvailableTier();
+  };
+
+  // Armed-textarea Enter: preventDefault BEFORE dispatch is non-negotiable —
+  // a <textarea>'s default Enter behavior is to insert a newline, which would
+  // dirty the just-checked text and the freshly-spent tier would vanish on the
+  // next render (charge-without-reveal bug). The guard runs only while armed,
+  // so off-arm Enter still produces newlines as expected.
+  const onTextareaKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (!armedSpendable) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      spendNextAvailableTier();
+    }
+  };
 
   // In-widget check button (shown when the footer isn't driving the check —
   // open mode, or `checkInFooter` not set). Wrapped in a Tooltip when the word
@@ -471,12 +564,32 @@ export function RubricResponse({
     </button>
   );
 
+  // Panel renders once it has been shown at least once. `panelShown` is the
+  // single source of truth — the bit is set on the first observed non-empty
+  // `panelEntries`, and never cleared (so editing away a misconception or
+  // satisfying a criterion does NOT collapse the panel mid-edit, which was
+  // the F9 failure mode).
+  const panelVisible = panelShown;
+  const pipCount = panelEntries.length;
+
+  const verdictsHeader = verdictsPanelHeader ?? strings.widgets.rubric.verdictsPanelHeader;
+  const verdictRevealLabel =
+    verdictRevealPillLabel ?? strings.widgets.rubric.verdictRevealPillLabel;
+  const verdictRevealDisabled = bucket.tokens < VERDICT_REVEAL_COST;
+
+  const textareaClass = armedSpendable
+    ? 'border-amber-400 ring-1 ring-amber-300 cursor-pointer'
+    : '';
+
   return (
     <div className="my-4">
       <label htmlFor={`rr-${id}`} className="block text-sm font-medium text-slate-800 mb-1">
         {prompt}
       </label>
-      <HintPopup entries={popupEntries}>
+      {/* Wrapper hosts the textarea + the left-edge pip cluster. `relative`
+          for the pip-cluster's absolute positioning; `group` so the pips can
+          react to focus-within. */}
+      <span className="group/rr relative block w-full">
         <ProtectedTextarea
           id={`rr-${id}`}
           value={text}
@@ -486,21 +599,122 @@ export function RubricResponse({
           aria-invalid={tooShort || overMaxWords || undefined}
           allowPaste={allowPaste}
           onChange={(e) => onTextChange(e.target.value)}
+          onClick={onTextareaClick}
+          onKeyDown={onTextareaKeyDown}
+          className={textareaClass}
         />
-      </HintPopup>
-      <div id={helpId} aria-live="polite" className="contents">
-        {typeof maxChars === 'number' && (
-          <div className="mt-1 text-xs text-slate-500 text-right">
-            {text.length} / {maxChars}
-          </div>
-        )}
-        {typeof maxWords === 'number' && (
-          <div
-            className={`mt-1 text-xs text-right ${overMaxWords ? 'text-amber-700' : 'text-slate-500'}`}
+        {pipCount > 0 && (
+          // Pip cluster: mirror of the VariableTable cell pip block, flipped
+          // to the textarea's left edge. Count = panelEntries.length — one
+          // pip per visible bullet in the panel. On focus-within the cluster
+          // slides down + the pips grow to bridge visually toward the panel
+          // (which is the persistent surface below the textarea — the
+          // bridge metaphor mirrors VT's pip→popup behaviour). VT's pip code
+          // is intentionally not extracted; this is a local copy reusing the
+          // same Tailwind utilities (PL4).
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2 bottom-0.5 flex gap-0.5 transition-all duration-150 group-focus-within/rr:-bottom-1.5"
           >
-            {format(strings.widgets.rubric.wordCount, { n: words, max: maxWords })}
-          </div>
+            {panelEntries.map((entry) => (
+              <span
+                key={`rr-${id}-pip-${entry.key}`}
+                className="block h-1.5 w-0.5 rounded-sm bg-amber-400 transition-all duration-150 group-focus-within/rr:h-3.5"
+              />
+            ))}
+          </span>
         )}
+      </span>
+      {/* Panel sits to the left, word counter to the right. The panel is
+          capped at `max-w-md` so it cannot push the counter off; the row's
+          top edge meets the textarea's pip cluster ("the tick") so the pip
+          visually bridges into the panel. When the panel is absent the row
+          still right-aligns the counter (initial-render layout unchanged). */}
+      <div className={`mt-1 flex items-start gap-3 ${panelVisible ? '' : 'justify-end'}`}>
+        {panelVisible && (
+          <section
+            aria-label={strings.widgets.rubric.hintsLabel}
+            // `hint-popup` class is the same hook globals.css uses to
+            // suppress the project-wide `.prose ul > li::before` blue dot
+            // — see TieredHintList for the popup-side use.
+            className="hint-popup max-w-md flex-1 rounded-md border border-amber-300 bg-slate-50 p-3 text-sm"
+          >
+            {verdictsRevealed && result && persistedVerdictRowIds && (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {verdictsHeader}
+                </div>
+                <ul className="space-y-1">
+                  {persistedVerdictRowIds.map((rowId) => {
+                    // Live ✓/✗ lookup against the latest result. A criterion
+                    // missing from `result.criteria` (rubric edited mid-flight)
+                    // is skipped defensively — the engine rejects malformed
+                    // rubrics at parseRubric so this branch is best-effort.
+                    const c = result.criteria.find((x) => x.id === rowId);
+                    if (!c) return null;
+                    const template = c.satisfied
+                      ? strings.widgets.rubric.verdictPass
+                      : strings.widgets.rubric.verdictFail;
+                    return (
+                      <li
+                        key={`verdict-${rowId}`}
+                        className={c.satisfied ? 'text-emerald-800' : 'text-rose-800'}
+                      >
+                        {format(template, { label: c.label })}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* Bullets — amber misconception lines first, then slate paid tier
+                text in author order. Matches the visual language of the retired
+                focus-popup so the student's mental model carries over. */}
+            <ul className="space-y-1">
+              {panelEntries.map((entry) => (
+                <li
+                  key={entry.key}
+                  className={`flex items-start gap-2 ${entry.tone === 'misconception' ? 'text-orange-800' : 'text-slate-700'}`}
+                >
+                  <span aria-hidden="true" className="select-none leading-snug">
+                    –
+                  </span>
+                  <span>{entry.text}</span>
+                </li>
+              ))}
+            </ul>
+
+            {verdictUnlocked && !verdictsRevealed && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleVerdictReveal}
+                  disabled={verdictRevealDisabled}
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-3 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {verdictRevealLabel}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+        <div
+          id={helpId}
+          aria-live="polite"
+          className="shrink-0 whitespace-nowrap text-xs text-right"
+        >
+          {typeof maxChars === 'number' && (
+            <div className="text-slate-500">
+              {text.length} / {maxChars}
+            </div>
+          )}
+          {typeof maxWords === 'number' && (
+            <div className={overMaxWords ? 'text-amber-700' : 'text-slate-500'}>
+              {format(strings.widgets.rubric.wordCount, { n: words, max: maxWords })}
+            </div>
+          )}
+        </div>
       </div>
 
       {(showAriaStatus || !footerActive) && (
@@ -510,18 +724,14 @@ export function RubricResponse({
               {strings.widgets.rubric.statusPassed}
             </output>
           )}
-          {!footerActive && (
-            <>
-              <HintBucket placement="inline" />
-              {wordCountHint != null ? (
-                <Tooltip content={wordCountHint} align="right" openDelayMs={500}>
-                  {checkButton}
-                </Tooltip>
-              ) : (
-                checkButton
-              )}
-            </>
-          )}
+          {!footerActive &&
+            (wordCountHint != null ? (
+              <Tooltip content={wordCountHint} align="right" openDelayMs={500}>
+                {checkButton}
+              </Tooltip>
+            ) : (
+              checkButton
+            ))}
         </div>
       )}
 
@@ -529,55 +739,6 @@ export function RubricResponse({
         <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           {embedderDownMessage ?? strings.widgets.rubric.embedderDown}
         </div>
-      )}
-
-      {armed && failingCriteria.length > 0 && (
-        <ul
-          aria-label={strings.widgets.rubric.hintsLabel}
-          className="mt-3 list-none space-y-2 pl-0 text-sm text-slate-700"
-        >
-          {failingCriteria.map((c) => {
-            const atCap = c.tier >= c.cap;
-            // Reveal pill renders only at the boundary (tier === cap). Once the
-            // reveal is unlocked (tier > cap) the criterion has nothing left to
-            // spend on — the reveal text is already in the popup.
-            const revealAvailable = c.tier === c.cap && c.reveal !== undefined;
-            const insufficient = revealAvailable && bucket.tokens < REVEAL_COST;
-            return (
-              <li key={c.id} className="flex items-center gap-2">
-                <span className="font-medium text-slate-800">{c.label}</span>
-                {revealAvailable ? (
-                  <HintLightbulb
-                    variant="reveal"
-                    cost={REVEAL_COST}
-                    disabled={insufficient}
-                    onSpend={() =>
-                      spendAndRevealRubricTier({
-                        widgetId: id,
-                        criterionId: c.id,
-                        op: { kind: 'reveal', cost: REVEAL_COST },
-                        hintCap: c.cap,
-                      })
-                    }
-                  />
-                ) : atCap ? null : (
-                  <HintLightbulb
-                    nextTier={c.tier + 1}
-                    cap={c.cap}
-                    onSpend={() =>
-                      spendAndRevealRubricTier({
-                        widgetId: id,
-                        criterionId: c.id,
-                        op: { kind: 'tier' },
-                        hintCap: c.cap,
-                      })
-                    }
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );

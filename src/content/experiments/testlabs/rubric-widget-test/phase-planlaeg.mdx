@@ -1,13 +1,18 @@
-import rubric from '../template/rubrics/template-hypothesis.json';
+import rubric from './rubrics/widget-test-hypothesis.json';
 
-Baseline: standardprops, `rubric-required`-gate. Brug fasen til at verificere tier-progression i hints og gate-overgangen ved pass/dirty.
+Baseline: standardprops, `rubric-required`-gate. Brug fasen til at verificere panel-flowet, paid tier-walk på tværs af kriterier, og verdict-checklist-reveal.
 
 **Probe-tjekliste**
-- Tom tekst → Tjek-knappen er deaktiveret.
+- Tom tekst → Tjek-knappen er deaktiveret (tooltip "Skriv mindst 10 ord før du tjekker.").
 - Under 10 ord → knap stadig deaktiveret.
-- Mindst 10 ord uden relations-verbum → klik Tjek tre gange; tier-1 → tier-1+2 → tier-1+2+3 (cap).
-- Skriv "X stiger, så Y vokser" og klik Tjek → gate åbner (Næste aktiveres), bonus-panel for `principle` dukker op. Skærmlæser annoncerer "Godkendt" via sr-only live-region.
-- Redigér teksten efter pass → gate lukker igen (Næste deaktiveres). Ingen synlig dirty-pille — afhængigheden er strukturel.
+- Mindst 10 ord uden relations-verbum og uden X/Y → panel er endnu ikke synligt. Klik Tjek: intet panel (ingen misconception, ingen brugte tokens).
+- Skriv "pendul stiger" + 10+ ord → Tjek → panel materialiserer sig med en amber misconception-bullet. Pip-cluster i venstre kant viser 1 pip.
+- Klik HintBucket → tekstfeltet får amber-border + ring. Klik i tekstfeltet → første kriterium ("relation") afslører tier 1 som slate-bullet under misconception. Pip-cluster vokser til 2. Token-tæller falder med 1.
+- Fortsæt at klikke (arm + spend) indtil alle paid-ladders er på cap (relation: 3 tiers, variables: 2 tiers). Når alle failing ladders er på cap → pillen "Vis hvad der mangler (2)" dukker op nederst i panelet.
+- Klik pillen → 2 tokens forbruges; verdict-checklist materialiserer sig OVER Tips-listen med ✓/✗ ud for hvert frosset row-id. Optional-kriteriet "shape" inkluderes kun hvis det var i `failingCriteria` på spend-tidspunktet.
+- Skriv "X stiger så Y vokser lineært" + 10+ ord → Tjek → gate åbner (Næste aktiveres). Verdict-checklist opdaterer ✓/✗ live for hver allerede-frosset row.
+- Genindlæs siden midt i flowet: panel forbliver synligt (sticky `panelShown`); verdict-checklist forsvinder indtil næste Tjek (mangler fresh `result`).
+- Redigér teksten efter pass → gate lukker; panel + bullets forbliver synlige (de forsvinder IKKE mid-edit — det er F9-rettelsen).
 
 <RubricResponse
   id="hypotese"

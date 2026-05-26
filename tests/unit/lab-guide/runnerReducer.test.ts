@@ -18,6 +18,8 @@ function makeState(overrides: Partial<RunnerState> = {}): RunnerState {
     attemptCounts: {},
     simulationState: null,
     rubricHintTiers: {},
+    rubricVerdictsRevealed: {},
+    rubricVerdictRowIds: {},
     variableTableHintTiers: {},
     variableTableHintReveals: {},
     variableTableLastChecked: {},
@@ -233,7 +235,6 @@ describe('runnerReducer', () => {
         phaseId: 'planlaeg',
         widgetId: 'w1',
         criterionId: 'c1',
-        op: { kind: 'tier' },
         hintCap: 3,
         poolCap: 3,
         now: 1_000,
@@ -256,7 +257,6 @@ describe('runnerReducer', () => {
         phaseId: 'planlaeg',
         widgetId: 'w1',
         criterionId: 'c1',
-        op: { kind: 'tier' },
         hintCap: 3,
         poolCap: 3,
         now: 2_000,
@@ -271,7 +271,6 @@ describe('runnerReducer', () => {
         phaseId: 'planlaeg',
         widgetId: 'w1',
         criterionId: 'c1',
-        op: { kind: 'tier' },
         hintCap: 3,
         poolCap: 3,
         now: 1_000,
@@ -288,7 +287,6 @@ describe('runnerReducer', () => {
         phaseId: 'planlaeg',
         widgetId: 'w1',
         criterionId: 'c1',
-        op: { kind: 'tier' as const },
         hintCap: 1,
         poolCap: 3,
         now: 1_000,
@@ -298,57 +296,55 @@ describe('runnerReducer', () => {
       expect(s.rubricHintTiers.w1?.c1).toBe(1);
       expect(s.hintTokens.planlaeg).toBe(2);
     });
+  });
 
-    it('reveal moves tier from hintCap to hintCap + 1 and costs `op.cost`', () => {
-      const s = makeState({
-        rubricHintTiers: { w1: { c1: 3 } },
-        hintTokens: { planlaeg: 3 },
-      });
-      const next = runnerReducer(s, {
-        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+  describe('REVEAL_RUBRIC_VERDICTS', () => {
+    it('decrements 2 tokens, sets revealed bit, freezes rowIds, accounts under the sentinel key', () => {
+      const next = runnerReducer(makeState(), {
+        type: 'REVEAL_RUBRIC_VERDICTS',
         phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'c1',
-        op: { kind: 'reveal', cost: 2 },
-        hintCap: 3,
+        rowIds: ['c1', 'c2'],
         poolCap: 3,
         now: 5_000,
       });
-      expect(next.rubricHintTiers.w1?.c1).toBe(4);
+      expect(next.rubricVerdictsRevealed.w1).toBe(true);
+      expect(next.rubricVerdictRowIds.w1).toEqual(['c1', 'c2']);
       expect(next.hintTokens.planlaeg).toBe(1);
+      expect(next.hintLastReplenishAt.planlaeg).toBe(5_000);
       expect(next.hintUsageTotal).toBe(2);
+      expect(next.hintUsageByPhase.planlaeg).toBe(2);
+      expect(next.hintUsageByTarget['w1::__verdicts__']).toBe(2);
     });
 
-    it('reveal fails when prior tier < hintCap (must finish ladder first)', () => {
-      const s = makeState({
-        rubricHintTiers: { w1: { c1: 1 } },
-        hintTokens: { planlaeg: 3 },
-      });
-      const next = runnerReducer(s, {
-        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+    it('is idempotent — a second dispatch on an already-revealed widget is a no-op', () => {
+      const first = runnerReducer(makeState(), {
+        type: 'REVEAL_RUBRIC_VERDICTS',
         phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'c1',
-        op: { kind: 'reveal', cost: 2 },
-        hintCap: 3,
+        rowIds: ['c1'],
         poolCap: 3,
         now: 5_000,
       });
-      expect(next).toBe(s);
-    });
-
-    it('insufficient-token reveal is a no-op', () => {
-      const s = makeState({
-        rubricHintTiers: { w1: { c1: 3 } },
-        hintTokens: { planlaeg: 1 },
-      });
-      const next = runnerReducer(s, {
-        type: 'SPEND_AND_REVEAL_RUBRIC_TIER',
+      const second = runnerReducer(first, {
+        type: 'REVEAL_RUBRIC_VERDICTS',
         phaseId: 'planlaeg',
         widgetId: 'w1',
-        criterionId: 'c1',
-        op: { kind: 'reveal', cost: 2 },
-        hintCap: 3,
+        rowIds: ['c1', 'c2'],
+        poolCap: 3,
+        now: 6_000,
+      });
+      // No token charge, no row-ids overwrite, no timer anchor shift.
+      expect(second).toBe(first);
+    });
+
+    it('is a no-op when tokens are insufficient (< 2)', () => {
+      const s = makeState({ hintTokens: { planlaeg: 1 } });
+      const next = runnerReducer(s, {
+        type: 'REVEAL_RUBRIC_VERDICTS',
+        phaseId: 'planlaeg',
+        widgetId: 'w1',
+        rowIds: ['c1', 'c2'],
         poolCap: 3,
         now: 5_000,
       });

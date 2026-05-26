@@ -14,8 +14,8 @@ export interface HintPopupEntry {
   key: string;
   text: string;
   /** Free misconception entries render in orange at the top. Paid ladder
-   *  entries (and reveal text) render in neutral slate. */
-  tone: 'misconception' | 'hint' | 'reveal';
+   *  entries render in neutral slate. */
+  tone: 'misconception' | 'hint';
   /** Optional section header rendered above the entry (criterion label, etc.).
    *  Adjacent entries with the same `group` share one header. */
   group?: string;

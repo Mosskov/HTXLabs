@@ -186,4 +186,17 @@ describe('RubricSchema', () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe('retired `reveal` field (F9)', () => {
+    it('rejects a criterion that still carries `reveal`', () => {
+      const result = CriterionSchema.safeParse({
+        id: 'c1',
+        label: 'x',
+        hints: ['t1'],
+        reveal: 'answer',
+        any: [{ kind: 'literal', terms: ['x'] }],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
 });

@@ -2,6 +2,7 @@ import { HintSpendProvider } from '@/lab-guide/HintSpendContext';
 import { PhaseScopeProvider } from '@/lab-guide/PhaseScopeContext';
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { isGateSatisfied } from '@/lab-guide/gates';
+import { HintBucket } from '@/lab-guide/widgets/HintBucket';
 import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { RubricResponse } from '@/lab-guide/widgets/RubricResponse';
 import { MockEmbedder } from '@/lib/rubric/embedder';
@@ -358,27 +359,36 @@ describe('RubricResponse — tiered hints', () => {
   });
 });
 
-describe('RubricResponse — spend mode (integration)', () => {
-  // Same rubric shape as the tiered-hints suite, plus a semantic-only bonus
-  // exposed under a flaky embedder. Required criteria are literal-only so they
-  // can fail or pass without touching the embedder.
-  const tieredRubric = {
-    id: 'tiered-int',
+describe('RubricResponse — panel + spend (F9)', () => {
+  // Three criteria laid out so the spend-mode integration can exercise the
+  // author-priority walk: relation (3 tiers + misconception), variables
+  // (2 tiers), shape (optional, 1 tier).
+  const panelRubric = {
+    id: 'panel-int',
     version: 1,
-    title: 'Tiered integration',
+    title: 'Panel integration',
     criteria: [
       {
-        id: 'iv',
-        label: 'IV',
-        hints: ['hint-iv-1', 'hint-iv-2', 'hint-iv-3'],
-        any: [{ kind: 'literal', terms: ['uafhængig'] }],
+        id: 'relation',
+        label: 'Relation',
+        hints: ['rel-t1', 'rel-t2', 'rel-t3'],
+        any: [{ kind: 'literal', terms: ['stiger'] }],
+        misconceptions: [
+          { kind: 'regex', pattern: 'pendul', flags: 'iu', hint: 'mis-pendul' },
+        ],
       },
       {
-        id: 'bonus',
-        label: 'Bonus',
+        id: 'variables',
+        label: 'Variable',
+        hints: ['var-t1', 'var-t2'],
+        any: [{ kind: 'literal', terms: ['x'] }],
+      },
+      {
+        id: 'shape',
+        label: 'Lineær',
         required: false,
-        hints: ['bonus-t1'],
-        any: [{ kind: 'literal', terms: ['ekstra'] }],
+        hints: ['shape-t1'],
+        any: [{ kind: 'literal', terms: ['lineær'] }],
       },
     ],
   };
@@ -394,93 +404,197 @@ describe('RubricResponse — spend mode (integration)', () => {
       <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[phase]}>
         <HintSpendProvider>
           <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+          <GateProbe />
         </HintSpendProvider>
       </RunnerProvider>
     );
   }
 
-  it('bucket → lightbulb → popup: spending one token reveals tier 1 in the popup', async () => {
-    const user = userEvent.setup();
+  // T1: nothing visible until first Tjek + first interaction.
+  it('initial render: no panel, no pip, no inline HintBucket', () => {
     render(
-      <IntegrationHarness experimentId="rr-spend/1">
-        <RubricResponse id="hyp" prompt="?" rubric={tieredRubric} embedder={new MockEmbedder({})} />
+      <IntegrationHarness experimentId="rr-f9/init">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
       </IntegrationHarness>,
     );
-
-    // Tjek with an answer that fails both required + bonus criteria.
-    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt');
-    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
-
-    // Bucket renders with the full default pool. No lightbulbs yet — the
-    // request-driven model never auto-reveals.
-    const bucket = await screen.findByRole('button', { name: /hint-pulje:\s*3\s*af\s*3/i });
-    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
-
-    // Click bucket → spend mode armed → lightbulb on the failing required
-    // criterion ('IV'). The bonus is failing too, but required-not-satisfied
-    // suppresses bonus-criterion lightbulbs.
-    await user.click(bucket);
-    const lightbulbs = screen.getAllByLabelText(/få et hint/i);
-    expect(lightbulbs).toHaveLength(1);
-
-    // Click → tier 1 unlocks → token decrements → spend mode exits.
-    await user.click(lightbulbs[0]);
-    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /hint-pulje:\s*2\s*af\s*3/i })).toBeInTheDocument();
-
-    // Focus the textarea → popup opens showing the freshly-paid tier-1 hint.
-    await user.click(screen.getByRole('textbox'));
-    expect(screen.getByText('hint-iv-1')).toBeInTheDocument();
-    expect(screen.queryByText('hint-iv-2')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Tips/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hvad mangler/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /hint-pulje/i })).not.toBeInTheDocument();
   });
 
-  it('does NOT show a lightbulb on a semantic-only bonus while the embedder is down', async () => {
-    const semanticBonusRubric = {
-      id: 'sem-bonus-int',
-      version: 1,
-      title: 'Sem bonus integration',
-      criteria: [
-        {
-          id: 'iv',
-          label: 'IV',
-          hints: ['hint-iv-1'],
-          any: [{ kind: 'literal', terms: ['uafhængig'] }],
-        },
-        {
-          id: 'bonus',
-          label: 'Bonus',
-          required: false,
-          hints: ['bonus-t1'],
-          any: [{ kind: 'semantic', threshold: 0.5, anchors: ['something'] }],
-        },
-      ],
-    };
-    const flaky = {
-      async embed() {
-        throw new Error('embed server down');
-      },
-    };
+  // T2: failing Tjek without a triggered misconception → panel still hidden.
+  // Wait via the Tjek button's `Tjekker…` label cycling back to the idle label.
+  it('failing Tjek with no misconception: panel does not materialize', async () => {
     const user = userEvent.setup();
     render(
-      <IntegrationHarness experimentId="rr-spend/2">
-        <RubricResponse id="hyp" prompt="?" rubric={semanticBonusRubric} embedder={flaky} />
+      <IntegrationHarness experimentId="rr-f9/no-mis">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
       </IntegrationHarness>,
     );
-
-    // Pass the required criterion so the bonus would normally be eligible —
-    // but the embedder outage makes the bonus !evaluable, suppressing its
-    // lightbulb even in spend mode.
-    await user.type(screen.getByRole('textbox'), 'min uafhængig variabel er X');
+    await user.type(screen.getByRole('textbox'), 'svaret er ufuldstændigt her');
     await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
-    await screen.findByText(/semantiske vurdering/i);
+    // After the async evaluate settles the gate flips to 'fail' (widgetId
+    // 'hyp' doesn't match the gate's 'hypotese', so gate stays 'fail' — but
+    // that's also exactly what we want: just confirm the eval settled.)
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+    expect(
+      screen.queryByRole('region', { name: /tips til de manglende krav/i }),
+    ).not.toBeInTheDocument();
+  });
 
-    const bucket = screen.getByRole('button', { name: /hint-pulje/i });
+  // T3: failing Tjek with a misconception → panel renders w/ amber bullet, no
+  // verdict-reveal pill (failing ladders aren't at cap yet).
+  it('failing Tjek with misconception: panel materializes with the misconception', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/mis">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    await user.type(screen.getByRole('textbox'), 'pendul svinger frem og tilbage tydeligt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    expect(await screen.findByText('mis-pendul')).toBeInTheDocument();
+    // Panel region materialized (its aria-label is the stable signal — the
+    // visible 'Tips' header was removed; border colour carries the affordance).
+    expect(
+      screen.getByRole('region', { name: /tips til de manglende krav/i }),
+    ).toBeInTheDocument();
+    // Verdict-reveal pill is not present yet.
+    expect(screen.queryByRole('button', { name: /vis hvad der mangler/i })).not.toBeInTheDocument();
+  });
+
+  // T4 + T5: arm bucket + click textarea → next failing criterion's tier 1
+  // appears as a slate bullet; continuing to spend walks the ladders in
+  // author order across criteria.
+  it('armed-click on textarea spends the next paid tier in author order', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/walk">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'svar uden krav opfyldt her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    // Wait for failing Tjek to flush so spendable-count registers + bucket is
+    // armable.
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    const bucket = await screen.findByRole('button', { name: /hint-pulje:\s*3\s*af\s*3/i });
+    // First arm + click textarea → relation tier 1
     await user.click(bucket);
+    await user.click(textarea);
+    expect(await screen.findByText('rel-t1')).toBeInTheDocument();
+    expect(screen.queryByText('rel-t2')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /hint-pulje:\s*2\s*af\s*3/i })).toBeInTheDocument();
 
-    // No lightbulb on the bonus criterion — it would surface unreachable hint
-    // text under the outage. (Required is satisfied, so it doesn't render one
-    // either — `c.satisfied` filter.)
-    expect(screen.queryByLabelText(/få et hint/i)).not.toBeInTheDocument();
+    // Second spend → relation tier 2 (same criterion still has remaining cap).
+    await user.click(screen.getByRole('button', { name: /hint-pulje/i }));
+    await user.click(textarea);
+    expect(await screen.findByText('rel-t2')).toBeInTheDocument();
+  });
+
+  // T18 (vacuous-true guard): a fully-passing rubric does not show the
+  // verdict-reveal pill. Widget id matches the gate's `widgetIds` so the
+  // gate-probe flips to 'pass' on the rubric-pass — that's our settle signal.
+  it('fully-passing rubric: verdict-reveal pill is suppressed', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/pass">
+        <RubricResponse
+          id="hypotese"
+          prompt="?"
+          rubric={panelRubric}
+          embedder={new MockEmbedder({})}
+        />
+      </IntegrationHarness>,
+    );
+    // Hit BOTH required criteria literally: 'stiger' + 'x'.
+    await user.type(screen.getByRole('textbox'), 'når x stiger så y vokser i en bestemt takt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('pass'));
+    expect(
+      screen.queryByRole('button', { name: /vis hvad der mangler/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  // T15: sticky panel — after the misconception resolves, the panel and its
+  // earlier bullets stay in place (one-way `panelShown` bit).
+  it('panel is sticky once shown: edit that resolves the misconception keeps the panel up', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/sticky">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    await user.type(textarea, 'pendul svinger frem og tilbage tydeligt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await screen.findByText('mis-pendul');
+
+    // Replace the text so the misconception no longer triggers — and Tjek
+    // again. The triggered-misconception bullet goes away on the next Tjek
+    // (it's tied to the latest `result`), but the panel itself remains
+    // because `panelShown` is one-way.
+    await user.clear(textarea);
+    await user.type(textarea, 'svaret er nu uden problematiske ord');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.queryByText('mis-pendul')).not.toBeInTheDocument());
+    expect(
+      screen.getByRole('region', { name: /tips til de manglende krav/i }),
+    ).toBeInTheDocument();
+  });
+
+  // T19: paid bullet survives a dirty edit — was the F9 failure mode in the
+  // old focus-popup model.
+  it('paid bullet survives a dirty edit (no Tjek): panel + bullet remain in DOM', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/dirty-keeps-bullet">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'svar uden krav opfyldt her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    // Spend one tier.
+    const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+    await user.click(bucket);
+    await user.click(textarea);
+    expect(await screen.findByText('rel-t1')).toBeInTheDocument();
+
+    // Now edit the textarea (no fresh Tjek). The result is `dirty`, but the
+    // paid bullet must NOT vanish — that's the F9 fix.
+    await user.type(textarea, ' yderligere tekst');
+    expect(screen.getByText('rel-t1')).toBeInTheDocument();
+  });
+
+  // T16: armed Enter on the textarea spends without inserting a newline.
+  it('armed Enter spends and does NOT insert a newline into the textarea', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/enter">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const initialText = 'svar uden krav opfyldt her';
+    await user.type(textarea, initialText);
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    // Arm the bucket, focus the textarea, press Enter.
+    await user.click(await screen.findByRole('button', { name: /hint-pulje/i }));
+    textarea.focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('rel-t1')).toBeInTheDocument();
+    // Newline must NOT have been inserted by the textarea default.
+    expect(textarea.value).toBe(initialText);
   });
 });
 

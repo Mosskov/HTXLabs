@@ -66,11 +66,6 @@ export const CriterionSchema = z
     hint: z.string().optional(),
     /** Tiered progressive hints; engine surfaces these on CriterionResult.hints. */
     hints: z.array(z.string()).optional(),
-    /** 4th-tier "show the answer" reveal text. Costs 2 tokens to unlock in the
-     *  request-driven hint system; semantically distinct from a ladder tier.
-     *  Requires `hint` or `hints` to be set — the reveal only makes sense once
-     *  the ladder exists. */
-    reveal: z.string().optional(),
     any: z.array(CheckSchema).min(1),
     none: z.array(VetoSchema).optional(),
     misconceptions: z.array(MisconceptionSchema).optional(),
@@ -82,13 +77,6 @@ export const CriterionSchema = z
         code: 'custom',
         message: `criterion '${c.id}': use 'hint' or 'hints', not both`,
         path: ['hints'],
-      });
-    }
-    if (c.reveal !== undefined && c.hint === undefined && c.hints === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `criterion '${c.id}': 'reveal' requires 'hint' or 'hints' to be set`,
-        path: ['reveal'],
       });
     }
   });
