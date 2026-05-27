@@ -1,20 +1,48 @@
 {
   "id": "template-hypothesis",
-  "version": 5,
+  "version": 6,
   "title": "Hypotese — sammenhæng mellem variable",
   "criteria": [
+    {
+      "id": "iv-named",
+      "label": "Uafhængig variabel nævnt",
+      "hints": [
+        "Din hypotese skal nævne den uafhængige variabel.",
+        "Brug det samme navn som i variabel-tabellen — her xvar."
+      ],
+      "any": [
+        {
+          "kind": "literal",
+          "terms": ["xvar"]
+        }
+      ]
+    },
+    {
+      "id": "dv-named",
+      "label": "Afhængig variabel nævnt",
+      "hints": [
+        "Din hypotese skal nævne den afhængige variabel.",
+        "Brug det samme navn som i variabel-tabellen — her yvar."
+      ],
+      "any": [
+        {
+          "kind": "literal",
+          "terms": ["yvar"]
+        }
+      ]
+    },
     {
       "id": "relation",
       "label": "Forudsagt sammenhæng",
       "hints": [
         "Har du læst teoriafsnittet igennem? Brug teorien til at skrive en god hypotese.",
         "Din hypotese skal forudsige en sammenhæng — hvad sker der med den ene variabel, når du varierer den anden?",
-        "Skriv det som én sætning: når X stiger, så ... Y."
+        "Skriv det som én sætning: når xvar stiger, så ... yvar."
       ],
       "any": [
         {
           "kind": "regex",
-          "pattern": "\\b\\p{L}{1,3}\\b[^.!?\\n]*\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b|\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b[^.!?\\n]*\\b\\p{L}{1,3}\\b",
+          "pattern": "\\b(stiger|vokser|øges|falder|aftager|proportional|konstant|større|mindre)\\b",
           "flags": "iu"
         }
       ],
