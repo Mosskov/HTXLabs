@@ -173,23 +173,13 @@ export const strings = {
       statusPassed: 'Godkendt',
       rubricError: 'Denne opgave er midlertidigt utilgængelig.',
       hintsLabel: 'Tips til de manglende krav',
-      /** Section header above the verdict checklist (✓/✗ rows) once the
-       *  student has paid the 2-token reveal. Author-overridable per
-       *  instance via the widget's `verdictsPanelHeader` prop. */
-      verdictsPanelHeader: 'Hvad mangler',
-      /** Visible label on the verdict-reveal pill at the bottom of the
-       *  panel — shown once every failing criterion's ladder is at cap.
-       *  Author-overridable per instance via `verdictRevealPillLabel`. */
-      verdictRevealPillLabel: 'Vis hvad der mangler (2)',
-      /** Per-criterion verdict-row templates. Vars: {label} = criterion
-       *  label from the rubric. Framework chrome, not author-overridable
-       *  (consistent with the existing checklist row pattern). The glyph
-       *  (`✓` / `➔`) lives in the JSX, not the template — so it can be
-       *  sized + tone-coloured independently of the label. `➔` matches the
-       *  InstructionBox active-step marker ("do this next"), not `✗`
-       *  ("you got this wrong"). */
-      verdictPass: '{label}',
-      verdictFail: '{label}',
+      /** Aria-label on the pip-toggle button when the hint panel is collapsed.
+       *  Vars: {n} = visible pip count. Author-overridable per instance via
+       *  the widget's `pipToggleShowLabel` prop. */
+      pipToggleShowLabel: 'Vis hint-panel ({n})',
+      /** Aria-label on the pip-toggle button when the hint panel is open.
+       *  Author-overridable per instance via `pipToggleHideLabel`. */
+      pipToggleHideLabel: 'Skjul hint-panel',
     },
     variableTable: {
       ivLabel: 'Uafhængig variabel',

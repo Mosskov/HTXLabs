@@ -49,18 +49,6 @@ export interface RunnerState {
    *  surfaced yet; widget reveals hints[0..tier]. Incremented post-resolve
    *  in the widget for criteria still failing in the latest result. */
   rubricHintTiers: Record<string, Record<string, number>>;
-  /** Per-RubricResponse one-way bit: `true` once the student has spent the
-   *  2-token verdict reveal. Drives the ✓/✗ checklist section above the Tips
-   *  panel. Never cleared by widget code — re-verdicts re-derive ✓/✗ from a
-   *  fresh `result`, but the row set is frozen at spend time. */
-  rubricVerdictsRevealed: Record<string, boolean>;
-  /** Frozen snapshot of criterion ids covered by the verdict checklist for a
-   *  given RubricResponse widget, captured at the moment of the reveal spend.
-   *  This is the source of truth for which rows appear in the checklist —
-   *  later edits that shift `failingCriteria` cannot add/remove rows once the
-   *  reveal has been paid for. ✓/✗ for each row is derived live from the
-   *  latest `result.criteria[id].satisfied`. */
-  rubricVerdictRowIds: Record<string, string[]>;
   /** Tier reached per VariableTable widget per cell (dot-path key like
    *  `iv.<expectedIndex>.<cell>` — e.g. `iv.0.symbol`, `dv.1.unit`,
    *  `constants.0.name`). Mirrors `rubricHintTiers`. Incremented on Tjek
@@ -117,8 +105,6 @@ interface SerializedRunnerState {
   attemptCounts: Record<string, number>;
   simulationState: unknown;
   rubricHintTiers: Record<string, Record<string, number>>;
-  rubricVerdictsRevealed?: Record<string, boolean>;
-  rubricVerdictRowIds?: Record<string, string[]>;
   variableTableHintTiers: Record<string, Record<string, number>>;
   variableTableHintReveals?: Record<string, Record<string, string[]>>;
   variableTableLastChecked: Record<string, VariableTableValues>;
@@ -154,8 +140,6 @@ export function emptyState(
     attemptCounts: {},
     simulationState: null,
     rubricHintTiers: {},
-    rubricVerdictsRevealed: {},
-    rubricVerdictRowIds: {},
     variableTableHintTiers: {},
     variableTableHintReveals: {},
     variableTableLastChecked: {},
@@ -195,8 +179,6 @@ function deserialize(raw: SerializedRunnerState): RunnerState {
     attemptCounts: raw.attemptCounts ?? {},
     simulationState: raw.simulationState ?? null,
     rubricHintTiers: raw.rubricHintTiers ?? {},
-    rubricVerdictsRevealed: raw.rubricVerdictsRevealed ?? {},
-    rubricVerdictRowIds: raw.rubricVerdictRowIds ?? {},
     variableTableHintTiers: raw.variableTableHintTiers ?? {},
     variableTableHintReveals: raw.variableTableHintReveals ?? {},
     variableTableLastChecked: raw.variableTableLastChecked ?? {},

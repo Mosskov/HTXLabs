@@ -1,7 +1,7 @@
-// Diagnostic testlab for the production <RubricResponse> widget. Each phase
-// isolates one facet of the widget's UI/state machine: status pill, hint
-// tiers, override props, multi-widget gate, dependsOn churn, raw scoring.
-// Both rubric JSONs are validated at module-load.
+// Diagnostic testlab for the production <RubricResponse> widget. Reorganised
+// around capability areas: each phase maps to one capability slot (basic
+// surface, prop overrides, multi-widget, dependsOn, engine probe). Both
+// rubric JSONs are validated at module-load.
 import { parseRubric } from '@/lib/rubric/engine';
 import type { ExperimentFrontmatter } from '@/lib/schema';
 import type { ComponentType } from 'react';
@@ -29,7 +29,7 @@ for (const [name, json] of [
 }
 
 export const frontmatter: ExperimentFrontmatter = {
-  version: 1,
+  version: 3,
   title: 'Rubric-widget — diagnostisk testlab',
   simulationId: '__none',
   learningObjectives: ['Verificere RubricResponse-widgetens tilstand, props og gate-kobling'],
@@ -40,37 +40,43 @@ export const frontmatter: ExperimentFrontmatter = {
       phases: [
         {
           id: 'planlaeg',
-          title: 'Baseline',
+          title: 'Kapacitet 1: Grundflade',
           steps: [
-            'Skriv en hypotese og tryk Tjek for at se hint-tiers rulle frem og gaten åbne ved pass.',
+            'Standardprops, ét rubric, fuld hint-ladder. Skriv en hypotese og tryk Tjek for at se panel-flowet og gaten åbne ved pass.',
           ],
-          gate: { type: 'rubric-required', widgetIds: ['hypotese'] },
+          gate: { type: 'always' },
         },
         {
           id: 'opstil',
-          title: 'Overrides',
-          steps: ['Bekræft at brugerdefinerede labels og tegnbegrænsning vises korrekt.'],
-          gate: { type: 'rubric-required', widgetIds: ['overrides'] },
+          title: 'Kapacitet 2: Prop-overrides',
+          steps: [
+            'Brugerdefinerede labels + tegnbegrænsning. Bekræft at hver override-prop vises korrekt.',
+          ],
+          gate: { type: 'always' },
         },
         {
           id: 'maal',
-          title: 'Multi-rubric',
-          steps: ['Tjek begge svarfelter. Fasen åbner først når begge er godkendt.'],
-          gate: { type: 'all-satisfied', widgetIds: ['rubA', 'rubB'] },
+          title: 'Kapacitet 3: Flere rubrics',
+          steps: [
+            'To <RubricResponse>-widgets i samme fase. Tjek begge — gate-koblingen bevares i prosa, men gate er åben her så testlab kan cykle frit.',
+          ],
+          gate: { type: 'always' },
         },
         {
           id: 'analyser',
-          title: 'dependsOn',
+          title: 'Kapacitet 4: dependsOn',
           steps: [
             'Skriv en hypotese og tryk Tjek.',
-            'Tryk på Skift-knappen — gate skal lukke selvom teksten er uændret.',
+            'Tryk på Skift-knappen — verificér dirty-derivationen uden at gate blokerer fremdrift.',
           ],
-          gate: { type: 'rubric-required', widgetIds: ['dep'] },
+          gate: { type: 'always' },
         },
         {
           id: 'konkluder',
-          title: 'Engine-probe',
-          steps: ['Diagnostisk værktøj — skriv en formulering og se rå per-kriterium scoring.'],
+          title: 'Kapacitet 5: Motor-probe',
+          steps: [
+            'Rå per-kriterium scoring via RubricTester. Skriv en formulering og se anker-scores + status-tabel.',
+          ],
           gate: { type: 'always' },
         },
       ],

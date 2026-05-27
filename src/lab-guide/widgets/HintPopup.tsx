@@ -1,8 +1,9 @@
 // Focus-triggered popup that surfaces revealed hint tiers (paid) and
-// misconception / always-on diagnostics (free). Composed by RubricResponse +
-// VariableTable: the consumer passes a pre-resolved `entries` list (built from
-// the latest result/snapshot under the widget's own free-vs-paid gating rule)
-// and wraps the input/textarea this popup is attached to.
+// misconception / always-on diagnostics (free). Composed by VariableTable:
+// the consumer passes a pre-resolved `entries` list (built from the latest
+// result/snapshot under the widget's own free-vs-paid gating rule) and
+// wraps the input/textarea this popup is attached to. RubricResponse no
+// longer uses this component; it renders its own panel inline.
 //
 // `entries.length === 0` → popup does not open at all on focus. The empty
 // state is "no popup", not "empty popup".

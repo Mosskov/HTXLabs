@@ -7,7 +7,7 @@ import { LabPasteContext } from '@/lab-guide/widgets/ProtectedInput';
 import { RubricResponse } from '@/lab-guide/widgets/RubricResponse';
 import { MockEmbedder } from '@/lib/rubric/embedder';
 import type { Gate, Phase } from '@/lib/schema';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -418,8 +418,9 @@ describe('RubricResponse — panel + spend (F9)', () => {
       </IntegrationHarness>,
     );
     expect(screen.queryByText(/Tips/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Hvad mangler/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /hint-pulje/i })).not.toBeInTheDocument();
+    // Pip-toggle button never appears before any panel content surfaces.
+    expect(screen.queryByRole('button', { name: /hint-panel/i })).not.toBeInTheDocument();
   });
 
   // T2: failing Tjek without a triggered misconception → panel still hidden.
@@ -459,14 +460,13 @@ describe('RubricResponse — panel + spend (F9)', () => {
     expect(
       screen.getByRole('region', { name: /tips til de manglende krav/i }),
     ).toBeInTheDocument();
-    // Verdict-reveal pill is not present yet.
-    expect(screen.queryByRole('button', { name: /vis hvad der mangler/i })).not.toBeInTheDocument();
   });
 
-  // T4 + T5: arm bucket + click textarea → next failing criterion's tier 1
-  // appears as a slate bullet; continuing to spend walks the ladders in
-  // author order across criteria.
-  it('armed-click on textarea spends the next paid tier in author order', async () => {
+  // T4 + T5: arm bucket + click textarea → first failing criterion's tier 1
+  // appears as a slate bullet. Strict per-group gating: a second spend on
+  // the same text still targets relation (the first failing criterion),
+  // never advances to variables until relation is satisfied.
+  it('armed-click on textarea spends the next paid tier on the first failing criterion (strict gating)', async () => {
     const user = userEvent.setup();
     render(
       <IntegrationHarness experimentId="rr-f9/walk">
@@ -495,10 +495,10 @@ describe('RubricResponse — panel + spend (F9)', () => {
     expect(await screen.findByText('rel-t2')).toBeInTheDocument();
   });
 
-  // T18 (vacuous-true guard): a fully-passing rubric does not show the
-  // verdict-reveal pill. Widget id matches the gate's `widgetIds` so the
-  // gate-probe flips to 'pass' on the rubric-pass — that's our settle signal.
-  it('fully-passing rubric: verdict-reveal pill is suppressed', async () => {
+  // Vacuous-true guard: a fully-passing rubric with no triggered
+  // misconceptions leaves the panel hidden — no failing-with-spent-hints
+  // criterion AND no pinned errors means hasContent === false.
+  it('fully-passing rubric with no misconceptions: panel does not render', async () => {
     const user = userEvent.setup();
     render(
       <IntegrationHarness experimentId="rr-f9/pass">
@@ -515,13 +515,252 @@ describe('RubricResponse — panel + spend (F9)', () => {
     await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
     await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('pass'));
     expect(
-      screen.queryByRole('button', { name: /vis hvad der mangler/i }),
+      screen.queryByRole('region', { name: /tips til de manglende krav/i }),
     ).not.toBeInTheDocument();
   });
 
-  // T15: sticky panel — after the misconception resolves, the panel and its
-  // earlier bullets stay in place (one-way `panelShown` bit).
-  it('panel is sticky once shown: edit that resolves the misconception keeps the panel up', async () => {
+  // Strict gating: once the first failing criterion's ladder is capped, the
+  // HintBucket's spendable count drops to 0 (later criteria are unreachable)
+  // and arming the bucket no longer fires spend-mode against the textarea.
+  it('strict gating: capped first-failing criterion blocks further spend even with tokens + a later failing criterion', async () => {
+    const bigPoolPhase: Phase = { id: 'p', title: 'P', gate, hintPoolSize: 10 };
+    function BigPoolHarness({
+      experimentId,
+      children,
+    }: {
+      experimentId: string;
+      children: React.ReactNode;
+    }) {
+      return (
+        <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[bigPoolPhase]}>
+          <HintSpendProvider>
+            <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+            <GateProbe />
+          </HintSpendProvider>
+        </RunnerProvider>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <BigPoolHarness experimentId="rr-f9/strict-cap">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </BigPoolHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'svar uden krav opfyldt her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
+
+    // Spend relation's 3 tiers — they all target the first failing criterion.
+    for (let i = 0; i < 3; i++) {
+      const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+      await user.click(bucket);
+      await user.click(textarea);
+    }
+    expect(await screen.findByText('rel-t3')).toBeInTheDocument();
+    // The deepest hint of a capped ladder carries the ➔ active-step glyph.
+    expect(screen.getByText('➔')).toBeInTheDocument();
+
+    // Bucket now reads "no targets" — relation is capped, variables is
+    // unreachable until relation is satisfied. The bucket stays in the DOM
+    // (tokens > 0) but is rendered aria-disabled with the no-targets tooltip.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /hint-pulje/i })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
+    );
+    // Clicking the disabled bucket + the textarea does NOT reveal var-t1.
+    await user.click(screen.getByRole('button', { name: /hint-pulje/i }));
+    await user.click(textarea);
+    expect(screen.queryByText('var-t1')).not.toBeInTheDocument();
+  });
+
+  // Active-group identity: B has spent hints, but the student then breaks A
+  // (now failing with tier === 0). Retjek: panel hides B's stack and shows
+  // only common-errors / nothing extra until the student spends on A.
+  it('active-group identity: regressing earlier criterion drops later spent hints from the panel', async () => {
+    const bigPoolPhase: Phase = { id: 'p', title: 'P', gate, hintPoolSize: 10 };
+    function BigPoolHarness({
+      experimentId,
+      children,
+    }: {
+      experimentId: string;
+      children: React.ReactNode;
+    }) {
+      return (
+        <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[bigPoolPhase]}>
+          <HintSpendProvider>
+            <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+            <GateProbe />
+          </HintSpendProvider>
+        </RunnerProvider>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <BigPoolHarness experimentId="rr-f9/active-group">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </BigPoolHarness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    // Phase 1: satisfy relation literally ('stiger') so variables becomes the
+    // first failing criterion. Spend a tier on variables.
+    await user.type(textarea, 'noget stiger her men ingen variabel nævnes endnu');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    // Relation passes (contains 'stiger'); variables fails (no 'x'). Spend.
+    const bucket1 = await screen.findByRole('button', { name: /hint-pulje/i });
+    await user.click(bucket1);
+    await user.click(textarea);
+    expect(await screen.findByText('var-t1')).toBeInTheDocument();
+
+    // Phase 2: edit the text so relation breaks ('stiger' removed) AND
+    // variables also still fails. Retjek.
+    await user.clear(textarea);
+    await user.type(textarea, 'svaret nævner ikke længere nogen relation eller variabel her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+
+    // Relation is now first-failing again with tier === 0; the panel's
+    // active stack hides — variables' spent hint must NOT leak in.
+    await waitFor(() => expect(screen.queryByText('var-t1')).not.toBeInTheDocument());
+  });
+
+  // Flat-panel render contract: misconceptions at top, paid hints
+  // newest-on-top, no criterion-label header in the panel.
+  it('flat-panel contract: misconceptions render before paid hints, newest-on-top, no label header', async () => {
+    const bigPoolPhase: Phase = { id: 'p', title: 'P', gate, hintPoolSize: 10 };
+    function BigPoolHarness({
+      experimentId,
+      children,
+    }: {
+      experimentId: string;
+      children: React.ReactNode;
+    }) {
+      return (
+        <RunnerProvider experimentId={experimentId} experimentVersion={1} phases={[bigPoolPhase]}>
+          <HintSpendProvider>
+            <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
+            <GateProbe />
+          </HintSpendProvider>
+        </RunnerProvider>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <BigPoolHarness experimentId="rr-f9/flat">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </BigPoolHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    // Trigger the 'pendul' misconception on relation; relation still failing
+    // (no 'stiger'). Spend two tiers on relation.
+    await user.type(textarea, 'pendul nævnes uden relation eller variabel her');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await screen.findByText('mis-pendul');
+    for (let i = 0; i < 2; i++) {
+      const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+      await user.click(bucket);
+      await user.click(textarea);
+    }
+    await screen.findByText('rel-t2');
+
+    const panel = screen.getByRole('region', { name: /tips til de manglende krav/i });
+    const text = panel.textContent ?? '';
+    // (a) Misconception appears before any paid hint in DOM order.
+    expect(text.indexOf('mis-pendul')).toBeLessThan(text.indexOf('rel-t1'));
+    expect(text.indexOf('mis-pendul')).toBeLessThan(text.indexOf('rel-t2'));
+    // (b) tier-2 hint appears before tier-1 (newest-on-top).
+    expect(text.indexOf('rel-t2')).toBeLessThan(text.indexOf('rel-t1'));
+    // (c) No criterion-label header in the panel.
+    expect(text).not.toContain('Relation');
+  });
+
+  // Pip-toggle: clicking the pip cluster collapses the panel; clicking again
+  // reopens. A spend forces the panel back open. The collapsed bit persists
+  // via widgetValues so phase nav + reload preserve it.
+  it('pip-toggle: collapses + reopens the panel; spend forces reopen; state persists', async () => {
+    const user = userEvent.setup();
+    render(
+      <IntegrationHarness experimentId="rr-f9/pip-toggle">
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+        <HintBucket placement="footer" />
+      </IntegrationHarness>,
+    );
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'pendul svinger frem og tilbage tydeligt');
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await screen.findByText('mis-pendul');
+    expect(
+      screen.getByRole('region', { name: /tips til de manglende krav/i }),
+    ).toBeInTheDocument();
+
+    // Click pip-toggle to collapse — pips stay; panel region unmounts.
+    const pipToggle = screen.getByRole('button', { name: /skjul hint-panel/i });
+    await user.click(pipToggle);
+    expect(
+      screen.queryByRole('region', { name: /tips til de manglende krav/i }),
+    ).not.toBeInTheDocument();
+    // Aria-label flips to the show variant + pip count.
+    expect(screen.getByRole('button', { name: /vis hint-panel/i })).toBeInTheDocument();
+
+    // Click again → panel reopens.
+    await user.click(screen.getByRole('button', { name: /vis hint-panel/i }));
+    expect(
+      screen.getByRole('region', { name: /tips til de manglende krav/i }),
+    ).toBeInTheDocument();
+
+    // Collapse again, then spend a tier — panel auto-reopens.
+    await user.click(screen.getByRole('button', { name: /skjul hint-panel/i }));
+    const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
+    await user.click(bucket);
+    await user.click(textarea);
+    await screen.findByText('rel-t1');
+    expect(
+      screen.getByRole('region', { name: /tips til de manglende krav/i }),
+    ).toBeInTheDocument();
+  });
+
+  // Persistence of the collapsed bit across remount (mirrors panelShown).
+  it('pip-toggle collapsed bit persists across remount', async () => {
+    const experimentId = 'rr-f9/collapse-persist';
+    localStorage.removeItem(`htxlabs:state:${experimentId}`);
+    const user = userEvent.setup();
+    const first = render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    await user.type(
+      screen.getByRole('textbox'),
+      'pendul svinger frem og tilbage tydeligt',
+    );
+    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
+    await screen.findByText('mis-pendul');
+    await user.click(screen.getByRole('button', { name: /skjul hint-panel/i }));
+    first.unmount();
+
+    render(
+      <IntegrationHarness experimentId={experimentId}>
+        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
+      </IntegrationHarness>,
+    );
+    // Panel stays collapsed after reload — pip-toggle aria-label is the
+    // collapse-side copy.
+    expect(screen.getByRole('button', { name: /vis hint-panel/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: /tips til de manglende krav/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  // Content-driven visibility: `panelShown` stays sticky-once, but the panel
+  // body only renders when there's something to show. After the misconception
+  // resolves and no paid hints have been spent, the panel hides — preventing
+  // the "empty box on satisfy" failure mode noted in the D3 prototype.
+  it('content-driven panel: edit that clears the misconception (with no spent hints) hides the panel', async () => {
     const user = userEvent.setup();
     render(
       <IntegrationHarness experimentId="rr-f9/sticky">
@@ -534,16 +773,15 @@ describe('RubricResponse — panel + spend (F9)', () => {
     await screen.findByText('mis-pendul');
 
     // Replace the text so the misconception no longer triggers — and Tjek
-    // again. The triggered-misconception bullet goes away on the next Tjek
-    // (it's tied to the latest `result`), but the panel itself remains
-    // because `panelShown` is one-way.
+    // again. With no spent hints on the active group, the panel has no
+    // content and hides itself even though `panelShown` is still true.
     await user.clear(textarea);
     await user.type(textarea, 'svaret er nu uden problematiske ord');
     await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
     await waitFor(() => expect(screen.queryByText('mis-pendul')).not.toBeInTheDocument());
     expect(
-      screen.getByRole('region', { name: /tips til de manglende krav/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('region', { name: /tips til de manglende krav/i }),
+    ).not.toBeInTheDocument();
   });
 
   // T19: paid bullet survives a dirty edit — was the F9 failure mode in the
@@ -632,84 +870,6 @@ describe('RubricResponse — panel + spend (F9)', () => {
       </IntegrationHarness>,
     );
     expect(screen.getByText('rel-t1')).toBeInTheDocument();
-  });
-
-  // C7 follow-up: the verdict checklist itself must survive remount, not
-  // just the Tips bullets. Needs a big-pool harness because reaching the
-  // verdict pill costs 5 paid tiers (relation 3 + variables 2) + the
-  // 2-token pill = 7 spends.
-  it('verdict checklist survives remount via the snapshot (C7 follow-up)', async () => {
-    const bigPoolPhase: Phase = { id: 'p', title: 'P', gate, hintPoolSize: 10 };
-    function BigPoolHarness({
-      experimentId,
-      children,
-    }: {
-      experimentId: string;
-      children: React.ReactNode;
-    }) {
-      return (
-        <RunnerProvider
-          experimentId={experimentId}
-          experimentVersion={1}
-          phases={[bigPoolPhase]}
-        >
-          <HintSpendProvider>
-            <PhaseScopeProvider phaseId="p">{children}</PhaseScopeProvider>
-            <GateProbe />
-          </HintSpendProvider>
-        </RunnerProvider>
-      );
-    }
-
-    const experimentId = 'rr-f9-c7/verdict';
-    localStorage.removeItem(`htxlabs:state:${experimentId}`);
-
-    const user = userEvent.setup();
-    const first = render(
-      <BigPoolHarness experimentId={experimentId}>
-        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
-        <HintBucket placement="footer" />
-      </BigPoolHarness>,
-    );
-    const textarea = screen.getByRole('textbox');
-    await user.type(textarea, 'svar uden krav opfyldt her');
-    await user.click(screen.getByRole('button', { name: /tjek mit svar/i }));
-    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
-
-    // Spend all 5 paid tiers (relation: 3, variables: 2). After each spend
-    // re-fetch the bucket button — its accessible name encodes the live
-    // count + spendable state, so the prior reference goes stale.
-    for (let i = 0; i < 5; i++) {
-      const bucket = await screen.findByRole('button', { name: /hint-pulje/i });
-      await user.click(bucket);
-      await user.click(textarea);
-    }
-
-    // Verdict-reveal pill now unlocked (every failing ladder at cap).
-    await user.click(await screen.findByRole('button', { name: /vis hvad der mangler/i }));
-
-    // Section + frozen rows visible. Scope row queries to the verdict
-    // section so they don't collide with TieredHintList's group headers
-    // (which use the same criterion labels).
-    const verdictHeader = await screen.findByText(/hvad mangler/i);
-    const verdictSection = verdictHeader.parentElement as HTMLElement;
-    expect(within(verdictSection).getByText('Relation')).toBeInTheDocument();
-    expect(within(verdictSection).getByText('Variable')).toBeInTheDocument();
-
-    first.unmount();
-
-    // Fresh remount with the same experimentId — snapshot rehydrates the
-    // verdict section before any re-Tjek.
-    render(
-      <BigPoolHarness experimentId={experimentId}>
-        <RubricResponse id="hyp" prompt="?" rubric={panelRubric} embedder={new MockEmbedder({})} />
-        <HintBucket placement="footer" />
-      </BigPoolHarness>,
-    );
-    const reloadedHeader = screen.getByText(/hvad mangler/i);
-    const reloadedSection = reloadedHeader.parentElement as HTMLElement;
-    expect(within(reloadedSection).getByText('Relation')).toBeInTheDocument();
-    expect(within(reloadedSection).getByText('Variable')).toBeInTheDocument();
   });
 
   // T16: armed Enter on the textarea spends without inserting a newline.

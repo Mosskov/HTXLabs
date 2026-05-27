@@ -1,7 +1,7 @@
 {
   "id": "widget-test-hypothesis",
   "version": 1,
-  "title": "Widget-test (panel + verdict-checklist diagnostic)",
+  "title": "Widget-test (panel diagnostic)",
   "criteria": [
     {
       "id": "relation",

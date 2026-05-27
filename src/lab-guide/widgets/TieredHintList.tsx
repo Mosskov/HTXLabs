@@ -3,8 +3,9 @@
 // criterion / cell tiers, then reveal text if any). The consumer owns the
 // resolution + dedup; this component just paints.
 //
-// No inline rendering elsewhere — the request-driven hint system surfaces all
-// revealed tiers through HintPopup, never below a field or inside the widget.
+// No inline rendering inside VariableTable cells — VariableTable surfaces
+// revealed tiers through HintPopup. RubricResponse renders its own panel
+// inline (it doesn't use this component).
 import type { HintPopupEntry } from './HintPopup';
 
 interface Props {

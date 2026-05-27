@@ -4,15 +4,6 @@
 import type { DataRow, LabMode, Mode, RunnerState } from './runner';
 import type { VariableTableValues } from './widgets/VariableTable';
 
-/** Cost of the widget-level verdict-checklist reveal in `<RubricResponse>` —
- *  the single "show me what's missing" affordance that replaces the retired
- *  per-criterion `reveal` field. */
-export const REVEAL_RUBRIC_VERDICTS_COST = 2;
-
-/** Sentinel suffix used to key the verdict-reveal spend in `hintUsageByTarget`
- *  so it can't collide with any criterion id. */
-export const VERDICTS_TARGET_SUFFIX = '__verdicts__';
-
 export type RunnerAction =
   | { type: 'SET_CURRENT_PHASE'; id: string }
   | { type: 'SET_MODE'; mode: Mode }
@@ -29,14 +20,6 @@ export type RunnerAction =
       widgetId: string;
       criterionId: string;
       hintCap: number;
-      poolCap: number;
-      now: number;
-    }
-  | {
-      type: 'REVEAL_RUBRIC_VERDICTS';
-      phaseId: string;
-      widgetId: string;
-      rowIds: readonly string[];
       poolCap: number;
       now: number;
     }
@@ -129,8 +112,8 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
       // at action time using the latest state — eliminates the stale-handler
       // race on rapid double-clicks. `poolCap`, `hintCap`, and `now` arrive in
       // the payload so the reducer stays pure. Every spend costs exactly 1
-      // token now that the per-criterion reveal variant is gone (replaced by
-      // the widget-level verdict reveal — see `REVEAL_RUBRIC_VERDICTS`).
+      // token; strict per-group gating lives in the widget (the reducer only
+      // applies the requested criterion's tier increment + token charge).
       const { phaseId, widgetId, criterionId, hintCap, poolCap, now } = action;
       const effectiveTokens = state.hintTokens[phaseId] ?? poolCap;
       const widgetBucket = state.rubricHintTiers[widgetId] ?? {};
@@ -144,41 +127,6 @@ export function runnerReducer(state: RunnerState, action: RunnerAction): RunnerS
         rubricHintTiers: {
           ...state.rubricHintTiers,
           [widgetId]: { ...widgetBucket, [criterionId]: nextTier },
-        },
-        hintTokens: { ...state.hintTokens, [phaseId]: effectiveTokens - cost },
-        hintLastReplenishAt: { ...state.hintLastReplenishAt, [phaseId]: now },
-        hintUsageTotal: state.hintUsageTotal + cost,
-        hintUsageByPhase: {
-          ...state.hintUsageByPhase,
-          [phaseId]: (state.hintUsageByPhase[phaseId] ?? 0) + cost,
-        },
-        hintUsageByTarget: {
-          ...state.hintUsageByTarget,
-          [targetKey]: (state.hintUsageByTarget[targetKey] ?? 0) + cost,
-        },
-      };
-    }
-    case 'REVEAL_RUBRIC_VERDICTS': {
-      // Widget-level "show what's missing" reveal. Idempotent: a second
-      // dispatch against an already-revealed widget is a no-op (no token
-      // charge, no row-id overwrite, no timer anchor, no usage bump). The
-      // guard lives in the reducer so a double-click in the same render frame
-      // can't double-charge or shift the frozen row-id snapshot.
-      const { phaseId, widgetId, rowIds, poolCap, now } = action;
-      if (state.rubricVerdictsRevealed[widgetId] === true) return state;
-      const cost = REVEAL_RUBRIC_VERDICTS_COST;
-      const effectiveTokens = state.hintTokens[phaseId] ?? poolCap;
-      if (effectiveTokens < cost) return state;
-      const targetKey = `${widgetId}::${VERDICTS_TARGET_SUFFIX}`;
-      return {
-        ...state,
-        rubricVerdictsRevealed: {
-          ...state.rubricVerdictsRevealed,
-          [widgetId]: true,
-        },
-        rubricVerdictRowIds: {
-          ...state.rubricVerdictRowIds,
-          [widgetId]: [...rowIds],
         },
         hintTokens: { ...state.hintTokens, [phaseId]: effectiveTokens - cost },
         hintLastReplenishAt: { ...state.hintLastReplenishAt, [phaseId]: now },

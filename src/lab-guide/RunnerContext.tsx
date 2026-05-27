@@ -70,23 +70,16 @@ interface RunnerApi {
   bumpAttempts: (id: string) => number;
   fireMilestone: (id: string) => void;
   /** Atomic spend-and-reveal for a RubricResponse criterion. Caller supplies
-   *  the criterion id and the hint ladder cap. Every spend costs 1 token —
-   *  the per-criterion reveal variant retired with F9. The context layer
-   *  resolves `phaseId` from `currentPhaseId`, `now` from `Date.now()`, and
-   *  `poolCap` from the current phase's `hintPoolSize` override. The reducer
-   *  re-validates token sufficiency + the tier ceiling against the latest
-   *  state, so rapid double-clicks reveal at most one tier. */
+   *  the criterion id and the hint ladder cap. Every spend costs 1 token.
+   *  The context layer resolves `phaseId` from `currentPhaseId`, `now` from
+   *  `Date.now()`, and `poolCap` from the current phase's `hintPoolSize`
+   *  override. The reducer re-validates token sufficiency + the tier ceiling
+   *  against the latest state, so rapid double-clicks reveal at most one tier. */
   spendAndRevealRubricTier: (args: {
     widgetId: string;
     criterionId: string;
     hintCap: number;
   }) => void;
-  /** Widget-level "show what's missing" reveal for a RubricResponse. Costs
-   *  2 tokens; sets `rubricVerdictsRevealed[widgetId] = true` and freezes
-   *  `rubricVerdictRowIds[widgetId]` to the criterion-id snapshot the widget
-   *  computed at spend time. Idempotent in the reducer — a re-dispatch on an
-   *  already-revealed widget is a no-op. */
-  revealRubricVerdicts: (args: { widgetId: string; rowIds: readonly string[] }) => void;
   /** Atomic spend-and-reveal for a VariableTable cell ladder. Same shape as
    *  the rubric variant but VT has no reveal tier — every spend is a single
    *  tier advance. */
@@ -297,21 +290,6 @@ export function RunnerProvider({
         widgetId,
         criterionId,
         hintCap,
-        poolCap: poolCapFor(phaseId),
-        now: Date.now(),
-      });
-    },
-    [poolCapFor],
-  );
-
-  const revealRubricVerdicts = useCallback(
-    ({ widgetId, rowIds }: { widgetId: string; rowIds: readonly string[] }) => {
-      const phaseId = stateRef.current.currentPhaseId;
-      dispatch({
-        type: 'REVEAL_RUBRIC_VERDICTS',
-        phaseId,
-        widgetId,
-        rowIds,
         poolCap: poolCapFor(phaseId),
         now: Date.now(),
       });
@@ -624,7 +602,6 @@ export function RunnerProvider({
     bumpAttempts,
     fireMilestone,
     spendAndRevealRubricTier,
-    revealRubricVerdicts,
     spendAndRevealVtTier,
     bucketView,
     setVariableTableLastChecked,

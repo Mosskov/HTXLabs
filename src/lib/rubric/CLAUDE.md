@@ -18,6 +18,6 @@ The engine is pure (sibling of `regression.ts`, `textMatch.ts`). No React, no I/
 
 `literal` checks and vetoes match on whole-word boundaries via `\p{L}\p{N}` lookarounds with the `u` flag — so a term `"afhængig"` does *not* fire inside `"uafhængig"`, and Danish letters at boundaries are respected. The match is also case-insensitive. Inflected forms are NOT covered automatically (e.g. `"afhængig"` doesn't match `"afhængige"`); list inflected variants explicitly or reach for `regex` if you need fuzzy matching.
 
-## Retired: per-criterion `reveal`
+## Retired: per-criterion `reveal` + widget-level verdict checklist
 
-Per-criterion `reveal: string` was removed (F9). The "show the answer" affordance now lives at widget level as a single verdict-checklist reveal in `<RubricResponse>` — see the lab-guide hint-system docs.
+Per-criterion `reveal: string` was removed (F9), and the widget-level verdict-checklist reveal that briefly replaced it has since been retired too (F9 follow-up). The engine surface (`parseRubric`, `evaluateRubric`, `Embedder`) is unchanged. The "show the answer" affordance now lives entirely in the `<RubricResponse>` hint ladder: under strict per-group gating, the deepest hint of a capped failing criterion carries an `➔` actionable-directive marker. See the lab-guide hint-system docs for the surface behaviour.
