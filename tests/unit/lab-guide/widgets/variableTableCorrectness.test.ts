@@ -1,8 +1,9 @@
 import type { VariableEntry } from '@/lab-guide/widgets/VariableTable';
 // Pure-helper unit tests for variableTableCorrectness. Covers the contract
-// documented in the module header: trim policy, case-folding, four-pass
-// row-group matching (full / exact-key / case-insensitive-key / positional
-// fallback), malformed-entry handling, and cross-section row-swap detection.
+// documented in the module header: trim policy, case-folding, five-pass
+// row-group matching (full / exact-key / case-insensitive-key / best-
+// similarity / empty-row positional fallback), malformed-entry handling,
+// and cross-section row-swap detection.
 import {
   type ExpectedConstant,
   type ExpectedVariable,
@@ -242,6 +243,80 @@ describe('evaluateRowGroup (constants)', () => {
     if (result[0].status === 'partial') {
       expect(result[0].errors.symbol).toEqual({ type: 'case-mismatch' });
     }
+  });
+});
+
+describe('evaluateRowGroup — similarity pass (bug 1 + bug 2 regression)', () => {
+  const TWO_CONSTANTS: ExpectedConstant[] = [
+    { name: 'hældning', symbol: 'a', unit: 'ua' },
+    { name: 'skæringspunkt', symbol: 'b', unit: 'ub' },
+  ];
+
+  it('bug 1: right name + unit + wrong symbol → pair by similarity, only symbol errors', () => {
+    // The first konstanter row is empty; the second carries the "right
+    // name + unit but wrong symbol" payload. Without the similarity pass
+    // the matcher would pair row 1 positionally to expected[1] and report
+    // every cell wrong; with similarity, the score-2 hit on (name, unit)
+    // wins and only `symbol` flashes.
+    const student: VariableEntry[] = [
+      { name: '', symbol: '', unit: '' },
+      { name: 'skæringspunkt', symbol: 's', unit: 'ub' },
+    ];
+    const result = evaluateConstants(student, TWO_CONSTANTS);
+    const byExpected = new Map(result.map((m) => [m.expectedIndex, m]));
+    const m1 = byExpected.get(1);
+    expect(m1).toMatchObject({ status: 'partial', studentIndex: 1 });
+    if (m1?.status === 'partial') {
+      expect(m1.errors.name).toBeUndefined();
+      expect(m1.errors.unit).toBeUndefined();
+      expect(m1.errors.symbol).toEqual({ type: 'mismatch' });
+    }
+  });
+
+  it('bug 1: order-swapped konstanter (row 0 = second expected) → both matched', () => {
+    const student: VariableEntry[] = [
+      { name: 'skæringspunkt', symbol: 'b', unit: 'ub' },
+      { name: 'hældning', symbol: 'a', unit: 'ua' },
+    ];
+    const result = evaluateConstants(student, TWO_CONSTANTS);
+    const byExpected = new Map(result.map((m) => [m.expectedIndex, m]));
+    expect(byExpected.get(0)).toMatchObject({ status: 'matched', studentIndex: 1 });
+    expect(byExpected.get(1)).toMatchObject({ status: 'matched', studentIndex: 0 });
+  });
+
+  it('bug 2: type-then-delete row 0 + correct row 1 → row 0 not pinned to expected[0]', () => {
+    // Reproduces the "row pinning" symptom: the student typed `hældning`
+    // in row 0, then cleared it; meanwhile row 1 holds the correct second
+    // entry. The matcher must pair row 1 to expected[1] by similarity,
+    // leaving expected[0] to pair with the empty row 0 via the positional
+    // fallback — surfacing only `empty` per-cell errors, never `mismatch`
+    // against "hældning".
+    const student: VariableEntry[] = [
+      { name: '', symbol: '', unit: '' },
+      { name: 'skæringspunkt', symbol: 'b', unit: 'ub' },
+    ];
+    const result = evaluateConstants(student, TWO_CONSTANTS);
+    const byExpected = new Map(result.map((m) => [m.expectedIndex, m]));
+    expect(byExpected.get(1)).toMatchObject({ status: 'matched', studentIndex: 1 });
+    const m0 = byExpected.get(0);
+    expect(m0).toBeDefined();
+    if (m0?.status === 'partial') {
+      for (const cell of ['name', 'symbol', 'unit'] as const) {
+        const err = m0.errors[cell];
+        if (err !== undefined) expect(err.type).toBe('empty');
+      }
+    }
+  });
+
+  it('similarity matches a row with only one cell in common', () => {
+    // Single-cell hit is enough — name matches expected[1], symbol+unit blank.
+    // Pass 2c pairs stu[0] with exp[1] (score=1); exp[0] then reports as
+    // missing (no remaining students to fall through to in Pass 3).
+    const student: VariableEntry[] = [{ name: 'skæringspunkt', symbol: '', unit: '' }];
+    const result = evaluateConstants(student, TWO_CONSTANTS);
+    const byExpected = new Map(result.map((m) => [m.expectedIndex, m]));
+    expect(byExpected.get(1)).toMatchObject({ status: 'partial', studentIndex: 0 });
+    expect(byExpected.get(0)).toEqual({ status: 'missing', expectedIndex: 0 });
   });
 });
 

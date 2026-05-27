@@ -136,9 +136,11 @@ describe('template phase 1 — happy path', () => {
     expect(footerButton()).toHaveAttribute('aria-disabled', 'true');
 
     const textarea = document.getElementById('rr-hypotese') as HTMLTextAreaElement;
+    // Rubric v6 requires the literal variable names (xvar/yvar), not the
+    // symbols (X/Y) — `iv-named` / `dv-named` criteria gate before `relation`.
     await user.type(
       textarea,
-      'Når X stiger, forventer jeg, at Y stiger lineært med X i denne lab.',
+      'Når xvar stiger, forventer jeg, at yvar stiger lineært med xvar i denne lab.',
     );
     await waitFor(() => expect(footerButton()).not.toBeDisabled());
 
@@ -229,14 +231,19 @@ describe('template phase 1 — negative paths', () => {
     await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek hypotese/i));
 
     // Under the lock model, the just-Tjek'd IV symbol is a readOnly input.
-    // user.type would no-op. Unlock first via double-click, then the strict
-    // RevealWhen condition (variables `correct === true`) flips false →
-    // hypothesis hides, `clearOnHide` clears it, RubricResponse unmounts and
-    // its footer check is unregistered → the footer walk stops at
-    // `variables` and the button reverts to state 1.
+    // user.type would no-op. Unlock first via double-click (starts an edit
+    // session), then commit the unlock with a real change + blur. The
+    // strict RevealWhen condition (variables `correct === true`) then flips
+    // false → hypothesis hides, `clearOnHide` clears it, RubricResponse
+    // unmounts and its footer check is unregistered → the footer walk stops
+    // at `variables` and the button reverts to state 1.
     const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
     expect(ivSymbol).toHaveAttribute('readonly');
     await user.dblClick(ivSymbol);
+    // Re-fetch after the readonly→editable render swap.
+    const editable = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(editable, 'Z');
+    editable.blur();
     await waitFor(() => expect(document.getElementById('rr-hypotese')).toBeNull());
     await waitFor(() => expect(footerButton()).toHaveTextContent(/tjek variable/i));
   });

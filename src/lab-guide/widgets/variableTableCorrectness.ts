@@ -9,16 +9,18 @@
 // - Names: case-insensitive (toLowerCase); plain Danish case-folding suffices.
 // - Symbols/units: case-sensitive; case-only mismatch reported separately.
 // - All three sections (IV, DV, constants) match order-independently via the
-//   shared `evaluateRowGroup` helper. Four sub-passes per section: full match
-//   > exact-key partial > case-insensitive-key partial > positional fallback
-//   (pair the unpaired student row at index i with the unpaired expected at
-//   the next-by-index slot). The positional fallback preserves the legacy
-//   single-row-IV/DV behaviour where an unfilled student row produces per-cell
-//   empty/mismatch errors instead of degrading to `missing`. Each student row
-//   is used at most once. Matching key is `symbol` if set, else `name`.
-//   Malformed entries (neither set) are silently dropped — never produce
-//   `missing`, so a misauthored lab cannot permanently lock the gate. The
-//   widget warns in dev separately.
+//   shared `evaluateRowGroup` helper. Five sub-passes per section: full match
+//   > exact-key partial > case-insensitive-key partial > best-similarity
+//   partial (any configured cell matches) > positional fallback. The
+//   similarity pass handles the "name + unit right, symbol wrong" case
+//   without falling through to positional and pinning unrelated rows
+//   together. The positional fallback still runs for whatever stayed
+//   unpaired after similarity — preserving the legacy single-row-IV/DV
+//   per-cell-empty errors and the multi-row cross-section row-swap
+//   refinement. Each student row is used at most once. Matching key is
+//   `symbol` if set, else `name`. Malformed entries (neither set) are
+//   silently dropped — never produce `missing`, so a misauthored lab
+//   cannot permanently lock the gate. The widget warns in dev separately.
 //
 // Error precedence (each cell reports its first hit):
 //   1. exact match            → undefined
@@ -350,11 +352,27 @@ export interface RowGroupOpts {
   oppositeLabel?: 'iv' | 'dv';
 }
 
-/** Match a list of student rows against a list of expected entries. Four
- *  passes: full → exact-key → case-insensitive-key → positional fallback.
- *  The positional fallback preserves the legacy single-row case (an unfilled
- *  student row pairs with its position-matching expected entry so per-cell
- *  empty/mismatch errors surface instead of degrading to `missing`). */
+/** Count of configured cells of `exp` whose accepted-value list contains the
+ *  student row's same cell (trimmed, with the cell's case rule). Used by the
+ *  best-similarity pass: ≥1 means the rows share at least one real value and
+ *  are very likely the same intended entry. */
+function similarityScore(row: VariableEntry, exp: ExpectedVariable | ExpectedConstant): number {
+  let score = 0;
+  for (const cell of CELLS) {
+    const accepted = cellAccepted(exp, cell);
+    if (accepted === undefined) continue;
+    if (valueMatches(row[cell], accepted, isCaseSensitive(cell))) score++;
+  }
+  return score;
+}
+
+/** Match a list of student rows against a list of expected entries. Five
+ *  passes: full → exact-key → case-insensitive-key → best-similarity →
+ *  positional fallback. With Pass 2c covering similarity-based pairing,
+ *  any misfilled row that shares at least one cell with an expected entry
+ *  is paired there; only rows with no shared cell at all fall through to
+ *  position. The positional fallback preserves the legacy single-IV/DV
+ *  per-cell empty-error rendering for unfilled student rows. */
 export function evaluateRowGroup(
   student: VariableEntry[],
   expected: ReadonlyArray<ExpectedVariable | ExpectedConstant>,
@@ -450,13 +468,57 @@ export function evaluateRowGroup(
     }
   }
 
+  // Pass 2c — best-similarity match: for each remaining expected, find the
+  // unpaired student row with the highest similarityScore against it. Pair
+  // the globally-highest score ≥ 1, repeat greedily. Handles the "right
+  // name + unit, wrong symbol" case where Pass 2a/2b miss because the
+  // primary-key cell doesn't match. Unique per (expected, student) — each
+  // side is used at most once.
+  while (true) {
+    let best:
+      | { idx: number; exp: ExpectedVariable | ExpectedConstant; s: number; score: number }
+      | undefined;
+    for (const { idx, exp } of work) {
+      if (!remaining.has(idx)) continue;
+      for (let s = 0; s < student.length; s++) {
+        if (used.has(s)) continue;
+        const row = student[s];
+        if (row === undefined) continue;
+        const score = similarityScore(row, exp);
+        if (score < 1) continue;
+        if (best === undefined || score > best.score) {
+          best = { idx, exp, s, score };
+        }
+      }
+    }
+    if (best === undefined) break;
+    const row = student[best.s];
+    if (row === undefined) break;
+    result.push({
+      status: 'partial',
+      expectedIndex: best.idx,
+      studentIndex: best.s,
+      errors: refineRow(
+        evaluateRow(row, best.exp as ExpectedVariable),
+        row,
+        best.exp,
+        opts.opposite,
+        opts.oppositeLabel,
+      ),
+    });
+    used.add(best.s);
+    remaining.delete(best.idx);
+  }
+
   // Pass 3 — positional fallback: pair each remaining student row (in order)
-  // with the next remaining expected entry (in order). This is what preserves
-  // the legacy single-IV/DV behaviour where an empty student row still emits
-  // per-cell empty errors instead of degrading to `missing`. With arrays on
-  // both sides, this also catches unpaired student rows whose values matched
-  // nothing — they're surfaced via cell-level errors (and row-swapped
-  // refinement when opts.opposite is set), not silently dropped.
+  // with the next remaining expected entry (in order). Preserves the legacy
+  // single-IV/DV per-cell-empty errors (an unfilled student row still surfaces
+  // per-cell empty/mismatch errors instead of degrading to `missing`) and
+  // keeps the multi-row cross-section row-swap refinement reachable
+  // (`opts.opposite` is consulted via refineRow). With Pass 2c covering
+  // similarity-based pairing, the misfilled rows that used to land here are
+  // already paired correctly — only rows with no shared cell at all fall
+  // through to position.
   for (let s = 0; s < student.length; s++) {
     if (used.has(s)) continue;
     const row = student[s];

@@ -45,6 +45,7 @@
 // internal) appear in the focus popup without a token cost, gated on the same
 // checked-and-not-dirty rule as paid hints.
 import {
+  type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -475,6 +476,25 @@ export function VariableTable({
     const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
     if (!m || m.status === 'missing') return false;
     return cellLockedAndCorrect(section, m.expectedIndex, cell);
+  }
+
+  // Render-time resolution of a locked cell's store lock key. Returned to
+  // `Field` so it can snapshot the key at edit-session start — before any
+  // value change can shift the matcher pairing and re-resolve the studentIndex
+  // → expectedIndex link to a different expected row. Multi-row tables: the
+  // unlock-on-blur path would otherwise clear the wrong entry. Null when the
+  // cell isn't currently locked.
+  function lockKeyForStudent(
+    section: 'iv' | 'dv' | 'constants',
+    studentIndex: number,
+    cell: Cell,
+  ): string | null {
+    const matches = errors?.[section];
+    if (!matches) return null;
+    const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
+    if (!m || m.status === 'missing') return null;
+    if (!cellLockedAndCorrect(section, m.expectedIndex, cell)) return null;
+    return cellKey(section, m.expectedIndex, cell);
   }
 
   // Section-level lock coverage: every cell with `accepted` defined in the
@@ -939,11 +959,13 @@ export function VariableTable({
     exitSpendMode();
   };
 
-  const onUnlock = (section: 'iv' | 'dv' | 'constants', studentIndex: number, cell: Cell) => {
-    const matches = errors?.[section];
-    const cm = matches?.find((m) => m.status !== 'missing' && m.studentIndex === studentIndex);
-    if (!cm || cm.status === 'missing') return;
-    unlockVtCell(id, cellKey(section, cm.expectedIndex, cell));
+  // The lock key is resolved at render time via `lockKeyForStudent` and
+  // snapshotted by `Field` at edit-session start, so this handler just
+  // delegates to the store. Don't re-resolve from `errors` here — by the
+  // time blur fires the matcher pairing may have shifted (multi-row best-
+  // similarity pass), which would clear the wrong entry.
+  const onUnlock = (lockKey: string) => {
+    unlockVtCell(id, lockKey);
   };
 
   // Resolve the flash colour for a rendered cell. The flash is keyed by
@@ -997,6 +1019,7 @@ export function VariableTable({
             onRemove={(idx) => removeRow('iv', idx)}
             getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
             getLocked={(s, cell) => cellLockedForStudent('iv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent('iv', s, cell)}
             getFlash={(s, cell) => flashForStudent('iv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1007,7 +1030,7 @@ export function VariableTable({
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('iv', s, cell)}
-            onUnlock={(s, cell) => onUnlock('iv', s, cell)}
+            onUnlock={(lockKey) => onUnlock(lockKey)}
           />
           <RowGroupSection
             sectionId="dv"
@@ -1026,6 +1049,7 @@ export function VariableTable({
             onRemove={(idx) => removeRow('dv', idx)}
             getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
             getLocked={(s, cell) => cellLockedForStudent('dv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent('dv', s, cell)}
             getFlash={(s, cell) => flashForStudent('dv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1036,7 +1060,7 @@ export function VariableTable({
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('dv', s, cell)}
-            onUnlock={(s, cell) => onUnlock('dv', s, cell)}
+            onUnlock={(lockKey) => onUnlock(lockKey)}
           />
           <RowGroupSection
             sectionId="constants"
@@ -1061,6 +1085,7 @@ export function VariableTable({
               cellInfoFor('constants', constantsExpectedArr ?? [], errors?.constants, s, cell)
             }
             getLocked={(s, cell) => cellLockedForStudent('constants', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent('constants', s, cell)}
             getFlash={(s, cell) => flashForStudent('constants', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1073,7 +1098,7 @@ export function VariableTable({
             allowPaste={allowPaste}
             armed={armed}
             onSpend={(s, cell) => onSpendCell('constants', s, cell)}
-            onUnlock={(s, cell) => onUnlock('constants', s, cell)}
+            onUnlock={(lockKey) => onUnlock(lockKey)}
           />
         </div>
       </div>
@@ -1118,6 +1143,10 @@ interface RowGroupProps {
   onRemove: (idx: number) => void;
   getInfo: (studentIndex: number, cell: Cell) => CellHintInfo;
   getLocked: (studentIndex: number, cell: Cell) => boolean;
+  /** Render-time resolution of a locked cell's store lock key (or null if
+   *  the cell isn't currently locked). Field snapshots this at edit-session
+   *  start to avoid re-resolution drift on blur. */
+  getLockKey: (studentIndex: number, cell: Cell) => string | null;
   getFlash: (studentIndex: number, cell: Cell) => 'correct' | 'wrong' | null;
   flashNonce: number;
   flashWithTransition: boolean;
@@ -1132,7 +1161,7 @@ interface RowGroupProps {
   allowPaste?: boolean;
   armed: boolean;
   onSpend: (studentIndex: number, cell: Cell) => void;
-  onUnlock: (studentIndex: number, cell: Cell) => void;
+  onUnlock: (lockKey: string) => void;
 }
 
 function RowGroupSection({
@@ -1151,6 +1180,7 @@ function RowGroupSection({
   onRemove,
   getInfo,
   getLocked,
+  getLockKey,
   getFlash,
   flashNonce,
   flashWithTransition,
@@ -1194,6 +1224,11 @@ function RowGroupSection({
             symbol: getLocked(i, 'symbol'),
             unit: getLocked(i, 'unit'),
           }}
+          lockKey={{
+            name: getLockKey(i, 'name'),
+            symbol: getLockKey(i, 'symbol'),
+            unit: getLockKey(i, 'unit'),
+          }}
           flash={{
             name: getFlash(i, 'name'),
             symbol: getFlash(i, 'symbol'),
@@ -1206,7 +1241,7 @@ function RowGroupSection({
           allowPaste={allowPaste}
           armed={armed}
           onSpend={(cell) => onSpend(i, cell)}
-          onUnlock={(cell) => onUnlock(i, cell)}
+          onUnlock={onUnlock}
         />
       ))}
       {missingMessages.length > 0 && (
@@ -1247,6 +1282,9 @@ interface RepeatableRowProps {
   removeAriaLabel: string;
   info: Record<Cell, CellHintInfo>;
   locked: Record<Cell, boolean>;
+  /** Store lock key per cell — string when locked, null otherwise. Field
+   *  snapshots it at edit-session start; see `lockKeyForStudent`. */
+  lockKey: Record<Cell, string | null>;
   flash: Record<Cell, 'correct' | 'wrong' | null>;
   flashNonce: number;
   flashWithTransition: boolean;
@@ -1256,7 +1294,7 @@ interface RepeatableRowProps {
   allowPaste?: boolean;
   armed: boolean;
   onSpend: (cell: Cell) => void;
-  onUnlock: (cell: Cell) => void;
+  onUnlock: (lockKey: string) => void;
 }
 
 function RepeatableRow({
@@ -1272,6 +1310,7 @@ function RepeatableRow({
   removeAriaLabel,
   info,
   locked,
+  lockKey,
   flash,
   flashNonce,
   flashWithTransition,
@@ -1301,6 +1340,7 @@ function RepeatableRow({
         onChange={(v) => onChange('name', v)}
         info={info.name}
         locked={locked.name}
+        lockKey={lockKey.name}
         flash={flash.name}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
@@ -1309,7 +1349,7 @@ function RepeatableRow({
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('name')}
-        onUnlock={() => onUnlock('name')}
+        onUnlock={onUnlock}
       />
       <Field
         id={`${id}-symbol`}
@@ -1319,6 +1359,7 @@ function RepeatableRow({
         onChange={(v) => onChange('symbol', v)}
         info={info.symbol}
         locked={locked.symbol}
+        lockKey={lockKey.symbol}
         flash={flash.symbol}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
@@ -1327,7 +1368,7 @@ function RepeatableRow({
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('symbol')}
-        onUnlock={() => onUnlock('symbol')}
+        onUnlock={onUnlock}
       />
       <Field
         id={`${id}-unit`}
@@ -1337,6 +1378,7 @@ function RepeatableRow({
         onChange={(v) => onChange('unit', v)}
         info={info.unit}
         locked={locked.unit}
+        lockKey={lockKey.unit}
         flash={flash.unit}
         flashNonce={flashNonce}
         flashWithTransition={flashWithTransition}
@@ -1345,7 +1387,7 @@ function RepeatableRow({
         allowPaste={allowPaste}
         armed={armed}
         onSpend={() => onSpend('unit')}
-        onUnlock={() => onUnlock('unit')}
+        onUnlock={onUnlock}
       />
       {hasRemove && (
         <button
@@ -1378,6 +1420,11 @@ interface FieldProps {
    *  current matcher report still shows the cell correct. Locked cells render
    *  as plain text spans (no input chrome, no hint chrome). */
   locked: boolean;
+  /** Store lock key for this cell — string when `locked`, null otherwise.
+   *  Snapshotted at edit-session start so the matcher pairing the lock was
+   *  born under is the one cleared on blur, even if intervening edits to
+   *  other rows shifted the studentIndex → expectedIndex mapping. */
+  lockKey: string | null;
   /** Per-Tjek flash on this cell — emerald for newly-locked, rose for wrong
    *  or stale-lock cleanup. `null` between Tjeks. */
   flash: 'correct' | 'wrong' | null;
@@ -1394,7 +1441,7 @@ interface FieldProps {
   allowPaste?: boolean;
   armed: boolean;
   onSpend: () => void;
-  onUnlock: () => void;
+  onUnlock: (lockKey: string) => void;
 }
 
 function Field({
@@ -1405,6 +1452,7 @@ function Field({
   onChange,
   info,
   locked,
+  lockKey,
   flash,
   flashNonce,
   flashWithTransition,
@@ -1460,16 +1508,36 @@ function Field({
     }
   };
 
-  // Focus the freshly-rendered input on unlock so a keyboard student can
-  // resume typing without re-Tab. The effect only fires on the locked → editable
-  // transition (initial mount with locked=false is a no-op).
-  const prevLockedRef = useRef(locked);
+  // Unlock session model: opening a locked cell does NOT immediately drop the
+  // store-level lock entry. Instead it starts a transient "edit session" that
+  // renders the cell as editable while the lock entry stays in place. On blur
+  // we compare the current value (trimmed) against the snapshot taken at
+  // session start. If they match, the session ends silently — no store
+  // mutation, no relock-flash dance on the next Tjek (the lock was never
+  // dropped). If they differ, we commit the unlock by calling prop-`onUnlock`,
+  // which clears the store entry; the next Tjek then re-validates the new
+  // value and may re-lock with its usual emerald/rose flash.
+  const [editingUnlocked, setEditingUnlocked] = useState(false);
+  // Snapshot taken at edit-session start: the value (to detect net-zero edits)
+  // and the store lock key resolved at the moment editing began. Capturing
+  // the key here pins it to the matcher pairing the lock was born under, so
+  // a subsequent edit that re-pairs this student row with a different
+  // expected row still clears the original lock entry — not whatever the
+  // matcher happens to point at on blur.
+  const unlockSnapshotRef = useRef<{ value: string; lockKey: string | null } | null>(null);
+  const isReadonlyRender = locked && !editingUnlocked;
+
+  // Focus the freshly-rendered editable input on the readonly→editable
+  // transition so a keyboard student can resume typing without re-Tab. Fires
+  // for both genuine unlocks (locked → !locked) and session starts (locked &&
+  // editingUnlocked flip), since both flip isReadonlyRender true → false.
+  const prevReadonlyRef = useRef(isReadonlyRender);
   useEffect(() => {
-    if (prevLockedRef.current && !locked) {
+    if (prevReadonlyRef.current && !isReadonlyRender) {
       document.getElementById(id)?.focus();
     }
-    prevLockedRef.current = locked;
-  }, [locked, id]);
+    prevReadonlyRef.current = isReadonlyRender;
+  }, [isReadonlyRender, id]);
 
   // Long-press unlock for touch. Cleared on touchend/cancel/move so a swipe-
   // scroll doesn't accidentally unlock.
@@ -1487,31 +1555,57 @@ function Field({
     }
   };
 
+  // Start an edit session: snapshot the current trimmed value AND the
+  // current lock key, flip the session bit. No-op if not locked, or if a
+  // session is already running (re-snapshotting would lose the original
+  // "before edit" value and pin to a stale key).
+  const startEditSession = () => {
+    if (!locked || editingUnlocked) return;
+    unlockSnapshotRef.current = { value: value.trim(), lockKey };
+    setEditingUnlocked(true);
+  };
+
   // Wrapper-level handlers: the locked branch wraps its span in `Tooltip`,
   // which clones the child and overwrites onKeyDown / onClick / onTouch*
   // (see Tooltip.tsx). Catching the events on the bubble parent lets the
   // Tooltip own its child cloning while we still receive the unlock signals.
   const handleWrapperDoubleClick = () => {
-    if (locked) onUnlock();
+    startEditSession();
   };
   const handleWrapperKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-    if (!locked) return;
-    if (e.key === 'Enter' || e.key === 'F2') {
+    if (!locked || editingUnlocked) return;
+    // Enter / F2: documented keyboard-unlock keys. Space: ARIA-button
+    // activation pattern — the locked-cell wrapper has role="button" so
+    // Space must also trigger it (and we preventDefault to suppress the
+    // browser's default page-scroll).
+    if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') {
       e.preventDefault();
-      onUnlock();
+      startEditSession();
     }
   };
   const handleWrapperTouchStart = (_e: TouchEvent<HTMLSpanElement>) => {
-    if (!locked) return;
+    if (!locked || editingUnlocked) return;
     clearPressTimer();
     pressTimerRef.current = setTimeout(() => {
       pressTimerRef.current = null;
-      onUnlock();
+      startEditSession();
     }, 500);
   };
   const handleWrapperTouchEnd = () => clearPressTimer();
   const handleWrapperTouchCancel = () => clearPressTimer();
   const handleWrapperTouchMove = () => clearPressTimer();
+
+  // Editable-input blur: if a session is running, decide whether the student
+  // actually changed anything. Net-zero edits (typed then backspaced back to
+  // the original) end the session silently with no store mutation.
+  const handleInputBlur = (_e: FocusEvent<HTMLInputElement>) => {
+    if (!editingUnlocked) return;
+    const snapshot = unlockSnapshotRef.current;
+    const changed = snapshot !== null && value.trim() !== snapshot.value;
+    if (changed && snapshot.lockKey !== null) onUnlock(snapshot.lockKey);
+    setEditingUnlocked(false);
+    unlockSnapshotRef.current = null;
+  };
 
   // Flash wrapper class — shared by both branches so the column width is
   // identical input ↔ span. The static colour class (bg-emerald-100 /
@@ -1551,8 +1645,28 @@ function Field({
       <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600 sm:hidden">
         {label}
       </label>
+      {/* When locked-correct, the wrapper is the keyboard-reachable unlock
+          affordance: tabIndex=0 + role=button puts the cell back in the
+          tab order (the input itself stays tabIndex=-1 so SR users land on
+          the wrapper's labelled button instead of an anonymous readonly
+          input), and the aria-label tells the student what activates it.
+          Enter / F2 / Space all trigger startEditSession via the existing
+          keydown handler. focus-visible ring matches the readonly input's
+          own ring so the visual cue is the same whichever element receives
+          focus. */}
       <span
-        className="group/cell relative inline-block w-full"
+        className={`group/cell relative inline-block w-full${
+          isReadonlyRender
+            ? ' rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400'
+            : ''
+        }`}
+        tabIndex={isReadonlyRender ? 0 : undefined}
+        role={isReadonlyRender ? 'button' : undefined}
+        aria-label={
+          isReadonlyRender
+            ? `${ariaLabel}. ${strings.widgets.variableTable.lockedTooltipScreenReaderPrefix} ${strings.widgets.variableTable.lockedKeyboardImperative}.`
+            : undefined
+        }
         onDoubleClick={handleWrapperDoubleClick}
         onKeyDown={handleWrapperKeyDown}
         onTouchStart={handleWrapperTouchStart}
@@ -1561,7 +1675,7 @@ function Field({
         onTouchMove={handleWrapperTouchMove}
       >
         <span key={flashNonce} className={`block w-full ${flashClass}`}>
-          {locked ? (
+          {isReadonlyRender ? (
             <Tooltip content={lockedTooltipContent} openDelayMs={500} fullWidth>
               <input
                 id={id}
@@ -1569,7 +1683,11 @@ function Field({
                 value={value}
                 readOnly
                 aria-label={ariaLabel}
-                tabIndex={0}
+                // Suppress the input's own tab stop; the wrapper-span above
+                // is the tabbable element when locked (role=button + tabIndex=0
+                // + aria-label), so the cell remains one keyboard-reachable
+                // unlock target instead of two adjacent focus stops.
+                tabIndex={-1}
                 className="block w-full cursor-default rounded border border-slate-200 bg-transparent px-3 py-1.5 text-sm text-slate-800 read-only:focus:outline-none read-only:focus:ring-1 read-only:focus:ring-slate-300"
                 style={{ WebkitTouchCallout: 'none', userSelect: 'none' }}
                 onChange={() => {}}
@@ -1587,6 +1705,7 @@ function Field({
                 onChange={(e) => onChange(e.target.value)}
                 onMouseDown={handleMouseDown}
                 onKeyDown={handleInputKeyDown}
+                onBlur={handleInputBlur}
                 className={`${inputClass}${inputFlashClass}`}
               />
             </HintPopup>

@@ -224,6 +224,11 @@ export const strings = {
       lockedTooltipScreenReaderPrefix: 'Korrekt.',
       /** Visible imperative paired with the ✓ glyph in the default tooltip. */
       lockedTooltipRest: 'Dobbeltklik for at åbne',
+      /** Keyboard-friendly imperative used in the locked cell's wrapper
+       *  aria-label. The default tooltip says "Dobbeltklik for at åbne" —
+       *  fine for mouse, useless for screen-reader users tabbing through
+       *  the table. Pairs with the screen-reader prefix above. */
+      lockedKeyboardImperative: 'Tryk Enter for at åbne',
       /** Sr-only live-region announcement fired the moment a passing Tjek
        *  hides the visible status pill, so assistive-tech users still hear
        *  that the table was accepted. Reuses the existing `status.checked`

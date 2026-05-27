@@ -135,12 +135,18 @@ describe('VariableTable Tjek flow', () => {
     // Under the lock model, `correct` follows lock coverage — not snapshot
     // equality. Editing a non-locked cell (iv0-name has no expected entry)
     // changes the live values but leaves the IV/DV symbol locks intact, so
-    // `correct` stays true. To flip it, the student must unlock a locked
-    // cell — here via double-click on iv0-symbol's read-only input.
+    // `correct` stays true. To flip it, the student must commit an unlock
+    // on a locked cell — double-click starts an edit session, but the lock
+    // entry only drops once the student actually changes the value and
+    // blurs (deferred-commit model).
     const ivSymbol = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
     expect(ivSymbol).toHaveAttribute('readonly');
     await user.dblClick(ivSymbol);
-    expect(readCorrect()).toBe(false);
+    // Re-fetch after the readonly→editable render swap.
+    const editable = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(editable, 'Z');
+    editable.blur();
+    await waitFor(() => expect(readCorrect()).toBe(false));
   });
 
   it('Tjek does NOT auto-reveal any ladder hint (request-driven model)', async () => {
@@ -429,10 +435,16 @@ describe('VariableTable per-cell lock confirmation', () => {
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(isLocked('variables-iv0-symbol')).toBe(true);
     expect(isLocked('variables-dv0-symbol')).toBe(true);
-    // Double-click iv0-symbol's read-only input to unlock — DV symbol stays
-    // locked (locks are per-cell, not per-section).
-    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
-    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    // Double-click iv0-symbol's read-only input → starts edit session; type
+    // + blur commits the unlock. DV symbol stays locked (locks are per-cell,
+    // not per-section).
+    const ivSym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.dblClick(ivSym);
+    // Re-fetch after the readonly→editable render swap.
+    const editableIv = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(editableIv, 'Z');
+    editableIv.blur();
+    await waitFor(() => expect(isLocked('variables-iv0-symbol')).toBe(false));
     expect(isLocked('variables-dv0-symbol')).toBe(true);
     // The whole-table success announcement unmounts (gate no longer satisfied).
     expect(screen.queryByRole('status')).not.toBeInTheDocument();

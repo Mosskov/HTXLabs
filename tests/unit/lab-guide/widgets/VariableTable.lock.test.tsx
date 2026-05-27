@@ -2,6 +2,13 @@
 // (double-click / Enter / F2 / long-press), expected-row-keyed lock identity
 // for multi-row sections, gate behaviour through `all-validated` and through
 // `all-satisfied { strict: true }`.
+//
+// Unlock session semantics: opening a locked cell (dblclick / Enter / F2 /
+// long-press) starts a transient edit session — the input becomes editable
+// and takes focus, but the store-level lock entry stays in place. On blur
+// the cell's current value is compared against the snapshot taken at
+// session start: equal → session ends silently (lock preserved, no flash);
+// changed → `onUnlock` fires, lock entry drops, next Tjek re-validates.
 import { RunnerProvider, useRunner } from '@/lab-guide/RunnerContext';
 import { isGateSatisfied, widgetSatisfied } from '@/lab-guide/gates';
 import { VariableTable } from '@/lab-guide/widgets/VariableTable';
@@ -139,10 +146,121 @@ describe('VariableTable lock model', () => {
     expect(readState().correct).toBe(false);
   });
 
-  it('double-click on a locked cell unlocks it; the editable input takes focus', async () => {
+  async function fillAllCorrectly() {
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-iv0-unit', 'm');
+    await typeInto('variables-dv0-name', 'tid');
+    await typeInto('variables-dv0-symbol', 't');
+    await typeInto('variables-dv0-unit', 's');
+  }
+
+  it('double-click on a locked cell starts an edit session; commits unlock only on blur-with-change', async () => {
     const user = userEvent.setup();
     render(
       <Harness experimentId="vtl/dblclick-unlock">
+        <VariableTable id="variables" requireUnits expected={fullExpected} />
+      </Harness>,
+    );
+    await fillAllCorrectly();
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(isLocked('variables-iv0-symbol')).toBe(true);
+    expect(readState().lockKeys).toContain('iv.0.symbol');
+    expect(readState().correct).toBe(true);
+
+    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
+    // Session started: input is editable + focused, but the store-level
+    // lock entry stays in place (deferred-commit model).
+    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(document.getElementById('variables-iv0-symbol')),
+    );
+    expect(readState().lockKeys).toContain('iv.0.symbol');
+    expect(readState().correct).toBe(true);
+
+    // Commit the unlock by editing then blurring.
+    await user.type(document.getElementById('variables-iv0-symbol') as HTMLInputElement, 'X');
+    (document.getElementById('variables-iv0-symbol') as HTMLInputElement).blur();
+    await waitFor(() => expect(readState().lockKeys).not.toContain('iv.0.symbol'));
+    expect(readState().correct).toBe(false);
+  });
+
+  it('double-click + blur with no edit → session ends silently, lock + correct survive', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtl/dblclick-no-edit">
+        <VariableTable id="variables" requireUnits expected={fullExpected} />
+      </Harness>,
+    );
+    await fillAllCorrectly();
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(readState().correct).toBe(true);
+
+    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
+    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    // Blur without typing — value unchanged from snapshot.
+    (document.getElementById('variables-iv0-symbol') as HTMLInputElement).blur();
+    await waitFor(() => expect(isLocked('variables-iv0-symbol')).toBe(true));
+    expect(readState().lockKeys).toContain('iv.0.symbol');
+    expect(readState().correct).toBe(true);
+  });
+
+  it('double-click + type + delete back to original + blur → session ends silently', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtl/dblclick-net-zero">
+        <VariableTable id="variables" requireUnits expected={fullExpected} />
+      </Harness>,
+    );
+    await fillAllCorrectly();
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+    expect(readState().correct).toBe(true);
+
+    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
+    const input = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(input, 'X');
+    expect(input.value).toBe('hX');
+    await user.type(input, '{Backspace}');
+    expect(input.value).toBe('h');
+    input.blur();
+    // Net-zero edit: lock entry preserved, cell re-renders as locked.
+    await waitFor(() => expect(isLocked('variables-iv0-symbol')).toBe(true));
+    expect(readState().lockKeys).toContain('iv.0.symbol');
+    expect(readState().correct).toBe(true);
+  });
+
+  it('locked input itself is skipped in tab order; wrapper takes the tab stop', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtl/locked-tab-skip">
+        <VariableTable id="variables" expected={fullExpected} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-dv0-name', 'tid');
+    // Leave dv0-symbol wrong so it stays editable after Tjek (the only
+    // editable input "after" the locked iv0-symbol in tab order).
+    await typeInto('variables-dv0-symbol', 'WRONG');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+
+    const ivSym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    expect(ivSym).toHaveAttribute('readonly');
+    // Input itself stays out of the tab order…
+    expect(ivSym.tabIndex).toBe(-1);
+    // …but its wrapper takes the tab stop so keyboard-only students can
+    // reach the cell and trigger the documented Enter/F2 unlock.
+    const wrapper = ivSym.parentElement?.parentElement?.parentElement as HTMLElement;
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.tabIndex).toBe(0);
+    expect(wrapper.getAttribute('role')).toBe('button');
+    expect(wrapper.getAttribute('aria-label')).toMatch(/Tryk Enter/);
+  });
+
+  it('Tab reaches a locked cell via wrapper; Enter unlocks it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtl/tab-then-enter-unlock">
         <VariableTable id="variables" expected={fullExpected} />
       </Harness>,
     );
@@ -151,19 +269,43 @@ describe('VariableTable lock model', () => {
     await typeInto('variables-dv0-name', 'tid');
     await typeInto('variables-dv0-symbol', 't');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
-    expect(isLocked('variables-iv0-symbol')).toBe(true);
 
-    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
-    expect(isLocked('variables-iv0-symbol')).toBe(false);
+    const ivSym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    const wrapper = ivSym.parentElement?.parentElement?.parentElement as HTMLElement;
+    expect(wrapper.tabIndex).toBe(0);
 
-    // Focus lands on the newly-rendered editable input.
+    // Focus the wrapper directly (simulates Tab landing on it — userEvent's
+    // tab order traversal across a complex table is brittle, but the
+    // load-bearing claim is "wrapper.focus() + Enter unlocks", which is what
+    // a keyboard-only student gets after Tab finds the wrapper).
+    wrapper.focus();
+    expect(document.activeElement).toBe(wrapper);
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(isLocked('variables-iv0-symbol')).toBe(false));
     await waitFor(() =>
       expect(document.activeElement).toBe(document.getElementById('variables-iv0-symbol')),
     );
+  });
 
-    // Lock entry is dropped from state.
-    expect(readState().lockKeys).not.toContain('iv.0.symbol');
-    expect(readState().correct).toBe(false);
+  it('Space on a focused locked-cell wrapper also unlocks (ARIA button pattern)', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness experimentId="vtl/space-unlock">
+        <VariableTable id="variables" expected={fullExpected} />
+      </Harness>,
+    );
+    await typeInto('variables-iv0-name', 'højde');
+    await typeInto('variables-iv0-symbol', 'h');
+    await typeInto('variables-dv0-name', 'tid');
+    await typeInto('variables-dv0-symbol', 't');
+    await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
+
+    const ivSym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    const wrapper = ivSym.parentElement?.parentElement?.parentElement as HTMLElement;
+    wrapper.focus();
+    await user.keyboard(' ');
+    await waitFor(() => expect(isLocked('variables-iv0-symbol')).toBe(false));
   });
 
   it('Enter on a focused locked cell unlocks it', async () => {
@@ -286,11 +428,18 @@ describe('VariableTable lock model', () => {
     // to expected[1] should disappear; the one keyed to expected[0] (paired to
     // rendered row 1 = højde) stays. This is the load-bearing assertion for
     // expected-row-keyed lock identity — unlocking by render position would
-    // drop the wrong key.
+    // drop the wrong key. Under the deferred-commit model we need to actually
+    // edit + blur to commit the unlock. dblClick re-renders the cell from
+    // readonly → editable, so we must re-fetch the input by id afterwards.
     await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
-    const after = readState();
-    expect(after.lockKeys).not.toContain('iv.1.symbol');
-    expect(after.lockKeys).toEqual(expect.arrayContaining(['iv.0.symbol']));
+    const editable = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.type(editable, 'X');
+    editable.blur();
+    await waitFor(() => {
+      const after = readState();
+      expect(after.lockKeys).not.toContain('iv.1.symbol');
+      expect(after.lockKeys).toEqual(expect.arrayContaining(['iv.0.symbol']));
+    });
   });
 
   it('gate via all-validated reads correct === true; unlocking re-closes it', async () => {
@@ -316,9 +465,14 @@ describe('VariableTable lock model', () => {
     expect(screen.getByTestId('gate')).toHaveTextContent('fail');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByTestId('gate')).toHaveTextContent('pass');
-    // Unlock one cell — gate closes.
-    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
-    expect(screen.getByTestId('gate')).toHaveTextContent('fail');
+    // Open a cell — gate stays open under deferred-commit (no actual change yet).
+    const sym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.dblClick(sym);
+    expect(screen.getByTestId('gate')).toHaveTextContent('pass');
+    // Edit + blur commits the unlock, closing the gate.
+    await user.type(sym, 'X');
+    sym.blur();
+    await waitFor(() => expect(screen.getByTestId('gate')).toHaveTextContent('fail'));
   });
 
   it('gate via all-satisfied { strict: true } follows the same lock-based correct', async () => {
@@ -346,8 +500,13 @@ describe('VariableTable lock model', () => {
     expect(screen.getByTestId('strict')).toHaveTextContent('fail');
     await user.click(screen.getByRole('button', { name: /tjek mine variable/i }));
     expect(screen.getByTestId('strict')).toHaveTextContent('pass');
-    await user.dblClick(document.getElementById('variables-iv0-symbol') as HTMLInputElement);
-    expect(screen.getByTestId('strict')).toHaveTextContent('fail');
+    // Deferred-commit: open + edit + blur to actually invalidate the gate.
+    const sym = document.getElementById('variables-iv0-symbol') as HTMLInputElement;
+    await user.dblClick(sym);
+    expect(screen.getByTestId('strict')).toHaveTextContent('pass');
+    await user.type(sym, 'X');
+    sym.blur();
+    await waitFor(() => expect(screen.getByTestId('strict')).toHaveTextContent('fail'));
   });
 
   it('flash wrapper paints emerald/rose for 1.5s after Tjek; clears afterwards', async () => {

@@ -7,7 +7,7 @@ import type {
   RowMatch,
 } from '@/lab-guide/widgets/variableTableCorrectness';
 import type { Gate, Phase } from '@/lib/schema';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -630,12 +630,18 @@ describe('VariableTable — sections facet', () => {
     expect(readSections()).toEqual({ iv: true, dv: true, constants: true });
 
     // Under the lock model, the `sections` facet follows lock coverage —
-    // not snapshot equality. Double-click any locked IV cell to unlock it;
-    // IV's coverage drops while DV and constants stay locked. This is the
-    // per-section guarantee: unlocking one section's cell must not un-lock
-    // another that the student already validated.
-    await user.dblClick(document.getElementById('variables-iv0-name') as HTMLInputElement);
-    expect(readSections()).toEqual({ iv: false, dv: true, constants: true });
+    // not snapshot equality. Double-click any locked IV cell to start an
+    // edit session, then type + blur to commit the unlock; IV's coverage
+    // drops while DV and constants stay locked. This is the per-section
+    // guarantee: unlocking one section's cell must not un-lock another
+    // that the student already validated.
+    const ivName = document.getElementById('variables-iv0-name') as HTMLInputElement;
+    await user.dblClick(ivName);
+    // Re-fetch after the readonly→editable render swap.
+    const editable = document.getElementById('variables-iv0-name') as HTMLInputElement;
+    await user.type(editable, 'Z');
+    editable.blur();
+    await waitFor(() => expect(readSections()).toEqual({ iv: false, dv: true, constants: true }));
   });
 });
 
