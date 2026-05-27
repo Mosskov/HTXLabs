@@ -732,20 +732,18 @@ export function RubricResponse({
           className={textareaClass}
         />
         {pipsVisible && pipCount > 0 && (
-          // Pip cluster as panel toggle. Mirrors VariableTable's focused-state
-          // pip geometry: container `-bottom-1.5` (6 px below the textarea
-          // bottom border), pips `h-3.5` (14 px), so the pip top sits 8 px
-          // inside the textarea and the pip bottom lands exactly on the panel
-          // top edge (panel row uses `mt-1.5` for the matching 6 px offset).
-          // No button padding/background chrome — keeping the click target as
-          // just the pips themselves preserves VT's visual identity. Hover +
-          // focus-visible darken each pip (amber-400 → amber-600).
+          // Pip cluster as panel toggle. The button has a larger invisible
+          // 32 px hit target, while `pt-3` keeps the visible pips in the same
+          // bridge position as the old `-bottom-1.5`: 8 px inside the textarea,
+          // 6 px below it, landing on the panel top edge (`mt-1.5`).
+          // No background chrome — hover + focus-visible darken each pip
+          // (amber-400 → amber-600).
           <button
             type="button"
             onClick={togglePanelCollapsed}
             aria-label={pipAriaLabel}
             aria-expanded={!panelCollapsed}
-            className="group absolute -bottom-1.5 left-2 flex gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-sm"
+            className="group absolute -bottom-3 left-0 flex h-8 min-w-8 items-start gap-0.5 rounded-sm px-2 pt-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
           >
             {panelView.entries.map((entry) => (
               <span
@@ -758,12 +756,10 @@ export function RubricResponse({
         )}
       </span>
       {/* Row directly under the textarea wrapper: hint panel on the left so
-          the pip cluster (positioned at the textarea's -bottom-1.5) lands
-          exactly on its top edge, word counter on the right. The row always
-          renders so the counter stays right-aligned even when the panel is
-          hidden. `mt-1.5` (6 px) matches the pip-toggle's `-bottom-1.5`
-          (-6 px) so pip-bottom == panel-top, mirroring VariableTable's
-          pip→popup geometry. */}
+          the visible pips land exactly on its top edge, word counter on the
+          right. The row always renders so the counter stays right-aligned even
+          when the panel is hidden. `mt-1.5` (6 px) matches the visible pip
+          bottom offset, mirroring VariableTable's pip→popup geometry. */}
       <div className="mt-1.5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {/* Panel — flat list. Pinned misconceptions at top (orange

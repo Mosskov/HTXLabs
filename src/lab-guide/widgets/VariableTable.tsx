@@ -1417,7 +1417,7 @@ function Field({
 }: FieldProps) {
   const armedSpendable = !locked && armed && info.nextTier !== null;
   // Hint-count pips: editable + popup will open on focus. N tiny amber
-  // vertical ticks at bottom-right communicate "this cell has N hints" — one
+  // vertical ticks at bottom-left communicate "this cell has N hints" — one
   // tick per popup bullet, so the count matches what the student will read
   // when the popup opens. Stays visible while armed (the armed border is a
   // separate "spend mode" cue, not a hint-count cue). Gated on popupEntries
@@ -1600,7 +1600,7 @@ function Field({
           // effect: the pips become a visual bridge from input to hint box.
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute right-2 bottom-0.5 flex gap-0.5 transition-all duration-150 group-focus-within/cell:-bottom-1.5"
+            className="pointer-events-none absolute left-2 bottom-0.5 flex gap-0.5 transition-all duration-150 group-focus-within/cell:-bottom-1.5"
           >
             {info.popupEntries.map((entry) => (
               <span

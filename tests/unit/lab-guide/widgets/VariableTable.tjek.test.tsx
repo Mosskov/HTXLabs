@@ -558,6 +558,10 @@ describe('VariableTable in-field hint indicator (F4 + F8)', () => {
     return !!input.closest('div')?.querySelector('span.bg-amber-400');
   }
 
+  function hintTickBridge(input: HTMLInputElement): HTMLElement | null {
+    return input.closest('div')?.querySelector('span.bg-amber-400')?.parentElement ?? null;
+  }
+
   it('armed-border coexists with hint ticks (border = spend-mode cue, ticks = hint count)', async () => {
     const user = userEvent.setup();
     render(
@@ -574,6 +578,8 @@ describe('VariableTable in-field hint indicator (F4 + F8)', () => {
     // Idle: ticks present (no border).
     const input = symbolInput();
     expect(idleDotPresent(input)).toBe(true);
+    expect(hintTickBridge(input)?.className).toContain('left-2');
+    expect(hintTickBridge(input)?.className).not.toContain('right-2');
     expect(input.className).not.toContain('border-amber-300');
 
     // Arm: border on, ticks still present (no mutual exclusion).

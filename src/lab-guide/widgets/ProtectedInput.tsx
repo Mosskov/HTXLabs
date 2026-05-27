@@ -58,7 +58,7 @@ export const ProtectedInput = forwardRef<
       autoComplete="off"
       autoCorrect="off"
       spellCheck={false}
-      className={`rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 ${className}`}
+      className={`block rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 ${className}`}
       {...rest}
     />
   );
@@ -81,7 +81,7 @@ export const ProtectedTextarea = forwardRef<
       autoComplete="off"
       autoCorrect="off"
       spellCheck={false}
-      className={`w-full min-h-[6rem] rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 ${className}`}
+      className={`block w-full min-h-[6rem] rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 ${className}`}
       {...rest}
     />
   );
