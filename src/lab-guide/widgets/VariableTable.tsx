@@ -63,22 +63,23 @@ import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
 import { HintBucket } from './HintBucket';
-import { HintPopup, type HintPopupEntry } from './HintPopup';
+import { HintPopup } from './HintPopup';
 import { ProtectedInput } from './ProtectedInput';
 import {
   type Cell,
-  type CellError,
-  type CellSpec,
   type CorrectnessReport,
   type ExpectedVariables,
-  type RowMatch,
-  type VariableRowErrors,
   asExpectedArray,
-  cellAcceptedValues,
   evaluateTable,
-  maxTierForCell,
-  resolveLadder,
 } from './variableTableCorrectness';
+import {
+  type CellHintInfo,
+  type HintCtx,
+  cellInfoFor,
+  countSpendable,
+  missingMessagesFor,
+  resolveSpend,
+} from './variableTableHints';
 import {
   cellLockedForStudent,
   lockKeyForStudent,
@@ -92,11 +93,11 @@ import {
 } from './variableTableTjek';
 import {
   type Bounds,
-  CELLS,
   DEFAULT_CONSTANTS_BOUNDS,
   DEFAULT_DV_BOUNDS,
   DEFAULT_IV_BOUNDS,
   EMPTY,
+  type Section,
   type SectionConfig,
   type VariableEntry,
   cellKey,
@@ -183,37 +184,6 @@ interface Props {
   checkedAriaStatusLabel?: string;
   /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
   allowPaste?: boolean;
-}
-
-/** Compact per-cell info aggregated for the row renderer. `cap === 0` means
- *  no hint ladder for this cell (e.g. `empty` error with no author hints) —
- *  the cell is not a spend target / `nextTier` stays `null`. `freeDiagnostic`
- *  is the case-mismatch / whitespace-internal text (no token cost).
- *  `popupEntries` holds the revealed-tier paid hints for the focus popup. */
-interface CellHintInfo {
-  cap: number;
-  /** Next tier a spend click would unlock (1..cap). `null` when no advance is
-   *  possible (cap reached or no error). */
-  nextTier: number | null;
-  freeDiagnostic: string | null;
-  popupEntries: HintPopupEntry[];
-}
-
-const EMPTY_CELL_INFO: CellHintInfo = {
-  cap: 0,
-  nextTier: null,
-  freeDiagnostic: null,
-  popupEntries: [],
-};
-
-function freeDiagnosticFor(err: CellError | undefined, cell: Cell): string | null {
-  if (!err) return null;
-  if (err.type !== 'case-mismatch' && err.type !== 'whitespace-internal') return null;
-  const tableHints = strings.widgets.variableTable.hints[cell] as
-    | Record<string, readonly string[] | undefined>
-    | undefined;
-  const ladder = tableHints?.[err.type] ?? [];
-  return ladder[0] ?? null;
 }
 
 function prefersReducedMotion(): boolean {
@@ -495,135 +465,31 @@ export function VariableTable({
     constants: expected !== undefined && sectionChecked.constants,
   };
 
-  function cellInfoFor(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected: ReadonlyArray<{
-      name?: CellSpec;
-      symbol?: CellSpec;
-      unit?: CellSpec;
-    }>,
-    matches: RowMatch[] | undefined,
-    studentIndex: number,
-    cell: Cell,
-  ): CellHintInfo {
-    if (expected === undefined) return EMPTY_CELL_INFO;
-    // Try to pair the student row to its expected row via the current matcher.
-    // If the cell has been cleared or the row dropped out of `partial`, cm is
-    // undefined — we still want to surface previously-revealed paid strings.
-    // Fall back to `expectedIndex = studentIndex` (correct for the single-row
-    // sections that are the default; multi-row sections that reshuffle pairing
-    // are a known limitation).
-    const cm = matches?.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
-    const expectedIndex = cm?.expectedIndex ?? studentIndex;
-    const k = cellKey(section, expectedIndex, cell);
-    const revealsForCell = reveals[k] ?? [];
-
-    let cap = 0;
-    let nextTier: number | null = null;
-    let freeDiagnostic: string | null = null;
-    const popupEntries: HintPopupEntry[] = [];
-
-    if (cm && cm.status === 'partial') {
-      const rowExp = sectionExpected[cm.expectedIndex];
-      const err: CellError | undefined = rowExp
-        ? (cm.errors as VariableRowErrors)[cell]
-        : undefined;
-      if (rowExp && err) {
-        const cellSpec = rowExp[cell];
-        cap = maxTierForCell(err, cellSpec, cell);
-        const tier = tiers[k] ?? 0;
-        // Spend target only armed on a clean section — spending mid-edit
-        // would charge the student for a hint about an error type that may
-        // shift on the next keystroke.
-        nextTier = sectionClean[section] && cap > 0 && tier < cap ? tier + 1 : null;
-        // Free diagnostic only surfaces on a clean section — it diagnoses
-        // the live value, so showing it mid-edit would be noisy.
-        if (sectionClean[section]) {
-          freeDiagnostic = freeDiagnosticFor(err, cell);
-          if (freeDiagnostic !== null) {
-            popupEntries.push({
-              key: `free-${section}-${cm.expectedIndex}-${cell}`,
-              text: freeDiagnostic,
-              tone: 'misconception',
-            });
-          }
-        }
-      }
-    }
-
-    // Paid revealed strings — always surfaced, regardless of dirty state and
-    // even if the current error type / row pairing has shifted. They were
-    // paid for at spend-time; the student keeps reading them.
-    revealsForCell.forEach((text, i) => {
-      popupEntries.push({
-        key: `paid-${section}-${expectedIndex}-${cell}-${i + 1}`,
-        text,
-        tone: 'hint',
-      });
-    });
-
-    return { cap, nextTier, freeDiagnostic, popupEntries };
-  }
+  const hintCtx: HintCtx = {
+    hasExpected: expected !== undefined,
+    tiers,
+    reveals,
+    sectionClean,
+  };
 
   // Live spendable-target count — number of failing cells with a remaining
   // ladder. HintBucket reads the phase-aggregate to disable when tokens > 0
   // but nothing is left to buy. cellInfoFor already gates `nextTier` on the
   // section being clean + the cell having an unspent tier, so locked /
   // matched / mid-edit cells naturally drop out.
-  let spendableCount = 0;
-  if (expected && errors) {
-    for (const { section, expectedArr, matches } of [
-      { section: 'iv' as const, expectedArr: ivExpectedArr, matches: errors.iv },
-      { section: 'dv' as const, expectedArr: dvExpectedArr, matches: errors.dv },
-      {
-        section: 'constants' as const,
-        expectedArr: constantsExpectedArr ?? [],
-        matches: errors.constants,
-      },
-    ]) {
-      if (!matches) continue;
-      const studentRows = values[section];
-      for (let s = 0; s < studentRows.length; s++) {
-        for (const cell of CELLS) {
-          if (cellInfoFor(section, expectedArr, matches, s, cell).nextTier !== null) {
-            spendableCount++;
-          }
-        }
-      }
-    }
-  }
+  const spendableCount =
+    expected && errors
+      ? countSpendable(hintCtx, values, errors, {
+          iv: ivExpectedArr,
+          dv: dvExpectedArr,
+          constants: constantsExpectedArr ?? [],
+        })
+      : 0;
   useEffect(() => {
     if (expected === undefined) return;
     registerSpendableCount(id, spendableCount);
     return () => registerSpendableCount(id, null);
   }, [id, expected, spendableCount, registerSpendableCount]);
-
-  function missingMessagesFor(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected:
-      | ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>
-      | undefined,
-    matches: RowMatch[] | undefined,
-    template: string,
-  ): string[] {
-    if (!sectionClean[section] || !matches || !sectionExpected) return [];
-    const out: string[] = [];
-    for (const m of matches) {
-      if (m.status !== 'missing') continue;
-      const exp = sectionExpected[m.expectedIndex];
-      if (!exp) continue;
-      out.push(
-        format(template, {
-          name: cellAcceptedValues(exp.name)?.[0] ?? '',
-          symbol: cellAcceptedValues(exp.symbol)?.[0] ?? '',
-          unit: cellAcceptedValues(exp.unit)?.[0] ?? '',
-        }),
-      );
-      // Cap at one missing-message per section to avoid spam.
-      if (out.length >= 1) break;
-    }
-    return out;
-  }
 
   const nameH = nameHeader ?? strings.widgets.variableTable.nameHeader;
   const symbolH = symbolHeader ?? strings.widgets.variableTable.symbolHeader;
@@ -654,18 +520,21 @@ export function VariableTable({
     );
 
   const ivMissing = missingMessagesFor(
+    hintCtx,
     'iv',
     ivExpectedArr,
     errors?.iv,
     ivMissingMessage ?? strings.widgets.variableTable.hints.ivMissing,
   );
   const dvMissing = missingMessagesFor(
+    hintCtx,
     'dv',
     dvExpectedArr,
     errors?.dv,
     dvMissingMessage ?? strings.widgets.variableTable.hints.dvMissing,
   );
   const constantsMissing = missingMessagesFor(
+    hintCtx,
     'constants',
     constantsExpectedArr,
     errors?.constants,
@@ -677,37 +546,18 @@ export function VariableTable({
     spendMode.kind === 'active' &&
     spendMode.phaseId === state.currentPhaseId;
 
-  const onSpendCell = (section: 'iv' | 'dv' | 'constants', studentIndex: number, cell: Cell) => {
-    const expectedArr =
+  const onSpendCell = (section: Section, studentIndex: number, cell: Cell) => {
+    const sectionExpected =
       section === 'iv' ? ivExpectedArr : section === 'dv' ? dvExpectedArr : constantsExpectedArr;
-    if (!expectedArr) return;
     const matches =
       section === 'iv' ? errors?.iv : section === 'dv' ? errors?.dv : errors?.constants;
-    if (!matches) return;
-    const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
-    if (!cm || cm.status !== 'partial') return;
-    const rowExp = expectedArr[cm.expectedIndex];
-    if (!rowExp) return;
-    const err: CellError | undefined = (cm.errors as VariableRowErrors)[cell];
-    if (!err) return;
-    const cellSpec = rowExp[cell];
-    const cap = maxTierForCell(err, cellSpec, cell);
-    if (cap <= 0) return;
-    // Compute the hint text at spend-time from the current (F7-sliced) ladder
-    // and pass it to the reducer. The text is then stored in
-    // `variableTableHintReveals` so subsequent edits — including clearing the
-    // cell — don't drop the paid string.
-    const k = cellKey(section, cm.expectedIndex, cell);
-    const currentTier = tiers[k] ?? 0;
-    if (currentTier >= cap) return;
-    const ladder = resolveLadder(err, cellSpec, cell);
-    const revealedText = ladder[currentTier];
-    if (revealedText === undefined) return;
+    const spend = resolveSpend(hintCtx, section, sectionExpected, matches, studentIndex, cell);
+    if (spend === null) return;
     spendAndRevealVtTier({
       widgetId: id,
-      cellKey: k,
-      revealedText,
-      hintCap: cap,
+      cellKey: spend.cellKey,
+      revealedText: spend.revealedText,
+      hintCap: spend.hintCap,
     });
     // With HintLightbulb removed, the click-to-spend lives on the input
     // itself; spend mode must exit here instead of inside the lightbulb.
@@ -772,7 +622,7 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
             onAdd={() => addRow('iv')}
             onRemove={(idx) => removeRow('iv', idx)}
-            getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
+            getInfo={(s, cell) => cellInfoFor(hintCtx, 'iv', ivExpectedArr, errors?.iv, s, cell)}
             getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'iv', s, cell)}
             getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'iv', s, cell)}
             getFlash={(s, cell) => flashForStudent('iv', s, cell)}
@@ -802,7 +652,7 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
             onAdd={() => addRow('dv')}
             onRemove={(idx) => removeRow('dv', idx)}
-            getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
+            getInfo={(s, cell) => cellInfoFor(hintCtx, 'dv', dvExpectedArr, errors?.dv, s, cell)}
             getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'dv', s, cell)}
             getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'dv', s, cell)}
             getFlash={(s, cell) => flashForStudent('dv', s, cell)}
@@ -837,7 +687,14 @@ export function VariableTable({
             onAdd={() => addRow('constants')}
             onRemove={(idx) => removeRow('constants', idx)}
             getInfo={(s, cell) =>
-              cellInfoFor('constants', constantsExpectedArr ?? [], errors?.constants, s, cell)
+              cellInfoFor(
+                hintCtx,
+                'constants',
+                constantsExpectedArr ?? [],
+                errors?.constants,
+                s,
+                cell,
+              )
             }
             getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'constants', s, cell)}
             getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'constants', s, cell)}
