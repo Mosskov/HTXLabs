@@ -38,7 +38,7 @@
 // entry's corresponding cell — for arrays-on-both-sides, any opposite match
 // triggers the flag.
 import { strings } from '../strings.da';
-import type { VariableEntry } from './VariableTable';
+import type { VariableEntry } from './variableTableValues';
 
 export type Cell = 'name' | 'symbol' | 'unit';
 
