@@ -80,6 +80,11 @@ import {
   resolveLadder,
 } from './variableTableCorrectness';
 import {
+  cellLockedForStudent,
+  lockKeyForStudent,
+  sectionFullyLockedCorrect,
+} from './variableTableLocks';
+import {
   type Bounds,
   CELLS,
   DEFAULT_CONSTANTS_BOUNDS,
@@ -333,86 +338,11 @@ export function VariableTable({
 
   const locks = state.variableTableLocks[id] ?? {};
 
-  // A cell is *locked-and-currently-correct* iff a lock entry exists for its
-  // expected-row key AND the current matcher report still pairs that expected
-  // row to a student row whose value passes for that cell. This is the
-  // single rule the `correct` aggregation + `sections` facet + per-row Field
-  // lock branch all consume.
-  function cellLockedAndCorrect(
-    section: 'iv' | 'dv' | 'constants',
-    expectedIndex: number,
-    cell: Cell,
-  ): boolean {
-    const k = cellKey(section, expectedIndex, cell);
-    if (locks[k] !== true) return false;
-    const matches = errors?.[section];
-    if (!matches) return false;
-    const m = matches.find((x) => x.status !== 'missing' && x.expectedIndex === expectedIndex);
-    if (!m || m.status === 'missing') return false;
-    if (m.status === 'matched') return true;
-    return m.errors[cell] === undefined;
-  }
-
-  // Row-render convenience: resolves studentIndex → expectedIndex via the
-  // current matcher (same pairing rule paid hints use), then delegates. A
-  // student row with no matcher pairing reports as unlocked.
-  function cellLockedForStudent(
-    section: 'iv' | 'dv' | 'constants',
-    studentIndex: number,
-    cell: Cell,
-  ): boolean {
-    const matches = errors?.[section];
-    if (!matches) return false;
-    const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
-    if (!m || m.status === 'missing') return false;
-    return cellLockedAndCorrect(section, m.expectedIndex, cell);
-  }
-
-  // Render-time resolution of a locked cell's store lock key. Returned to
-  // `Field` so it can snapshot the key at edit-session start — before any
-  // value change can shift the matcher pairing and re-resolve the studentIndex
-  // → expectedIndex link to a different expected row. Multi-row tables: the
-  // unlock-on-blur path would otherwise clear the wrong entry. Null when the
-  // cell isn't currently locked.
-  function lockKeyForStudent(
-    section: 'iv' | 'dv' | 'constants',
-    studentIndex: number,
-    cell: Cell,
-  ): string | null {
-    const matches = errors?.[section];
-    if (!matches) return null;
-    const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
-    if (!m || m.status === 'missing') return null;
-    if (!cellLockedAndCorrect(section, m.expectedIndex, cell)) return null;
-    return cellKey(section, m.expectedIndex, cell);
-  }
-
-  // Section-level lock coverage: every cell with `accepted` defined in the
-  // section's expected entries is locked-and-currently-correct. Used by both
-  // the `sections` facet and the published `correct`.
-  function sectionFullyLockedCorrect(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected: ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>,
-  ): { covered: boolean; configured: number } {
-    let configured = 0;
-    let covered = true;
-    for (let i = 0; i < sectionExpected.length; i++) {
-      const exp = sectionExpected[i];
-      if (!exp) continue;
-      for (const cell of CELLS) {
-        if (exp[cell] === undefined) continue;
-        configured++;
-        if (!cellLockedAndCorrect(section, i, cell)) covered = false;
-      }
-    }
-    return { covered, configured };
-  }
-
-  const ivLock = expected ? sectionFullyLockedCorrect('iv', ivExpectedArr) : null;
-  const dvLock = expected ? sectionFullyLockedCorrect('dv', dvExpectedArr) : null;
+  const ivLock = expected ? sectionFullyLockedCorrect(locks, errors, 'iv', ivExpectedArr) : null;
+  const dvLock = expected ? sectionFullyLockedCorrect(locks, errors, 'dv', dvExpectedArr) : null;
   const constantsLock =
     expected && constantsExpectedArr
-      ? sectionFullyLockedCorrect('constants', constantsExpectedArr)
+      ? sectionFullyLockedCorrect(locks, errors, 'constants', constantsExpectedArr)
       : null;
 
   const expectedTotal =
@@ -908,8 +838,8 @@ export function VariableTable({
             onAdd={() => addRow('iv')}
             onRemove={(idx) => removeRow('iv', idx)}
             getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
-            getLocked={(s, cell) => cellLockedForStudent('iv', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('iv', s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'iv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'iv', s, cell)}
             getFlash={(s, cell) => flashForStudent('iv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -938,8 +868,8 @@ export function VariableTable({
             onAdd={() => addRow('dv')}
             onRemove={(idx) => removeRow('dv', idx)}
             getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
-            getLocked={(s, cell) => cellLockedForStudent('dv', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('dv', s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'dv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'dv', s, cell)}
             getFlash={(s, cell) => flashForStudent('dv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -974,8 +904,8 @@ export function VariableTable({
             getInfo={(s, cell) =>
               cellInfoFor('constants', constantsExpectedArr ?? [], errors?.constants, s, cell)
             }
-            getLocked={(s, cell) => cellLockedForStudent('constants', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('constants', s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'constants', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'constants', s, cell)}
             getFlash={(s, cell) => flashForStudent('constants', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
