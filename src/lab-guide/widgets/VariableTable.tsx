@@ -85,6 +85,12 @@ import {
   sectionFullyLockedCorrect,
 } from './variableTableLocks';
 import {
+  type FlashPayload,
+  type TjekDimReason,
+  computeTjekOutcome,
+  deriveTjekDimReason,
+} from './variableTableTjek';
+import {
   type Bounds,
   CELLS,
   DEFAULT_CONSTANTS_BOUNDS,
@@ -95,7 +101,6 @@ import {
   type VariableEntry,
   cellKey,
   clampExpected,
-  entryEmpty,
   readValues,
   resolveBounds,
   sectionFilled,
@@ -210,25 +215,6 @@ function freeDiagnosticFor(err: CellError | undefined, cell: Cell): string | nul
   const ladder = tableHints?.[err.type] ?? [];
   return ladder[0] ?? null;
 }
-
-/** Flash payload after a Tjek click. Cell keys (expectedIndex-addressed) map
- *  to the colour for their 1.5s flash. `nonce` re-mounts the wrapper so a
- *  repeat-Tjek re-triggers the CSS transition. `withTransition: false` honours
- *  `prefers-reduced-motion: reduce` — the colour still paints for 1.5s, the
- *  fade is suppressed. */
-interface FlashPayload {
-  keys: Record<string, 'correct' | 'wrong'>;
-  nonce: number;
-  withTransition: boolean;
-}
-
-/** Reason the Tjek button is dimmed (and clicking it is a no-op):
- *   - `'empty'`  — no values entered anywhere, so a Tjek would just report
- *                  uniformly empty cells.
- *   - `'clean'`  — every section's snapshot still matches the values, so a
- *                  re-Tjek would produce the same verdict as the prior click.
- *  `null` means the button is armed.  */
-type TjekDimReason = 'empty' | 'clean' | null;
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -417,17 +403,12 @@ export function VariableTable({
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashNonceRef = useRef(0);
 
-  // Tjek-dim derivation. When `expected` is not set the Tjek button isn't
-  // rendered at all, so the dim reason is moot — keep it `null` so any
-  // downstream consumer sees an armed default.
-  const valuesAllEmpty =
-    values.iv.every(entryEmpty) &&
-    values.dv.every(entryEmpty) &&
-    values.constants.every(entryEmpty);
-  const allSectionsClean =
-    lastChecked !== undefined && sectionChecked.iv && sectionChecked.dv && sectionChecked.constants;
-  const tjekDimReason: TjekDimReason =
-    expected === undefined ? null : valuesAllEmpty ? 'empty' : allSectionsClean ? 'clean' : null;
+  const tjekDimReason = deriveTjekDimReason(
+    values,
+    sectionChecked,
+    lastChecked !== undefined,
+    expected !== undefined,
+  );
   const tjekDimTooltip =
     tjekDimReason === 'empty'
       ? strings.widgets.variableTable.tjekDisabledEmpty
@@ -451,62 +432,16 @@ export function VariableTable({
     if (tjekDimReason !== null) return;
     setVariableTableLastChecked(id, values);
 
-    const newlyLocked: string[] = [];
-    const newlyUnlocked: string[] = [];
-    const flashKeys: Record<string, 'correct' | 'wrong'> = {};
-
-    const sectionData: Array<{
-      section: 'iv' | 'dv' | 'constants';
-      expectedArr: ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>;
-      matches: RowMatch[] | undefined;
-    }> = [
-      { section: 'iv', expectedArr: ivExpectedArr, matches: errors.iv },
-      { section: 'dv', expectedArr: dvExpectedArr, matches: errors.dv },
-      {
-        section: 'constants',
-        expectedArr: constantsExpectedArr ?? [],
-        matches: errors.constants,
+    const { newlyLocked, newlyUnlocked, flashKeys } = computeTjekOutcome({
+      values,
+      errors,
+      expected: {
+        iv: ivExpectedArr,
+        dv: dvExpectedArr,
+        constants: constantsExpectedArr ?? [],
       },
-    ];
-
-    for (const { section, expectedArr, matches } of sectionData) {
-      if (!matches) continue;
-      for (const m of matches) {
-        if (m.status === 'missing') continue;
-        const exp = expectedArr[m.expectedIndex];
-        const studentRow = values[section][m.studentIndex];
-        if (!exp || !studentRow) continue;
-        for (const cell of CELLS) {
-          if (exp[cell] === undefined) continue;
-          const k = cellKey(section, m.expectedIndex, cell);
-          const value = studentRow[cell].trim();
-          const hadLock = locks[k] === true;
-          const isCellCorrect =
-            m.status === 'matched' ||
-            (m.status === 'partial' && (m.errors as VariableRowErrors)[cell] === undefined);
-
-          // Empty cells are always ignored for flash/wrong-state per the
-          // task rule. Stale locks on a now-empty value are dropped silently.
-          if (value === '') {
-            if (hadLock) newlyUnlocked.push(k);
-            continue;
-          }
-          if (hadLock && isCellCorrect) continue;
-          if (hadLock && !isCellCorrect) {
-            // Stale-lock cleanup: drop the lock + rose-flash the regression.
-            newlyUnlocked.push(k);
-            flashKeys[k] = 'wrong';
-            continue;
-          }
-          if (isCellCorrect) {
-            newlyLocked.push(k);
-            flashKeys[k] = 'correct';
-          } else {
-            flashKeys[k] = 'wrong';
-          }
-        }
-      }
-    }
+      locks,
+    });
 
     if (newlyLocked.length > 0) lockVtCells(id, newlyLocked);
     for (const k of newlyUnlocked) unlockVtCell(id, k);
