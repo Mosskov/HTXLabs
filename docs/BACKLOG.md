@@ -16,6 +16,7 @@ Phase-scope `milestone` and `data-points` gates via per-phase buckets; leave `pr
 
 ### Extract widget-registration hook (R-B1)
 **Why:** the `registerWidgetState` + `setTick` dance is repeated across widgets and easy to get subtly wrong.
+**Update (2026-08-04):** now easier to design — the VariableTable split (see STATUS.md) isolated one caller's version of the dance in `VariableTable.tsx` on its own, giving the cross-widget abstraction a concrete second data point to design against once `RubricResponse.tsx` (below) is similarly decomposed.
 
 ### i18n cluster (B-1, C-2, C-3, C-4)
 **Why:** Danish strings still leak into framework code in places; consolidating around [src/lab-guide/strings.da.ts](../src/lab-guide/strings.da.ts) would tighten SPEC §17 compliance.
@@ -23,6 +24,26 @@ Phase-scope `milestone` and `data-points` gates via per-phase buckets; leave `pr
 ---
 
 ## Widgets
+
+### `evaluateRowGroup` is ~186 lines
+In `variableTableCorrectness.ts` — the one long function in an otherwise well-decomposed pure module.
+**Why:** it was left alone deliberately during the VariableTable split (2026-08-04); it is the remaining structural outlier in that file.
+
+### `RubricResponse.tsx` is 855 lines
+Same shape as pre-split `VariableTable.tsx` (1786 lines).
+**Why:** same disease; the hint plumbing now extracted for VariableTable (`variableTableHints.ts`, `useVariableTableUnlockSession.ts`) may make that job much smaller.
+
+### `resolveSpend` untested against a dirty section
+In `variableTableHints.test.ts` (19 tests, all passing), no test exercises `resolveSpend` with a dirty section.
+**Why:** adding `if (!ctx.sectionClean[section]) return null;` to `resolveSpend` would pass all 19 tests while changing behavior — the gate is unreachable in practice (the spend affordance only renders when `nextTier !== null`), but the suite does not pin it.
+
+### Duplicated `CELLS` across a type-only cycle
+`CELLS` is defined once in `variableTableValues.ts` and once in `variableTableCorrectness.ts`. The two modules already import each other's types (`Section` from values, `Cell` from correctness), a cycle that is currently type-only and harmless.
+**Why:** deduplicating `CELLS` by having one module import it as a *value* from the other would turn that erased type-only cycle into a real runtime cycle, with temporal-dead-zone risk on module-level `const` initialization order — so the fix is to move `Cell` (and `CELLS`) into a leaf module both can import from, not to cross-import between them.
+
+### `SectionExpected` is declared in the wrong module
+It's defined in `variableTableTjek.ts` but is a shared expected-row shape: `variableTableHints.ts` imports it from Tjek purely for the type, and `variableTableLocks.ts` spells the same shape inline instead of importing it. `variableTableValues.ts` is the declared home for shared types.
+**Why:** the hints→tjek dependency edge exists only for a type, and one of three consumers duplicates the shape rather than importing it.
 
 ### Per-widget "is satisfied" indicator on FreeTextResponse
 **Why:** with multiple FreeTextResponse instances under one `all-filled` gate, students can't see *which* sub-tasks are done — only the global next-button state.

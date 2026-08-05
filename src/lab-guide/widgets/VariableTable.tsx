@@ -44,60 +44,60 @@
 // border, no idle dot, no popup. Free diagnostics (case-mismatch + whitespace-
 // internal) appear in the focus popup without a token cost, gated on the same
 // checked-and-not-dirty rule as paid hints.
-import {
-  type FocusEvent,
-  type KeyboardEvent,
-  type MouseEvent,
-  type ReactNode,
-  type TouchEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useHintSpend } from '../HintSpendContext';
 import { useRunner } from '../RunnerContext';
 import { Tooltip } from '../Tooltip';
-import { format, strings } from '../strings.da';
+import { strings } from '../strings.da';
 import { useRegisteredHintEligibility } from '../useRegisteredHintEligibility';
 import { useRegisteredWidgetCheck } from '../useRegisteredWidgetCheck';
 import { useRegisteredWidgetState } from '../useRegisteredWidgetState';
 import type { WidgetCheck } from '../widgetCheck';
 import { HintBucket } from './HintBucket';
-import { HintPopup, type HintPopupEntry } from './HintPopup';
-import { ProtectedInput } from './ProtectedInput';
+import { RowGroupSection } from './VariableTableRows';
 import {
   type Cell,
-  type CellError,
-  type CellSpec,
   type CorrectnessReport,
   type ExpectedVariables,
-  type RowMatch,
-  type VariableRowErrors,
   asExpectedArray,
-  cellAcceptedValues,
   evaluateTable,
-  maxTierForCell,
-  resolveLadder,
 } from './variableTableCorrectness';
+import {
+  type HintCtx,
+  cellInfoFor,
+  countSpendable,
+  missingMessagesFor,
+  resolveSpend,
+} from './variableTableHints';
+import {
+  cellLockedForStudent,
+  lockKeyForStudent,
+  sectionFullyLockedCorrect,
+} from './variableTableLocks';
+import {
+  type FlashPayload,
+  type TjekDimReason,
+  computeTjekOutcome,
+  deriveTjekDimReason,
+} from './variableTableTjek';
+import {
+  DEFAULT_CONSTANTS_BOUNDS,
+  DEFAULT_DV_BOUNDS,
+  DEFAULT_IV_BOUNDS,
+  EMPTY,
+  type Section,
+  type SectionConfig,
+  type VariableEntry,
+  cellKey,
+  clampExpected,
+  readValues,
+  resolveBounds,
+  sectionFilled,
+  valuesEqual,
+  warnMalformed,
+} from './variableTableValues';
 
-export interface VariableEntry {
-  name: string;
-  symbol: string;
-  unit: string;
-}
-
-export interface VariableTableValues {
-  iv: VariableEntry[];
-  dv: VariableEntry[];
-  constants: VariableEntry[];
-}
-
-export type SectionConfig = { count: number } | { min: number; max: number };
-
-interface Bounds {
-  min: number;
-  max: number;
-}
+export type { VariableEntry, VariableTableValues, SectionConfig } from './variableTableValues';
 
 interface Props {
   id: string;
@@ -173,167 +173,6 @@ interface Props {
   /** SEN accommodation — propagated to cell inputs to bypass paste-block. */
   allowPaste?: boolean;
 }
-
-const EMPTY: VariableEntry = { name: '', symbol: '', unit: '' };
-
-const CELLS: readonly Cell[] = ['name', 'symbol', 'unit'];
-
-function cellKey(section: 'iv' | 'dv' | 'constants', expectedIndex: number, cell: Cell): string {
-  return `${section}.${expectedIndex}.${cell}`;
-}
-
-function resolveBounds(config: SectionConfig | undefined, fallback: Bounds): Bounds {
-  if (config === undefined) return fallback;
-  if ('count' in config) return { min: config.count, max: config.count };
-  return { min: config.min, max: config.max };
-}
-
-const DEFAULT_IV_BOUNDS: Bounds = { min: 1, max: 1 };
-const DEFAULT_DV_BOUNDS: Bounds = { min: 1, max: 1 };
-const DEFAULT_CONSTANTS_BOUNDS: Bounds = { min: 0, max: Number.POSITIVE_INFINITY };
-
-function emptyRows(n: number): VariableEntry[] {
-  const finite = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-  return Array.from({ length: finite }, () => ({ ...EMPTY }));
-}
-
-function readRows(raw: unknown, min: number): VariableEntry[] {
-  if (Array.isArray(raw)) {
-    const rows = raw.map((c) => ({ ...EMPTY, ...(c as Partial<VariableEntry>) }));
-    while (rows.length < min) rows.push({ ...EMPTY });
-    return rows;
-  }
-  return emptyRows(min);
-}
-
-function readValues(
-  raw: unknown,
-  bounds: { iv: Bounds; dv: Bounds; constants: Bounds },
-): VariableTableValues {
-  if (raw && typeof raw === 'object') {
-    const r = raw as { iv?: unknown; dv?: unknown; constants?: unknown };
-    return {
-      iv: readRows(r.iv, bounds.iv.min),
-      dv: readRows(r.dv, bounds.dv.min),
-      constants: readRows(r.constants, bounds.constants.min),
-    };
-  }
-  return {
-    iv: emptyRows(bounds.iv.min),
-    dv: emptyRows(bounds.dv.min),
-    constants: emptyRows(bounds.constants.min),
-  };
-}
-
-function entryFilled(e: VariableEntry, requireUnits: boolean): boolean {
-  const nameOk = e.name.trim().length > 0;
-  const symbolOk = e.symbol.trim().length > 0;
-  const unitOk = !requireUnits || e.unit.trim().length > 0;
-  return nameOk && symbolOk && unitOk;
-}
-
-function entryEmpty(e: VariableEntry): boolean {
-  return e.name.trim() === '' && e.symbol.trim() === '' && e.unit.trim() === '';
-}
-
-function sectionFilled(rows: VariableEntry[], bounds: Bounds, requireUnits: boolean): boolean {
-  if (rows.length < bounds.min) return false;
-  if (Number.isFinite(bounds.max) && rows.length > bounds.max) return false;
-  return rows.every((r) => entryFilled(r, requireUnits));
-}
-
-/** Deep-equality via JSON. Used to detect per-section dirty state for paid-hint
- *  reveal-vs-edit gating + the free-diagnostic gate. `correct` no longer
- *  depends on this — locks own the correctness contract. */
-function valuesEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-/** Truncate an expected array to `max` entries, warning in dev when the
- *  author oversupplied (a permanent-lock authoring failure — the student
- *  physically cannot render enough rows). */
-function clampExpected<T>(
-  widgetId: string,
-  section: 'iv' | 'dv' | 'constants',
-  expected: T[],
-  bounds: Bounds,
-): T[] {
-  if (!Number.isFinite(bounds.max) || expected.length <= bounds.max) return expected;
-  if (import.meta.env.DEV) {
-    console.warn(
-      `[VariableTable id=${widgetId}] expected.${section}.length (${expected.length}) exceeds section max (${bounds.max}) — extra entries dropped to keep the widget useable in dev.`,
-    );
-  }
-  return expected.slice(0, bounds.max);
-}
-
-/** Dev-only warning when an expected entry has neither symbol nor name set —
- *  such entries are silently dropped by `evaluateRowGroup` (no `missing`),
- *  so without this warning a misauthored lab would look fine. */
-function warnMalformed(
-  widgetId: string,
-  section: 'iv' | 'dv' | 'constants',
-  expected: ReadonlyArray<{ symbol?: unknown; name?: unknown }>,
-): void {
-  if (!import.meta.env.DEV) return;
-  for (const e of expected) {
-    if (e.symbol === undefined && e.name === undefined) {
-      console.warn(
-        `[VariableTable id=${widgetId}] expected.${section} entry has neither symbol nor name — it will never match any student row.`,
-      );
-    }
-  }
-}
-
-/** Compact per-cell info aggregated for the row renderer. `cap === 0` means
- *  no hint ladder for this cell (e.g. `empty` error with no author hints) —
- *  the cell is not a spend target / `nextTier` stays `null`. `freeDiagnostic`
- *  is the case-mismatch / whitespace-internal text (no token cost).
- *  `popupEntries` holds the revealed-tier paid hints for the focus popup. */
-interface CellHintInfo {
-  cap: number;
-  /** Next tier a spend click would unlock (1..cap). `null` when no advance is
-   *  possible (cap reached or no error). */
-  nextTier: number | null;
-  freeDiagnostic: string | null;
-  popupEntries: HintPopupEntry[];
-}
-
-const EMPTY_CELL_INFO: CellHintInfo = {
-  cap: 0,
-  nextTier: null,
-  freeDiagnostic: null,
-  popupEntries: [],
-};
-
-function freeDiagnosticFor(err: CellError | undefined, cell: Cell): string | null {
-  if (!err) return null;
-  if (err.type !== 'case-mismatch' && err.type !== 'whitespace-internal') return null;
-  const tableHints = strings.widgets.variableTable.hints[cell] as
-    | Record<string, readonly string[] | undefined>
-    | undefined;
-  const ladder = tableHints?.[err.type] ?? [];
-  return ladder[0] ?? null;
-}
-
-/** Flash payload after a Tjek click. Cell keys (expectedIndex-addressed) map
- *  to the colour for their 1.5s flash. `nonce` re-mounts the wrapper so a
- *  repeat-Tjek re-triggers the CSS transition. `withTransition: false` honours
- *  `prefers-reduced-motion: reduce` — the colour still paints for 1.5s, the
- *  fade is suppressed. */
-interface FlashPayload {
-  keys: Record<string, 'correct' | 'wrong'>;
-  nonce: number;
-  withTransition: boolean;
-}
-
-/** Reason the Tjek button is dimmed (and clicking it is a no-op):
- *   - `'empty'`  — no values entered anywhere, so a Tjek would just report
- *                  uniformly empty cells.
- *   - `'clean'`  — every section's snapshot still matches the values, so a
- *                  re-Tjek would produce the same verdict as the prior click.
- *  `null` means the button is armed.  */
-type TjekDimReason = 'empty' | 'clean' | null;
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -443,86 +282,11 @@ export function VariableTable({
 
   const locks = state.variableTableLocks[id] ?? {};
 
-  // A cell is *locked-and-currently-correct* iff a lock entry exists for its
-  // expected-row key AND the current matcher report still pairs that expected
-  // row to a student row whose value passes for that cell. This is the
-  // single rule the `correct` aggregation + `sections` facet + per-row Field
-  // lock branch all consume.
-  function cellLockedAndCorrect(
-    section: 'iv' | 'dv' | 'constants',
-    expectedIndex: number,
-    cell: Cell,
-  ): boolean {
-    const k = cellKey(section, expectedIndex, cell);
-    if (locks[k] !== true) return false;
-    const matches = errors?.[section];
-    if (!matches) return false;
-    const m = matches.find((x) => x.status !== 'missing' && x.expectedIndex === expectedIndex);
-    if (!m || m.status === 'missing') return false;
-    if (m.status === 'matched') return true;
-    return m.errors[cell] === undefined;
-  }
-
-  // Row-render convenience: resolves studentIndex → expectedIndex via the
-  // current matcher (same pairing rule paid hints use), then delegates. A
-  // student row with no matcher pairing reports as unlocked.
-  function cellLockedForStudent(
-    section: 'iv' | 'dv' | 'constants',
-    studentIndex: number,
-    cell: Cell,
-  ): boolean {
-    const matches = errors?.[section];
-    if (!matches) return false;
-    const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
-    if (!m || m.status === 'missing') return false;
-    return cellLockedAndCorrect(section, m.expectedIndex, cell);
-  }
-
-  // Render-time resolution of a locked cell's store lock key. Returned to
-  // `Field` so it can snapshot the key at edit-session start — before any
-  // value change can shift the matcher pairing and re-resolve the studentIndex
-  // → expectedIndex link to a different expected row. Multi-row tables: the
-  // unlock-on-blur path would otherwise clear the wrong entry. Null when the
-  // cell isn't currently locked.
-  function lockKeyForStudent(
-    section: 'iv' | 'dv' | 'constants',
-    studentIndex: number,
-    cell: Cell,
-  ): string | null {
-    const matches = errors?.[section];
-    if (!matches) return null;
-    const m = matches.find((x) => x.status !== 'missing' && x.studentIndex === studentIndex);
-    if (!m || m.status === 'missing') return null;
-    if (!cellLockedAndCorrect(section, m.expectedIndex, cell)) return null;
-    return cellKey(section, m.expectedIndex, cell);
-  }
-
-  // Section-level lock coverage: every cell with `accepted` defined in the
-  // section's expected entries is locked-and-currently-correct. Used by both
-  // the `sections` facet and the published `correct`.
-  function sectionFullyLockedCorrect(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected: ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>,
-  ): { covered: boolean; configured: number } {
-    let configured = 0;
-    let covered = true;
-    for (let i = 0; i < sectionExpected.length; i++) {
-      const exp = sectionExpected[i];
-      if (!exp) continue;
-      for (const cell of CELLS) {
-        if (exp[cell] === undefined) continue;
-        configured++;
-        if (!cellLockedAndCorrect(section, i, cell)) covered = false;
-      }
-    }
-    return { covered, configured };
-  }
-
-  const ivLock = expected ? sectionFullyLockedCorrect('iv', ivExpectedArr) : null;
-  const dvLock = expected ? sectionFullyLockedCorrect('dv', dvExpectedArr) : null;
+  const ivLock = expected ? sectionFullyLockedCorrect(locks, errors, 'iv', ivExpectedArr) : null;
+  const dvLock = expected ? sectionFullyLockedCorrect(locks, errors, 'dv', dvExpectedArr) : null;
   const constantsLock =
     expected && constantsExpectedArr
-      ? sectionFullyLockedCorrect('constants', constantsExpectedArr)
+      ? sectionFullyLockedCorrect(locks, errors, 'constants', constantsExpectedArr)
       : null;
 
   const expectedTotal =
@@ -597,17 +361,12 @@ export function VariableTable({
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashNonceRef = useRef(0);
 
-  // Tjek-dim derivation. When `expected` is not set the Tjek button isn't
-  // rendered at all, so the dim reason is moot — keep it `null` so any
-  // downstream consumer sees an armed default.
-  const valuesAllEmpty =
-    values.iv.every(entryEmpty) &&
-    values.dv.every(entryEmpty) &&
-    values.constants.every(entryEmpty);
-  const allSectionsClean =
-    lastChecked !== undefined && sectionChecked.iv && sectionChecked.dv && sectionChecked.constants;
-  const tjekDimReason: TjekDimReason =
-    expected === undefined ? null : valuesAllEmpty ? 'empty' : allSectionsClean ? 'clean' : null;
+  const tjekDimReason = deriveTjekDimReason(
+    values,
+    sectionChecked,
+    lastChecked !== undefined,
+    expected !== undefined,
+  );
   const tjekDimTooltip =
     tjekDimReason === 'empty'
       ? strings.widgets.variableTable.tjekDisabledEmpty
@@ -631,62 +390,16 @@ export function VariableTable({
     if (tjekDimReason !== null) return;
     setVariableTableLastChecked(id, values);
 
-    const newlyLocked: string[] = [];
-    const newlyUnlocked: string[] = [];
-    const flashKeys: Record<string, 'correct' | 'wrong'> = {};
-
-    const sectionData: Array<{
-      section: 'iv' | 'dv' | 'constants';
-      expectedArr: ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>;
-      matches: RowMatch[] | undefined;
-    }> = [
-      { section: 'iv', expectedArr: ivExpectedArr, matches: errors.iv },
-      { section: 'dv', expectedArr: dvExpectedArr, matches: errors.dv },
-      {
-        section: 'constants',
-        expectedArr: constantsExpectedArr ?? [],
-        matches: errors.constants,
+    const { newlyLocked, newlyUnlocked, flashKeys } = computeTjekOutcome({
+      values,
+      errors,
+      expected: {
+        iv: ivExpectedArr,
+        dv: dvExpectedArr,
+        constants: constantsExpectedArr ?? [],
       },
-    ];
-
-    for (const { section, expectedArr, matches } of sectionData) {
-      if (!matches) continue;
-      for (const m of matches) {
-        if (m.status === 'missing') continue;
-        const exp = expectedArr[m.expectedIndex];
-        const studentRow = values[section][m.studentIndex];
-        if (!exp || !studentRow) continue;
-        for (const cell of CELLS) {
-          if (exp[cell] === undefined) continue;
-          const k = cellKey(section, m.expectedIndex, cell);
-          const value = studentRow[cell].trim();
-          const hadLock = locks[k] === true;
-          const isCellCorrect =
-            m.status === 'matched' ||
-            (m.status === 'partial' && (m.errors as VariableRowErrors)[cell] === undefined);
-
-          // Empty cells are always ignored for flash/wrong-state per the
-          // task rule. Stale locks on a now-empty value are dropped silently.
-          if (value === '') {
-            if (hadLock) newlyUnlocked.push(k);
-            continue;
-          }
-          if (hadLock && isCellCorrect) continue;
-          if (hadLock && !isCellCorrect) {
-            // Stale-lock cleanup: drop the lock + rose-flash the regression.
-            newlyUnlocked.push(k);
-            flashKeys[k] = 'wrong';
-            continue;
-          }
-          if (isCellCorrect) {
-            newlyLocked.push(k);
-            flashKeys[k] = 'correct';
-          } else {
-            flashKeys[k] = 'wrong';
-          }
-        }
-      }
-    }
+      locks,
+    });
 
     if (newlyLocked.length > 0) lockVtCells(id, newlyLocked);
     for (const k of newlyUnlocked) unlockVtCell(id, k);
@@ -740,135 +453,31 @@ export function VariableTable({
     constants: expected !== undefined && sectionChecked.constants,
   };
 
-  function cellInfoFor(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected: ReadonlyArray<{
-      name?: CellSpec;
-      symbol?: CellSpec;
-      unit?: CellSpec;
-    }>,
-    matches: RowMatch[] | undefined,
-    studentIndex: number,
-    cell: Cell,
-  ): CellHintInfo {
-    if (expected === undefined) return EMPTY_CELL_INFO;
-    // Try to pair the student row to its expected row via the current matcher.
-    // If the cell has been cleared or the row dropped out of `partial`, cm is
-    // undefined — we still want to surface previously-revealed paid strings.
-    // Fall back to `expectedIndex = studentIndex` (correct for the single-row
-    // sections that are the default; multi-row sections that reshuffle pairing
-    // are a known limitation).
-    const cm = matches?.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
-    const expectedIndex = cm?.expectedIndex ?? studentIndex;
-    const k = cellKey(section, expectedIndex, cell);
-    const revealsForCell = reveals[k] ?? [];
-
-    let cap = 0;
-    let nextTier: number | null = null;
-    let freeDiagnostic: string | null = null;
-    const popupEntries: HintPopupEntry[] = [];
-
-    if (cm && cm.status === 'partial') {
-      const rowExp = sectionExpected[cm.expectedIndex];
-      const err: CellError | undefined = rowExp
-        ? (cm.errors as VariableRowErrors)[cell]
-        : undefined;
-      if (rowExp && err) {
-        const cellSpec = rowExp[cell];
-        cap = maxTierForCell(err, cellSpec, cell);
-        const tier = tiers[k] ?? 0;
-        // Spend target only armed on a clean section — spending mid-edit
-        // would charge the student for a hint about an error type that may
-        // shift on the next keystroke.
-        nextTier = sectionClean[section] && cap > 0 && tier < cap ? tier + 1 : null;
-        // Free diagnostic only surfaces on a clean section — it diagnoses
-        // the live value, so showing it mid-edit would be noisy.
-        if (sectionClean[section]) {
-          freeDiagnostic = freeDiagnosticFor(err, cell);
-          if (freeDiagnostic !== null) {
-            popupEntries.push({
-              key: `free-${section}-${cm.expectedIndex}-${cell}`,
-              text: freeDiagnostic,
-              tone: 'misconception',
-            });
-          }
-        }
-      }
-    }
-
-    // Paid revealed strings — always surfaced, regardless of dirty state and
-    // even if the current error type / row pairing has shifted. They were
-    // paid for at spend-time; the student keeps reading them.
-    revealsForCell.forEach((text, i) => {
-      popupEntries.push({
-        key: `paid-${section}-${expectedIndex}-${cell}-${i + 1}`,
-        text,
-        tone: 'hint',
-      });
-    });
-
-    return { cap, nextTier, freeDiagnostic, popupEntries };
-  }
+  const hintCtx: HintCtx = {
+    hasExpected: expected !== undefined,
+    tiers,
+    reveals,
+    sectionClean,
+  };
 
   // Live spendable-target count — number of failing cells with a remaining
   // ladder. HintBucket reads the phase-aggregate to disable when tokens > 0
   // but nothing is left to buy. cellInfoFor already gates `nextTier` on the
   // section being clean + the cell having an unspent tier, so locked /
   // matched / mid-edit cells naturally drop out.
-  let spendableCount = 0;
-  if (expected && errors) {
-    for (const { section, expectedArr, matches } of [
-      { section: 'iv' as const, expectedArr: ivExpectedArr, matches: errors.iv },
-      { section: 'dv' as const, expectedArr: dvExpectedArr, matches: errors.dv },
-      {
-        section: 'constants' as const,
-        expectedArr: constantsExpectedArr ?? [],
-        matches: errors.constants,
-      },
-    ]) {
-      if (!matches) continue;
-      const studentRows = values[section];
-      for (let s = 0; s < studentRows.length; s++) {
-        for (const cell of CELLS) {
-          if (cellInfoFor(section, expectedArr, matches, s, cell).nextTier !== null) {
-            spendableCount++;
-          }
-        }
-      }
-    }
-  }
+  const spendableCount =
+    expected && errors
+      ? countSpendable(hintCtx, values, errors, {
+          iv: ivExpectedArr,
+          dv: dvExpectedArr,
+          constants: constantsExpectedArr ?? [],
+        })
+      : 0;
   useEffect(() => {
     if (expected === undefined) return;
     registerSpendableCount(id, spendableCount);
     return () => registerSpendableCount(id, null);
   }, [id, expected, spendableCount, registerSpendableCount]);
-
-  function missingMessagesFor(
-    section: 'iv' | 'dv' | 'constants',
-    sectionExpected:
-      | ReadonlyArray<{ name?: CellSpec; symbol?: CellSpec; unit?: CellSpec }>
-      | undefined,
-    matches: RowMatch[] | undefined,
-    template: string,
-  ): string[] {
-    if (!sectionClean[section] || !matches || !sectionExpected) return [];
-    const out: string[] = [];
-    for (const m of matches) {
-      if (m.status !== 'missing') continue;
-      const exp = sectionExpected[m.expectedIndex];
-      if (!exp) continue;
-      out.push(
-        format(template, {
-          name: cellAcceptedValues(exp.name)?.[0] ?? '',
-          symbol: cellAcceptedValues(exp.symbol)?.[0] ?? '',
-          unit: cellAcceptedValues(exp.unit)?.[0] ?? '',
-        }),
-      );
-      // Cap at one missing-message per section to avoid spam.
-      if (out.length >= 1) break;
-    }
-    return out;
-  }
 
   const nameH = nameHeader ?? strings.widgets.variableTable.nameHeader;
   const symbolH = symbolHeader ?? strings.widgets.variableTable.symbolHeader;
@@ -899,18 +508,21 @@ export function VariableTable({
     );
 
   const ivMissing = missingMessagesFor(
+    hintCtx,
     'iv',
     ivExpectedArr,
     errors?.iv,
     ivMissingMessage ?? strings.widgets.variableTable.hints.ivMissing,
   );
   const dvMissing = missingMessagesFor(
+    hintCtx,
     'dv',
     dvExpectedArr,
     errors?.dv,
     dvMissingMessage ?? strings.widgets.variableTable.hints.dvMissing,
   );
   const constantsMissing = missingMessagesFor(
+    hintCtx,
     'constants',
     constantsExpectedArr,
     errors?.constants,
@@ -922,37 +534,18 @@ export function VariableTable({
     spendMode.kind === 'active' &&
     spendMode.phaseId === state.currentPhaseId;
 
-  const onSpendCell = (section: 'iv' | 'dv' | 'constants', studentIndex: number, cell: Cell) => {
-    const expectedArr =
+  const onSpendCell = (section: Section, studentIndex: number, cell: Cell) => {
+    const sectionExpected =
       section === 'iv' ? ivExpectedArr : section === 'dv' ? dvExpectedArr : constantsExpectedArr;
-    if (!expectedArr) return;
     const matches =
       section === 'iv' ? errors?.iv : section === 'dv' ? errors?.dv : errors?.constants;
-    if (!matches) return;
-    const cm = matches.find((m) => m.status === 'partial' && m.studentIndex === studentIndex);
-    if (!cm || cm.status !== 'partial') return;
-    const rowExp = expectedArr[cm.expectedIndex];
-    if (!rowExp) return;
-    const err: CellError | undefined = (cm.errors as VariableRowErrors)[cell];
-    if (!err) return;
-    const cellSpec = rowExp[cell];
-    const cap = maxTierForCell(err, cellSpec, cell);
-    if (cap <= 0) return;
-    // Compute the hint text at spend-time from the current (F7-sliced) ladder
-    // and pass it to the reducer. The text is then stored in
-    // `variableTableHintReveals` so subsequent edits — including clearing the
-    // cell — don't drop the paid string.
-    const k = cellKey(section, cm.expectedIndex, cell);
-    const currentTier = tiers[k] ?? 0;
-    if (currentTier >= cap) return;
-    const ladder = resolveLadder(err, cellSpec, cell);
-    const revealedText = ladder[currentTier];
-    if (revealedText === undefined) return;
+    const spend = resolveSpend(hintCtx, section, sectionExpected, matches, studentIndex, cell);
+    if (spend === null) return;
     spendAndRevealVtTier({
       widgetId: id,
-      cellKey: k,
-      revealedText,
-      hintCap: cap,
+      cellKey: spend.cellKey,
+      revealedText: spend.revealedText,
+      hintCap: spend.hintCap,
     });
     // With HintLightbulb removed, the click-to-spend lives on the input
     // itself; spend mode must exit here instead of inside the lightbulb.
@@ -1017,9 +610,9 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('iv', idx, field, next)}
             onAdd={() => addRow('iv')}
             onRemove={(idx) => removeRow('iv', idx)}
-            getInfo={(s, cell) => cellInfoFor('iv', ivExpectedArr, errors?.iv, s, cell)}
-            getLocked={(s, cell) => cellLockedForStudent('iv', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('iv', s, cell)}
+            getInfo={(s, cell) => cellInfoFor(hintCtx, 'iv', ivExpectedArr, errors?.iv, s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'iv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'iv', s, cell)}
             getFlash={(s, cell) => flashForStudent('iv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1047,9 +640,9 @@ export function VariableTable({
             onChange={(idx, field, next) => updateRow('dv', idx, field, next)}
             onAdd={() => addRow('dv')}
             onRemove={(idx) => removeRow('dv', idx)}
-            getInfo={(s, cell) => cellInfoFor('dv', dvExpectedArr, errors?.dv, s, cell)}
-            getLocked={(s, cell) => cellLockedForStudent('dv', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('dv', s, cell)}
+            getInfo={(s, cell) => cellInfoFor(hintCtx, 'dv', dvExpectedArr, errors?.dv, s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'dv', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'dv', s, cell)}
             getFlash={(s, cell) => flashForStudent('dv', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1082,10 +675,17 @@ export function VariableTable({
             onAdd={() => addRow('constants')}
             onRemove={(idx) => removeRow('constants', idx)}
             getInfo={(s, cell) =>
-              cellInfoFor('constants', constantsExpectedArr ?? [], errors?.constants, s, cell)
+              cellInfoFor(
+                hintCtx,
+                'constants',
+                constantsExpectedArr ?? [],
+                errors?.constants,
+                s,
+                cell,
+              )
             }
-            getLocked={(s, cell) => cellLockedForStudent('constants', s, cell)}
-            getLockKey={(s, cell) => lockKeyForStudent('constants', s, cell)}
+            getLocked={(s, cell) => cellLockedForStudent(locks, errors, 'constants', s, cell)}
+            getLockKey={(s, cell) => lockKeyForStudent(locks, errors, 'constants', s, cell)}
             getFlash={(s, cell) => flashForStudent('constants', s, cell)}
             flashNonce={flash?.nonce ?? 0}
             flashWithTransition={flash?.withTransition ?? true}
@@ -1121,619 +721,6 @@ export function VariableTable({
             </>
           )}
         </div>
-      )}
-    </div>
-  );
-}
-
-interface RowGroupProps {
-  sectionId: 'iv' | 'dv' | 'constants';
-  idPrefix: string;
-  label: string;
-  rows: VariableEntry[];
-  bounds: Bounds;
-  nameHeader: string;
-  symbolHeader: string;
-  unitHeader: string;
-  addLabel: string;
-  removeAriaLabel: string;
-  rowAriaLabel: string;
-  onChange: (idx: number, field: keyof VariableEntry, next: string) => void;
-  onAdd: () => void;
-  onRemove: (idx: number) => void;
-  getInfo: (studentIndex: number, cell: Cell) => CellHintInfo;
-  getLocked: (studentIndex: number, cell: Cell) => boolean;
-  /** Render-time resolution of a locked cell's store lock key (or null if
-   *  the cell isn't currently locked). Field snapshots this at edit-session
-   *  start to avoid re-resolution drift on blur. */
-  getLockKey: (studentIndex: number, cell: Cell) => string | null;
-  getFlash: (studentIndex: number, cell: Cell) => 'correct' | 'wrong' | null;
-  flashNonce: number;
-  flashWithTransition: boolean;
-  lockedTooltipContent: ReactNode;
-  armedSpendableAriaDescription: string;
-  missingMessages: string[];
-  /** Empty-state copy. When `rows.length === 0` and this is a non-empty
-   *  string, the section renders heading → empty-state text → a button-chip
-   *  styled add affordance. When undefined or `""`, the section falls back
-   *  to today's bare add-link render. */
-  emptyMessage?: string;
-  allowPaste?: boolean;
-  armed: boolean;
-  onSpend: (studentIndex: number, cell: Cell) => void;
-  onUnlock: (lockKey: string) => void;
-}
-
-function RowGroupSection({
-  idPrefix,
-  label,
-  rows,
-  bounds,
-  nameHeader,
-  symbolHeader,
-  unitHeader,
-  addLabel,
-  removeAriaLabel,
-  rowAriaLabel,
-  onChange,
-  onAdd,
-  onRemove,
-  getInfo,
-  getLocked,
-  getLockKey,
-  getFlash,
-  flashNonce,
-  flashWithTransition,
-  lockedTooltipContent,
-  armedSpendableAriaDescription,
-  missingMessages,
-  emptyMessage,
-  allowPaste,
-  armed,
-  onSpend,
-  onUnlock,
-}: RowGroupProps) {
-  const canAdd = rows.length < bounds.max;
-  const canRemove = rows.length > bounds.min;
-  const showEmptyState = rows.length === 0 && !!emptyMessage;
-  return (
-    <div className="p-3">
-      <div className="mb-2 text-sm font-semibold text-navy">{label}</div>
-      {showEmptyState && <div className="mb-2 text-sm text-slate-500">{emptyMessage}</div>}
-      {rows.map((row, i) => (
-        <RepeatableRow
-          // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity of a row in this section
-          key={i}
-          id={`${idPrefix}${i}`}
-          rowIndex={i}
-          entry={row}
-          onChange={(field, next) => onChange(i, field, next)}
-          onRemove={canRemove ? () => onRemove(i) : undefined}
-          nameHeader={nameHeader}
-          symbolHeader={symbolHeader}
-          unitHeader={unitHeader}
-          rowAriaLabel={rowAriaLabel}
-          removeAriaLabel={removeAriaLabel}
-          info={{
-            name: getInfo(i, 'name'),
-            symbol: getInfo(i, 'symbol'),
-            unit: getInfo(i, 'unit'),
-          }}
-          locked={{
-            name: getLocked(i, 'name'),
-            symbol: getLocked(i, 'symbol'),
-            unit: getLocked(i, 'unit'),
-          }}
-          lockKey={{
-            name: getLockKey(i, 'name'),
-            symbol: getLockKey(i, 'symbol'),
-            unit: getLockKey(i, 'unit'),
-          }}
-          flash={{
-            name: getFlash(i, 'name'),
-            symbol: getFlash(i, 'symbol'),
-            unit: getFlash(i, 'unit'),
-          }}
-          flashNonce={flashNonce}
-          flashWithTransition={flashWithTransition}
-          lockedTooltipContent={lockedTooltipContent}
-          armedSpendableAriaDescription={armedSpendableAriaDescription}
-          allowPaste={allowPaste}
-          armed={armed}
-          onSpend={(cell) => onSpend(i, cell)}
-          onUnlock={onUnlock}
-        />
-      ))}
-      {missingMessages.length > 0 && (
-        <ul className="mb-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
-          {missingMessages.map((msg) => (
-            <li key={msg}>{msg}</li>
-          ))}
-        </ul>
-      )}
-      {canAdd && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className={
-            showEmptyState
-              ? 'mt-2 inline-flex items-center rounded border border-accent/40 px-2 py-1 text-sm font-medium text-accent hover:border-accent hover:bg-accent/5'
-              : 'mt-2 text-sm font-medium text-accent hover:underline'
-          }
-        >
-          {addLabel}
-        </button>
-      )}
-    </div>
-  );
-}
-
-interface RepeatableRowProps {
-  id: string;
-  rowIndex: number;
-  entry: VariableEntry;
-  onChange: (field: keyof VariableEntry, next: string) => void;
-  onRemove: (() => void) | undefined;
-  nameHeader: string;
-  symbolHeader: string;
-  unitHeader: string;
-  /** Template with {n} and {field} placeholders for repeated-row aria labels. */
-  rowAriaLabel: string;
-  removeAriaLabel: string;
-  info: Record<Cell, CellHintInfo>;
-  locked: Record<Cell, boolean>;
-  /** Store lock key per cell — string when locked, null otherwise. Field
-   *  snapshots it at edit-session start; see `lockKeyForStudent`. */
-  lockKey: Record<Cell, string | null>;
-  flash: Record<Cell, 'correct' | 'wrong' | null>;
-  flashNonce: number;
-  flashWithTransition: boolean;
-  lockedTooltipContent: ReactNode;
-  /** Already-resolved sr-only description for an armed-spendable cell. */
-  armedSpendableAriaDescription: string;
-  allowPaste?: boolean;
-  armed: boolean;
-  onSpend: (cell: Cell) => void;
-  onUnlock: (lockKey: string) => void;
-}
-
-function RepeatableRow({
-  id,
-  rowIndex,
-  entry,
-  onChange,
-  onRemove,
-  nameHeader,
-  symbolHeader,
-  unitHeader,
-  rowAriaLabel,
-  removeAriaLabel,
-  info,
-  locked,
-  lockKey,
-  flash,
-  flashNonce,
-  flashWithTransition,
-  lockedTooltipContent,
-  armedSpendableAriaDescription,
-  allowPaste,
-  armed,
-  onSpend,
-  onUnlock,
-}: RepeatableRowProps) {
-  // Every input carries a section-aware programmatic label: the visible
-  // per-input <label> is mobile-only, and the desktop header band is
-  // aria-hidden, so without this the inputs would be anonymous to SR.
-  const rowAria = (field: string) => format(rowAriaLabel, { n: rowIndex + 1, field });
-  const hasRemove = onRemove !== undefined;
-  // One grid template for every row in every section: name flexes (capped),
-  // symbol/unit are narrow fixed tracks, and a fixed remove-button gutter is
-  // always reserved (empty on non-removable rows) so every row lines up under
-  // the single header band.
-  return (
-    <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(10rem,16rem)_6rem_6rem_2rem]">
-      <Field
-        id={`${id}-name`}
-        label={nameHeader}
-        ariaLabel={rowAria(nameHeader)}
-        value={entry.name}
-        onChange={(v) => onChange('name', v)}
-        info={info.name}
-        locked={locked.name}
-        lockKey={lockKey.name}
-        flash={flash.name}
-        flashNonce={flashNonce}
-        flashWithTransition={flashWithTransition}
-        lockedTooltipContent={lockedTooltipContent}
-        armedSpendableAriaDescription={armedSpendableAriaDescription}
-        allowPaste={allowPaste}
-        armed={armed}
-        onSpend={() => onSpend('name')}
-        onUnlock={onUnlock}
-      />
-      <Field
-        id={`${id}-symbol`}
-        label={symbolHeader}
-        ariaLabel={rowAria(symbolHeader)}
-        value={entry.symbol}
-        onChange={(v) => onChange('symbol', v)}
-        info={info.symbol}
-        locked={locked.symbol}
-        lockKey={lockKey.symbol}
-        flash={flash.symbol}
-        flashNonce={flashNonce}
-        flashWithTransition={flashWithTransition}
-        lockedTooltipContent={lockedTooltipContent}
-        armedSpendableAriaDescription={armedSpendableAriaDescription}
-        allowPaste={allowPaste}
-        armed={armed}
-        onSpend={() => onSpend('symbol')}
-        onUnlock={onUnlock}
-      />
-      <Field
-        id={`${id}-unit`}
-        label={unitHeader}
-        ariaLabel={rowAria(unitHeader)}
-        value={entry.unit}
-        onChange={(v) => onChange('unit', v)}
-        info={info.unit}
-        locked={locked.unit}
-        lockKey={lockKey.unit}
-        flash={flash.unit}
-        flashNonce={flashNonce}
-        flashWithTransition={flashWithTransition}
-        lockedTooltipContent={lockedTooltipContent}
-        armedSpendableAriaDescription={armedSpendableAriaDescription}
-        allowPaste={allowPaste}
-        armed={armed}
-        onSpend={() => onSpend('unit')}
-        onUnlock={onUnlock}
-      />
-      {hasRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={format(removeAriaLabel, { n: rowIndex + 1 })}
-          className="self-start rounded px-2 py-1.5 text-sm text-slate-500 hover:bg-rose-50 hover:text-rose-600 focus-visible:bg-rose-50 focus-visible:text-rose-600"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
-}
-
-interface FieldProps {
-  id: string;
-  /** Column label, rendered as a mobile-only `<label>` (the desktop column
-   *  headers live in the table's single header band). */
-  label: string;
-  /** Programmatic label — always set so each input carries a section-aware
-   *  accessible name on desktop, where the visible `<label>` is hidden. */
-  ariaLabel: string;
-  value: string;
-  onChange: (next: string) => void;
-  /** Hint resolution for this cell — popup entries (free + paid) + the
-   *  remaining ladder length. */
-  info: CellHintInfo;
-  /** True iff a lock entry exists for this cell's expected-row key AND the
-   *  current matcher report still shows the cell correct. Locked cells render
-   *  as plain text spans (no input chrome, no hint chrome). */
-  locked: boolean;
-  /** Store lock key for this cell — string when `locked`, null otherwise.
-   *  Snapshotted at edit-session start so the matcher pairing the lock was
-   *  born under is the one cleared on blur, even if intervening edits to
-   *  other rows shifted the studentIndex → expectedIndex mapping. */
-  lockKey: string | null;
-  /** Per-Tjek flash on this cell — emerald for newly-locked, rose for wrong
-   *  or stale-lock cleanup. `null` between Tjeks. */
-  flash: 'correct' | 'wrong' | null;
-  /** Nonce that remounts the flash wrapper so a repeat-Tjek with identical
-   *  flash keys still re-triggers the CSS transition. */
-  flashNonce: number;
-  /** False under `prefers-reduced-motion: reduce` — the colour still paints
-   *  for the 1.5s window, but the fade transition is skipped. */
-  flashWithTransition: boolean;
-  /** Combined tooltip + sr-only prefix text for the locked branch. */
-  lockedTooltipContent: ReactNode;
-  /** Resolved sr-only description announced when the cell is armed-spendable. */
-  armedSpendableAriaDescription: string;
-  allowPaste?: boolean;
-  armed: boolean;
-  onSpend: () => void;
-  onUnlock: (lockKey: string) => void;
-}
-
-function Field({
-  id,
-  label,
-  ariaLabel,
-  value,
-  onChange,
-  info,
-  locked,
-  lockKey,
-  flash,
-  flashNonce,
-  flashWithTransition,
-  lockedTooltipContent,
-  armedSpendableAriaDescription,
-  allowPaste,
-  armed,
-  onSpend,
-  onUnlock,
-}: FieldProps) {
-  const armedSpendable = !locked && armed && info.nextTier !== null;
-  // Hint-count pips: editable + popup will open on focus. N tiny amber
-  // vertical ticks at bottom-left communicate "this cell has N hints" — one
-  // tick per popup bullet, so the count matches what the student will read
-  // when the popup opens. Stays visible while armed (the armed border is a
-  // separate "spend mode" cue, not a hint-count cue). Gated on popupEntries
-  // (not cap directly) so the indicator stays hidden mid-edit when the
-  // section is dirty and the popup will not open. Locked cells never carry
-  // hint chrome (the lock IS the affordance).
-  const showHintTicks = !locked && info.popupEntries.length > 0;
-
-  const inputClass = armedSpendable
-    ? 'w-full border-amber-400 ring-1 ring-amber-300 cursor-pointer'
-    : 'w-full hover:bg-accent-50 focus:border-accent-400 focus:!ring-0';
-
-  const armedDescId = `${id}-armed`;
-  const ariaDescribedBy = armedSpendable ? armedDescId : undefined;
-
-  // Spend + auto-focus the cell so the popup opens with fresh entries.
-  // Browser order on click: mousedown → focus → click. We preventDefault on
-  // mousedown to suppress the natural focus (the popup would open against
-  // stale entries), dispatch the spend, then re-focus on the next macrotask —
-  // by which point React has flushed the reveal into popupEntries and
-  // HintPopup's freshly-cloned onFocus sees willOpen=true.
-  const handleMouseDown = (e: MouseEvent<HTMLInputElement>) => {
-    if (!armedSpendable) return;
-    e.preventDefault();
-    onSpend();
-    setTimeout(() => document.getElementById(id)?.focus(), 0);
-  };
-  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (armedSpendable && e.key === 'Enter') {
-      e.preventDefault();
-      onSpend();
-      // Already focused — but HintPopup's onFocus only fires on focus
-      // *transitions*. Force a blur+refocus so the popup re-opens against
-      // fresh entries.
-      setTimeout(() => {
-        const el = document.getElementById(id) as HTMLInputElement | null;
-        el?.blur();
-        el?.focus();
-      }, 0);
-    }
-  };
-
-  // Unlock session model: opening a locked cell does NOT immediately drop the
-  // store-level lock entry. Instead it starts a transient "edit session" that
-  // renders the cell as editable while the lock entry stays in place. On blur
-  // we compare the current value (trimmed) against the snapshot taken at
-  // session start. If they match, the session ends silently — no store
-  // mutation, no relock-flash dance on the next Tjek (the lock was never
-  // dropped). If they differ, we commit the unlock by calling prop-`onUnlock`,
-  // which clears the store entry; the next Tjek then re-validates the new
-  // value and may re-lock with its usual emerald/rose flash.
-  const [editingUnlocked, setEditingUnlocked] = useState(false);
-  // Snapshot taken at edit-session start: the value (to detect net-zero edits)
-  // and the store lock key resolved at the moment editing began. Capturing
-  // the key here pins it to the matcher pairing the lock was born under, so
-  // a subsequent edit that re-pairs this student row with a different
-  // expected row still clears the original lock entry — not whatever the
-  // matcher happens to point at on blur.
-  const unlockSnapshotRef = useRef<{ value: string; lockKey: string | null } | null>(null);
-  const isReadonlyRender = locked && !editingUnlocked;
-
-  // Focus the freshly-rendered editable input on the readonly→editable
-  // transition so a keyboard student can resume typing without re-Tab. Fires
-  // for both genuine unlocks (locked → !locked) and session starts (locked &&
-  // editingUnlocked flip), since both flip isReadonlyRender true → false.
-  const prevReadonlyRef = useRef(isReadonlyRender);
-  useEffect(() => {
-    if (prevReadonlyRef.current && !isReadonlyRender) {
-      document.getElementById(id)?.focus();
-    }
-    prevReadonlyRef.current = isReadonlyRender;
-  }, [isReadonlyRender, id]);
-
-  // Long-press unlock for touch. Cleared on touchend/cancel/move so a swipe-
-  // scroll doesn't accidentally unlock.
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (pressTimerRef.current !== null) clearTimeout(pressTimerRef.current);
-    },
-    [],
-  );
-  const clearPressTimer = () => {
-    if (pressTimerRef.current !== null) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-  };
-
-  // Start an edit session: snapshot the current trimmed value AND the
-  // current lock key, flip the session bit. No-op if not locked, or if a
-  // session is already running (re-snapshotting would lose the original
-  // "before edit" value and pin to a stale key).
-  const startEditSession = () => {
-    if (!locked || editingUnlocked) return;
-    unlockSnapshotRef.current = { value: value.trim(), lockKey };
-    setEditingUnlocked(true);
-  };
-
-  // Wrapper-level handlers: the locked branch wraps its span in `Tooltip`,
-  // which clones the child and overwrites onKeyDown / onClick / onTouch*
-  // (see Tooltip.tsx). Catching the events on the bubble parent lets the
-  // Tooltip own its child cloning while we still receive the unlock signals.
-  const handleWrapperDoubleClick = () => {
-    startEditSession();
-  };
-  const handleWrapperKeyDown = (e: KeyboardEvent<HTMLSpanElement>) => {
-    if (!locked || editingUnlocked) return;
-    // Enter / F2: documented keyboard-unlock keys. Space: ARIA-button
-    // activation pattern — the locked-cell wrapper has role="button" so
-    // Space must also trigger it (and we preventDefault to suppress the
-    // browser's default page-scroll).
-    if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') {
-      e.preventDefault();
-      startEditSession();
-    }
-  };
-  const handleWrapperTouchStart = (_e: TouchEvent<HTMLSpanElement>) => {
-    if (!locked || editingUnlocked) return;
-    clearPressTimer();
-    pressTimerRef.current = setTimeout(() => {
-      pressTimerRef.current = null;
-      startEditSession();
-    }, 500);
-  };
-  const handleWrapperTouchEnd = () => clearPressTimer();
-  const handleWrapperTouchCancel = () => clearPressTimer();
-  const handleWrapperTouchMove = () => clearPressTimer();
-
-  // Editable-input blur: if a session is running, decide whether the student
-  // actually changed anything. Net-zero edits (typed then backspaced back to
-  // the original) end the session silently with no store mutation.
-  const handleInputBlur = (_e: FocusEvent<HTMLInputElement>) => {
-    if (!editingUnlocked) return;
-    const snapshot = unlockSnapshotRef.current;
-    const changed = snapshot !== null && value.trim() !== snapshot.value;
-    if (changed && snapshot.lockKey !== null) onUnlock(snapshot.lockKey);
-    setEditingUnlocked(false);
-    unlockSnapshotRef.current = null;
-  };
-
-  // Flash wrapper class — shared by both branches so the column width is
-  // identical input ↔ span. The static colour class (bg-emerald-100 /
-  // bg-rose-100) paints immediately on mount; the keyframe utility
-  // `animate-vt-flash-fade` (defined in globals.css) then fades the
-  // background to transparent over 1500ms. Under reduced motion the
-  // keyframe is omitted and the colour stays solid for the 1500ms window
-  // (matching the prefers-reduced-motion contract — no animated motion,
-  // but the visual signal still arrives). The `key={flashNonce}` remount
-  // restarts the animation on repeat-Tjek with identical keys.
-  const flashBg =
-    flash === 'correct' ? 'bg-emerald-100' : flash === 'wrong' ? 'bg-rose-100' : 'bg-transparent';
-  // Emerald fades to transparent (locked input is bg-transparent → page bg
-  // shows through both during and after the fade). Rose fades to white
-  // (editable input is forced transparent during flash, so the wrapper
-  // bleeds through; the input regains its native bg-white when flash clears
-  // — fading the wrapper to white makes that transition seamless).
-  const flashAnim =
-    flash !== null && flashWithTransition
-      ? flash === 'wrong'
-        ? ' animate-vt-flash-fade-to-white'
-        : ' animate-vt-flash-fade'
-      : '';
-  const flashClass = `rounded ${flashBg}${flashAnim}`;
-  // ProtectedInput hardcodes `bg-white`, which would cover the wrapper's
-  // rose flash on the unlocked branch. Force the input transparent for the
-  // flash window so the wrapper's animated rose bleeds through and fades
-  // alongside the keyframe (a static `!bg-rose-100` on the input would
-  // *defeat* the animation — `!important` beats the keyframe's intermediate
-  // values, so the colour would snap on/off instead of fading). The locked
-  // branch's input is already `bg-transparent`, so the emerald flash works
-  // the same way; this just makes the editable branch behave identically.
-  const inputFlashClass = flash === 'wrong' && !locked ? ' !bg-transparent' : '';
-
-  return (
-    <div className="min-w-0" data-locked={locked ? 'true' : undefined}>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600 sm:hidden">
-        {label}
-      </label>
-      {/* When locked-correct, the wrapper is the keyboard-reachable unlock
-          affordance: tabIndex=0 + role=button puts the cell back in the
-          tab order (the input itself stays tabIndex=-1 so SR users land on
-          the wrapper's labelled button instead of an anonymous readonly
-          input), and the aria-label tells the student what activates it.
-          Enter / F2 / Space all trigger startEditSession via the existing
-          keydown handler. focus-visible ring matches the readonly input's
-          own ring so the visual cue is the same whichever element receives
-          focus. */}
-      <span
-        className={`group/cell relative inline-block w-full${
-          isReadonlyRender
-            ? ' rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400'
-            : ''
-        }`}
-        tabIndex={isReadonlyRender ? 0 : undefined}
-        role={isReadonlyRender ? 'button' : undefined}
-        aria-label={
-          isReadonlyRender
-            ? `${ariaLabel}. ${strings.widgets.variableTable.lockedTooltipScreenReaderPrefix} ${strings.widgets.variableTable.lockedKeyboardImperative}.`
-            : undefined
-        }
-        onDoubleClick={handleWrapperDoubleClick}
-        onKeyDown={handleWrapperKeyDown}
-        onTouchStart={handleWrapperTouchStart}
-        onTouchEnd={handleWrapperTouchEnd}
-        onTouchCancel={handleWrapperTouchCancel}
-        onTouchMove={handleWrapperTouchMove}
-      >
-        <span key={flashNonce} className={`block w-full ${flashClass}`}>
-          {isReadonlyRender ? (
-            <Tooltip content={lockedTooltipContent} openDelayMs={500} fullWidth>
-              <input
-                id={id}
-                type="text"
-                value={value}
-                readOnly
-                aria-label={ariaLabel}
-                // Suppress the input's own tab stop; the wrapper-span above
-                // is the tabbable element when locked (role=button + tabIndex=0
-                // + aria-label), so the cell remains one keyboard-reachable
-                // unlock target instead of two adjacent focus stops.
-                tabIndex={-1}
-                className="block w-full cursor-default rounded border border-slate-200 bg-transparent px-3 py-1.5 text-sm text-slate-800 read-only:focus:outline-none read-only:focus:ring-1 read-only:focus:ring-slate-300"
-                style={{ WebkitTouchCallout: 'none', userSelect: 'none' }}
-                onChange={() => {}}
-              />
-            </Tooltip>
-          ) : (
-            <HintPopup entries={info.popupEntries}>
-              <ProtectedInput
-                id={id}
-                type="text"
-                value={value}
-                aria-label={ariaLabel}
-                aria-describedby={ariaDescribedBy}
-                allowPaste={allowPaste}
-                onChange={(e) => onChange(e.target.value)}
-                onMouseDown={handleMouseDown}
-                onKeyDown={handleInputKeyDown}
-                onBlur={handleInputBlur}
-                className={`${inputClass}${inputFlashClass}`}
-              />
-            </HintPopup>
-          )}
-        </span>
-        {showHintTicks && (
-          // On focus-within (= popup is open) the container slides DOWN by 8 px
-          // (bottom-0.5 → -bottom-1.5) and each pip grows from 6 px to 14 px,
-          // so the pip top stays put while the bottom reaches the popup's top
-          // edge (the popup is `top-full mt-1.5` = 6 px below the input). Net
-          // effect: the pips become a visual bridge from input to hint box.
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2 bottom-0.5 flex gap-0.5 transition-all duration-150 group-focus-within/cell:-bottom-1.5"
-          >
-            {info.popupEntries.map((entry) => (
-              <span
-                key={`${id}-tick-${entry.key}`}
-                className="block h-1.5 w-0.5 rounded-sm bg-amber-400 transition-all duration-150 group-focus-within/cell:h-3.5"
-              />
-            ))}
-          </span>
-        )}
-      </span>
-      {armedSpendable && (
-        <span id={armedDescId} className="sr-only">
-          {armedSpendableAriaDescription}
-        </span>
       )}
     </div>
   );

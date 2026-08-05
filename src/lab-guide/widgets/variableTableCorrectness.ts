@@ -38,7 +38,7 @@
 // entry's corresponding cell — for arrays-on-both-sides, any opposite match
 // triggers the flag.
 import { strings } from '../strings.da';
-import type { VariableEntry } from './VariableTable';
+import type { VariableEntry } from './variableTableValues';
 
 export type Cell = 'name' | 'symbol' | 'unit';
 
@@ -618,7 +618,7 @@ export function isCorrect(report: CorrectnessReport): boolean {
  *       levels of nuance about which value to type.
  *    4. For `case-mismatch` / `whitespace-internal` errors the first generic
  *       entry is already surfaced for FREE in the popup (see
- *       `freeDiagnosticFor` in VariableTable.tsx) — drop it from the paid
+ *       `freeDiagnosticFor` in variableTableHints.ts) — drop it from the paid
  *       ladder so spending a token never re-shows the same string.
  *  An empty ladder is legal and means "no paid hint to surface for this cell". */
 export function resolveLadder(
