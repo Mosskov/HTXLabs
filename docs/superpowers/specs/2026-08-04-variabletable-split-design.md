@@ -63,8 +63,17 @@ Separable units inside them:
 `VariableTable.tsx` imports 10 symbols from `variableTableCorrectness.ts`;
 `variableTableCorrectness.ts` imports `type VariableEntry` back from `VariableTable.tsx`
 (line 41). Type-only, so it erases at runtime and nothing breaks today — but it is a real
-cycle. Moving the shared types into `variableTableValues.ts` breaks it as a side effect
-of the extraction.
+cycle. Moving the shared types into `variableTableValues.ts` removes this specific cycle
+(`VariableTable.tsx` ↔ `variableTableCorrectness.ts`) as a side effect of the extraction —
+but relocates it, rather than eliminating it: `variableTableCorrectness.ts` still imports
+`type VariableEntry` back, now from `variableTableValues.ts`, and a new type-only cycle
+exists between those two modules. Because `Section` lives in `variableTableValues.ts` while
+`Cell` deliberately stays in `variableTableCorrectness.ts` (see "do not consolidate them"
+below), this new cycle is unavoidable given that split. It must stay type-only: `CELLS` is
+defined once in each module (`variableTableValues.ts` and `variableTableCorrectness.ts`),
+and deduplicating it by having one import the constant as a *value* from the other would
+turn the erased type-only cycle into a real runtime one, with temporal-dead-zone risk on
+module-level `const` initialization order.
 
 ### Layout convention
 
@@ -265,7 +274,10 @@ export type { VariableEntry, VariableTableValues, SectionConfig } from './variab
 
 Seven files import these types. Six keep working untouched — including both affected test
 files. The seventh, `variableTableCorrectness.ts`, is repointed from `./VariableTable` to
-`./variableTableValues`, which breaks the cycle.
+`./variableTableValues`, which removes the `VariableTable.tsx` ↔ `variableTableCorrectness.ts`
+cycle but relocates it: a type-only cycle now exists between `variableTableValues.ts` and
+`variableTableCorrectness.ts` (see "Existing type-only import cycle" above). It must stay
+type-only.
 
 Repointing the five `src/` consumers (`runner.ts`, `RunnerContext.tsx`,
 `runnerReducer.ts`, `TemplateHypothesisSection.tsx`) directly at `variableTableValues` is
